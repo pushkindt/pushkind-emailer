@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% include 'main/navigation.html' %}
+<h1>Hello World!</h1>
+<div id="content"></div>
+<button class="btn btn-primary" hx-post="/clicked" hx-target="#content">Click</button>
+
+{% endblock %}

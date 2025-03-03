@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card mt-5">
+                <div class="card-header text-muted fw-bold">
+                    Авторизация
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/auth/login">
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label" for="email">Электронная почта</label>
+                            <div class="col-md-6">
+                                <input autofocus="" class="form-control" id="email" name="email" required="" type="email" value="">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label" for="password">Пароль</label>
+                            <div class="col-md-6">
+                                <input class="form-control" id="password" name="password" required="" type="password" value="">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6 offset-md-4">
+                                <input class="btn btn-primary text-white" id="submit" name="submit" type="submit" value="Авторизация">
+                                <a href="/auth/signup" class="btn btn-link">Регистрация</a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}

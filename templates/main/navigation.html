@@ -1,0 +1,46 @@
+<div class="container">
+    <nav class="navbar navbar-expand-sm bg-body-tertiary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Emailer</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
+                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Сообщения</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Получатели</a>
+                    </li>
+                </ul>
+                <form class="d-flex w-100" role="search" action="/search">
+                    <div class="input-group me-2">
+                        <input name="q" class="form-control" type="search" placeholder="Поиск" aria-label="Search">
+                        <button class="btn btn-outline-secondary" type="submit">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="dropdown-center">
+                <button class="btn btn-link nav-link align-items-center text-muted dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-person-circle fs-4"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><h6 class="dropdown-header">{{current_user}}</h6></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <form method="POST" action="/auth/logout">
+                            <button type="submit" class="dropdown-item icon-link">
+                                <i class="bi bi-box-arrow-right mb-2"></i>
+                                Выйти
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+</div>
