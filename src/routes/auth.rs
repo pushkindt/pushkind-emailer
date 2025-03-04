@@ -1,6 +1,6 @@
 use actix_identity::Identity;
 use actix_session::Session;
-use actix_web::error::ErrorUnauthorized;
+use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header;
 use actix_web::{Error, FromRequest, HttpRequest, HttpResponse, dev::Payload};
 use actix_web::{HttpMessage, Responder, get, post, web};
@@ -11,11 +11,11 @@ use tera::Context;
 
 use crate::TEMPLATES;
 use crate::db::DbPool;
-use crate::models::Alert;
+use crate::models::{User, add_flash_message, get_flash_messages};
 use crate::repository::{create_user, find_user_by_email, verify_password};
 
 #[derive(Serialize)]
-pub struct AuthenticatedUser(pub String);
+pub struct AuthenticatedUser(pub User);
 
 impl FromRequest for AuthenticatedUser {
     type Error = Error;
@@ -29,13 +29,16 @@ impl FromRequest for AuthenticatedUser {
             use crate::schema::users::dsl::*;
             use diesel::prelude::*;
 
-            let mut conn = pool.get().expect("Couldn't get DB connection");
-            let user_exists =
-                diesel::dsl::select(diesel::dsl::exists(users.filter(email.eq(&uid))))
-                    .get_result::<bool>(&mut conn)
-                    .unwrap_or(false);
-            if user_exists {
-                return ready(Ok(AuthenticatedUser(uid)));
+            let mut conn = match pool.get() {
+                Ok(conn) => conn,
+                Err(_) => {
+                    return ready(Err(ErrorInternalServerError("DB connection error")));
+                }
+            };
+
+            match users.filter(email.eq(&uid)).first::<User>(&mut conn) {
+                Ok(user) => return ready(Ok(AuthenticatedUser(user))),
+                Err(_) => return ready(Err(ErrorUnauthorized("Invalid user"))),
             }
         }
         ready(Err(ErrorUnauthorized("Unauthorized").into()))
@@ -53,7 +56,7 @@ pub async fn login(
     request: HttpRequest,
     pool: web::Data<DbPool>,
     web::Form(form): web::Form<LoginRequest>,
-    session: Session,
+    mut session: Session,
 ) -> impl Responder {
     let mut conn = pool.get().expect("Couldn't get DB connection");
 
@@ -66,18 +69,14 @@ pub async fn login(
                     .insert_header((header::LOCATION, "/"))
                     .finish()
             } else {
-                session
-                    .insert("flash_message", "Не верный пароль.")
-                    .unwrap();
+                add_flash_message(&mut session, "danger", "Не верный пароль.");
                 HttpResponse::SeeOther()
                     .insert_header((header::LOCATION, "/auth/signin"))
                     .finish()
             }
         }
         Err(_) => {
-            session
-                .insert("flash_message", "Пользователь не существует.")
-                .unwrap();
+            add_flash_message(&mut session, "danger", "Пользователь не существует.");
             HttpResponse::SeeOther()
                 .insert_header((header::LOCATION, "/auth/signin"))
                 .finish()
@@ -95,26 +94,24 @@ struct RegisterRequest {
 pub async fn register(
     pool: web::Data<DbPool>,
     web::Form(form): web::Form<RegisterRequest>,
-    session: Session,
+    mut session: Session,
 ) -> impl Responder {
     let mut conn = pool.get().expect("Couldn't get DB connection");
 
     match create_user(&mut conn, &form.email, &form.password) {
         Ok(_) => {
-            session
-                .insert("flash_message", "Пользователь может войти.")
-                .unwrap();
+            add_flash_message(&mut session, "success", "Пользователь может войти.");
             HttpResponse::SeeOther()
                 .insert_header((header::LOCATION, "/auth/signin"))
                 .finish()
         }
         Err(err) => {
-            session
-                .insert(
-                    "flash_message",
-                    format!("Ошибка при создании пользователя: {}", err),
-                )
-                .unwrap();
+            add_flash_message(
+                &mut session,
+                "danger",
+                &format!("Ошибка при создании пользователя: {}", err),
+            );
+
             HttpResponse::SeeOther()
                 .insert_header((header::LOCATION, "/auth/signup"))
                 .finish()
@@ -137,20 +134,11 @@ pub async fn signin(user: Option<Identity>, session: Session) -> impl Responder 
             .insert_header((header::LOCATION, "/"))
             .finish()
     } else {
-        let flash_message: Option<String> = session.get("flash_message").unwrap_or(None);
-        session.remove("flash_message");
+        let flash_messages = get_flash_messages(&session);
 
         let mut context = Context::new();
 
-        if let Some(message) = flash_message {
-            context.insert(
-                "alerts",
-                &vec![Alert {
-                    category: "primary".to_string(),
-                    message: message,
-                }],
-            );
-        }
+        context.insert("alerts", &flash_messages);
 
         HttpResponse::Ok().body(
             TEMPLATES
@@ -167,20 +155,12 @@ pub async fn signup(user: Option<Identity>, session: Session) -> impl Responder 
             .insert_header((header::LOCATION, "/"))
             .finish()
     } else {
-        let flash_message: Option<String> = session.get("flash_message").unwrap_or(None);
-        session.remove("flash_message");
+        let flash_messages = get_flash_messages(&session);
 
         let mut context = Context::new();
 
-        if let Some(message) = flash_message {
-            context.insert(
-                "alerts",
-                &vec![Alert {
-                    category: "primary".to_string(),
-                    message: message,
-                }],
-            );
-        }
+        context.insert("alerts", &flash_messages);
+
         HttpResponse::Ok().body(
             TEMPLATES
                 .render("auth/register.html", &context)
