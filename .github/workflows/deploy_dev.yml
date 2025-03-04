@@ -28,6 +28,6 @@ jobs:
           if_key_exists: fail # replace / ignore / fail; optional (defaults to fail)
       - name: Deploy
         run: |
-          scp ./target/release/pushkind-emailer cicd@reports.pushkind.com:/var/www5/html/
-          scp ./assets/* cicd@reports.pushkind.com:/var/www5/html/assets/
-          scp ./templates/* cicd@reports.pushkind.com:/var/www5/html/assets/
+          scp ./target/release/pushkind-emailer cicd@admin.pushkind.com:/var/www5/html/
+          scp ./assets/* cicd@admin.pushkind.com:/var/www5/html/assets/
+          scp ./templates/* cicd@admin.pushkind.com:/var/www5/html/assets/
