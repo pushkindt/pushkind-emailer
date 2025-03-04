@@ -29,5 +29,6 @@ jobs:
       - name: Deploy
         run: |
           scp ./target/release/pushkind-emailer cicd@admin.pushkind.com:/var/www5/html/
-          scp ./assets/* cicd@admin.pushkind.com:/var/www5/html/assets/
-          scp ./templates/* cicd@admin.pushkind.com:/var/www5/html/assets/
+          scp -r ./assets/ cicd@admin.pushkind.com:/var/www5/html/
+          scp -r ./templates/ cicd@admin.pushkind.com:/var/www5/html/
+          scp -r ./migrations/ cicd@admin.pushkind.com:/var/www5/html/
