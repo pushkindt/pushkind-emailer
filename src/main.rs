@@ -16,6 +16,9 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenv().ok(); // Load .env file
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
+    let port = env::var("PORT").expect("PORT must be set in .env");
+    let port = port.parse::<u16>().expect("PORT must be a number");
+    let address = env::var("ADDRESS").expect("ADDRESS must be set in .env");
 
     let pool = establish_connection_pool(database_url);
 
@@ -42,7 +45,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::scope("").wrap(RedirectUnauthorized).service(index))
             .app_data(web::Data::new(pool.clone()))
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((address, port))?
     .run()
     .await
 }
