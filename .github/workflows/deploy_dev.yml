@@ -33,4 +33,4 @@ jobs:
           scp -r ./assets/ cicd@admin.pushkind.com:/var/www5/html/
           scp -r ./templates/ cicd@admin.pushkind.com:/var/www5/html/
           scp -r ./migrations/ cicd@admin.pushkind.com:/var/www5/html/
-          ssh cicd@admin.pushkind.com "cd /var/www5/html/ && diesel migration run && supervisorctl start emailer_dev"
+          ssh cicd@admin.pushkind.com "cd /var/www5/html/ && /home/cicd/.cargo/bin/diesel migration run && supervisorctl start emailer_dev"
