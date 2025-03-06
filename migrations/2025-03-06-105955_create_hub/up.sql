@@ -1,0 +1,14 @@
+-- Your SQL goes here
+CREATE TABLE IF NOT EXISTS hubs (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    login TEXT,
+    password TEXT,
+    sender TEXT,
+    server TEXT,
+    port INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE users ADD COLUMN hub_id INTEGER REFERENCES hubs(id);

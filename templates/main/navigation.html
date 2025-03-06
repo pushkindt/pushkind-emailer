@@ -1,7 +1,7 @@
 <div class="container">
     <nav class="navbar navbar-expand-sm bg-body-tertiary">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">
+            <a class="navbar-brand" href="/">
                 <img class="logo d-inline-block align-text-top" src="/assets/logo.png" alt="Logo">
                 Emailer
             </a>
@@ -12,10 +12,10 @@
             <div class="collapse navbar-collapse" id="navbarSupportedContent">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="#">Сообщения</a>
+                        <a class="nav-link {%if current_page == 'index'%}active{%endif%}" href="/">Сообщения</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">Получатели</a>
+                        <a class="nav-link {%if current_page == 'recipients'%}active{%endif%}" href="/recipients">Получатели</a>
                     </li>
                 </ul>
                 <form class="d-flex w-100" role="search" action="/search">
@@ -34,6 +34,12 @@
                 <ul class="dropdown-menu dropdown-menu-end">
                     <li><h6 class="dropdown-header">{{current_user.email}}</h6></li>
                     <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item icon-link" href="/settings">
+                            <i class="bi bi-wrench-adjustable-circle mb-2"></i>
+                            Настройки
+                        </a>
+                    </li>
                     <li>
                         <form method="POST" action="/auth/logout">
                             <button type="submit" class="dropdown-item icon-link">

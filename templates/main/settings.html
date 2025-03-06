@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% include 'main/navigation.html' %}
+
+<div class="container my-2">
+    <div class="row">
+        <div class="col">
+            <form method="POST" action="/settings/activate" id="activateHubForm">
+                <select class="form-select" aria-label="Select hub" id="activateHubSelect" name="hub_id">
+                    {% if not current_user.hub_id %}
+                        <option selected disabled></option>
+                    {% endif %}
+                    {% for hub in hubs %}
+                        <option value="{{hub.id}}" {%if current_user.hub_id == hub.id %}selected{%endif%}>{{hub.name}}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        <div class="col-auto">
+            <a class="btn btn-primary text-white" href="#" role="button" data-bs-toggle="modal" data-bs-target="#addHubModal">
+                <i class="bi bi-plus-square"></i>
+            </a>
+        </div>
+    </div>
+    {% if current_hub %}
+        <form method="POST" action="/settings/save" class="my-2">
+            <div class="row mb-3">
+                <input type="hidden" name="id" value="{{current_hub.id}}">
+                <label for="editHubName" class="col-sm-2 col-form-label">Название</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" id="editHubName" name="name" required value="{{current_hub.name}}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="editHubLogin" class="col-sm-2 col-form-label">Логин</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" id="editHubLogin" name="login" value="{{current_hub.login}}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="editHubPassword" class="col-sm-2 col-form-label">Пароль</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" id="editHubPassword" name="password" value="{{current_hub.password}}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="editHubSender" class="col-sm-2 col-form-label">Отправитель</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" id="editHubSender" name="sender" value="{{current_hub.sender}}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="editHubServer" class="col-sm-2 col-form-label">Сервер</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" id="editHubServer" name="server" value="{{current_hub.server}}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="editHubPort" class="col-sm-2 col-form-label">Порт</label>
+                <div class="col-sm-10">
+                    <input type="number" min="0" max="65535" step="1" class="form-control" id="editHubPort" name="port" value="{{current_hub.port}}">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </div>
+        </form>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="addHubModal" tabindex="-1" aria-labelledby="addCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addHubModalLabel">ДОБАВИТЬ ХАБ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/settings/add">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="addHubName">Название</label>
+                        <input class="form-control" id="addHubName" maxlength="128" name="hub_name" required="" type="text" value="">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <input class="btn btn-primary text-white" name="submit" type="submit" value="Создать">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const activateHubForm = document.getElementById("activateHubForm");
+            const activateHubSelect = document.getElementById("activateHubSelect");
+            activateHubSelect.addEventListener("change", function () {
+                activateHubForm.submit();
+            });
+        });
+    </script>
+{% endblock %}

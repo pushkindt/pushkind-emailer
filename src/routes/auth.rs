@@ -4,7 +4,7 @@ use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header;
 use actix_web::{Error, FromRequest, HttpRequest, HttpResponse, dev::Payload};
 use actix_web::{HttpMessage, Responder, get, post, web};
-
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::future::{Ready, ready};
 use tera::Context;
@@ -58,7 +58,14 @@ pub async fn login(
     web::Form(form): web::Form<LoginRequest>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = pool.get().expect("Couldn't get DB connection");
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
+            error!("Database connection error: {}", err); // Log the error for debugging
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
 
     match find_user_by_email(&mut conn, &form.email) {
         Ok(user) => {
@@ -96,7 +103,14 @@ pub async fn register(
     web::Form(form): web::Form<RegisterRequest>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = pool.get().expect("Couldn't get DB connection");
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
+            error!("Database connection error: {}", err); // Log the error for debugging
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
 
     match create_user(&mut conn, &form.email, &form.password) {
         Ok(_) => {

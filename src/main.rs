@@ -9,6 +9,9 @@ use dotenvy::dotenv;
 
 use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
+use pushkind_emailer::routes::main::{
+    recipients, settings, settings_activate, settings_add, settings_save,
+};
 use pushkind_emailer::routes::{index, login, logout, register, signin, signup};
 
 #[actix_web::main]
@@ -22,7 +25,11 @@ async fn main() -> std::io::Result<()> {
 
     let pool = establish_connection_pool(database_url);
 
-    let secret_key = Key::generate();
+    let secret_key = env::var("SECRET_KEY");
+    let secret_key = match secret_key {
+        Ok(key) => Key::from(key.as_bytes()),
+        Err(_) => Key::generate(),
+    };
 
     HttpServer::new(move || {
         App::new()
@@ -42,7 +49,16 @@ async fn main() -> std::io::Result<()> {
                     .service(register),
             )
             .service(Files::new("/assets", "./assets"))
-            .service(web::scope("").wrap(RedirectUnauthorized).service(index))
+            .service(
+                web::scope("")
+                    .wrap(RedirectUnauthorized)
+                    .service(index)
+                    .service(recipients)
+                    .service(settings)
+                    .service(settings_add)
+                    .service(settings_activate)
+                    .service(settings_save),
+            )
             .app_data(web::Data::new(pool.clone()))
     })
     .bind((address, port))?
