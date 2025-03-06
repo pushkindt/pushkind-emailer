@@ -18,10 +18,10 @@ use pushkind_emailer::routes::{index, login, logout, register, signin, signup};
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenv().ok(); // Load .env file
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
-    let port = env::var("PORT").expect("PORT must be set in .env");
+    let database_url = env::var("DATABASE_URL").unwrap_or("app.db".to_string());
+    let port = env::var("PORT").unwrap_or("8080".to_string());
     let port = port.parse::<u16>().expect("PORT must be a number");
-    let address = env::var("ADDRESS").expect("ADDRESS must be set in .env");
+    let address = env::var("ADDRESS").unwrap_or("127.0.0.1".to_string());
 
     let pool = establish_connection_pool(database_url);
 
@@ -45,8 +45,7 @@ async fn main() -> std::io::Result<()> {
                     .service(logout)
                     .service(login)
                     .service(signin)
-                    .service(signup)
-                    .service(register),
+                    .service(signup), // .service(register),
             )
             .service(Files::new("/assets", "./assets"))
             .service(
