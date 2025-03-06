@@ -1,61 +1,22 @@
 use actix_identity::Identity;
 use actix_session::Session;
-use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header;
-use actix_web::{Error, FromRequest, HttpRequest, HttpResponse, dev::Payload};
 use actix_web::{HttpMessage, Responder, get, post, web};
+use actix_web::{HttpRequest, HttpResponse};
 use log::error;
-use serde::{Deserialize, Serialize};
-use std::future::{Ready, ready};
 use tera::Context;
 
 use crate::TEMPLATES;
 use crate::db::DbPool;
-use crate::models::{User, add_flash_message, get_flash_messages};
-use crate::repository::{create_user, find_user_by_email, verify_password};
-
-#[derive(Serialize)]
-pub struct AuthenticatedUser(pub User);
-
-impl FromRequest for AuthenticatedUser {
-    type Error = Error;
-    type Future = Ready<Result<Self, Self::Error>>;
-
-    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        let identity = Identity::from_request(req, &mut Payload::None).into_inner();
-        let pool = req.app_data::<web::Data<DbPool>>().cloned();
-
-        if let (Ok(Some(uid)), Some(pool)) = (identity.map(|i| i.id().ok()), pool) {
-            use crate::schema::users::dsl::*;
-            use diesel::prelude::*;
-
-            let mut conn = match pool.get() {
-                Ok(conn) => conn,
-                Err(_) => {
-                    return ready(Err(ErrorInternalServerError("DB connection error")));
-                }
-            };
-
-            match users.filter(email.eq(&uid)).first::<User>(&mut conn) {
-                Ok(user) => return ready(Ok(AuthenticatedUser(user))),
-                Err(_) => return ready(Err(ErrorUnauthorized("Invalid user"))),
-            }
-        }
-        ready(Err(ErrorUnauthorized("Unauthorized").into()))
-    }
-}
-
-#[derive(Deserialize)]
-struct LoginRequest {
-    email: String,
-    password: String,
-}
+use crate::forms::auth::{LoginForm, RegisterForm};
+use crate::models::alert::{add_flash_message, get_flash_messages};
+use crate::repository::user::{create_user, find_user_by_email, verify_password};
 
 #[post("/login")]
 pub async fn login(
     request: HttpRequest,
     pool: web::Data<DbPool>,
-    web::Form(form): web::Form<LoginRequest>,
+    web::Form(form): web::Form<LoginForm>,
     mut session: Session,
 ) -> impl Responder {
     let mut conn = match pool.get() {
@@ -91,16 +52,10 @@ pub async fn login(
     }
 }
 
-#[derive(Deserialize)]
-struct RegisterRequest {
-    email: String,
-    password: String,
-}
-
 #[post("/register")]
 pub async fn register(
     pool: web::Data<DbPool>,
-    web::Form(form): web::Form<RegisterRequest>,
+    web::Form(form): web::Form<RegisterForm>,
     mut session: Session,
 ) -> impl Responder {
     let mut conn = match pool.get() {

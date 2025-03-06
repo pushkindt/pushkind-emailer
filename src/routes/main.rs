@@ -2,14 +2,15 @@ use actix_session::Session;
 use actix_web::http::header;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use log::error;
-use serde::Deserialize;
 use tera::Context;
 
 use crate::TEMPLATES;
 use crate::db::DbPool;
-use crate::models::{Hub, add_flash_message, get_flash_messages};
-use crate::repository::{create_hub, get_hub, list_hubs, set_user_hub, update_hub};
-use crate::routes::auth::AuthenticatedUser;
+use crate::forms::main::{ActivateHubForm, AddHubForm, SaveHubForm};
+use crate::models::alert::{add_flash_message, get_flash_messages};
+use crate::models::auth::AuthenticatedUser;
+use crate::repository::hub::{create_hub, get_hub, list_hubs, update_hub};
+use crate::repository::user::set_user_hub;
 
 #[get("/")]
 pub async fn index(user: AuthenticatedUser, session: Session) -> impl Responder {
@@ -82,16 +83,11 @@ pub async fn settings(
     )
 }
 
-#[derive(Deserialize)]
-struct AddHubRequest {
-    hub_name: String,
-}
-
 #[post("/settings/add")]
 pub async fn settings_add(
     _: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    web::Form(form): web::Form<AddHubRequest>,
+    web::Form(form): web::Form<AddHubForm>,
     mut session: Session,
 ) -> impl Responder {
     let mut conn = match pool.get() {
@@ -120,16 +116,11 @@ pub async fn settings_add(
         .finish()
 }
 
-#[derive(Deserialize)]
-struct ActivateHubRequest {
-    hub_id: i32,
-}
-
 #[post("/settings/activate")]
 pub async fn settings_activate(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    web::Form(form): web::Form<ActivateHubRequest>,
+    web::Form(form): web::Form<ActivateHubForm>,
     mut session: Session,
 ) -> impl Responder {
     let mut conn = match pool.get() {
@@ -162,7 +153,7 @@ pub async fn settings_activate(
 pub async fn settings_save(
     _: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    web::Form(form): web::Form<Hub>,
+    web::Form(form): web::Form<SaveHubForm>,
     mut session: Session,
 ) -> impl Responder {
     let mut conn = match pool.get() {
@@ -174,7 +165,7 @@ pub async fn settings_save(
         }
     };
 
-    match update_hub(&mut conn, &form) {
+    match update_hub(&mut conn, &form.into()) {
         Ok(_) => {
             add_flash_message(&mut session, "success", "Хаб сохранён.");
         }

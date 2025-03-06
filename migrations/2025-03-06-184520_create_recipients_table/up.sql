@@ -1,0 +1,25 @@
+-- Your SQL goes here
+CREATE TABLE IF NOT EXISTS recipients (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    hub_id INTEGER NOT NULL REFERENCES hubs(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS groups (
+    id INTEGER NOT NULL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    hub_id INTEGER NOT NULL REFERENCES hubs(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS groups_recipients (
+    group_id INTEGER NOT NULL,
+    recipient_id INTEGER NOT NULL,
+    PRIMARY KEY (group_id, recipient_id),
+    FOREIGN KEY (group_id) REFERENCES groups(id),
+    FOREIGN KEY (recipient_id) REFERENCES recipients(id)
+);

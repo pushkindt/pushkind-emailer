@@ -9,10 +9,10 @@ use dotenvy::dotenv;
 
 use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
+use pushkind_emailer::routes::auth::{login, logout, signin, signup};
 use pushkind_emailer::routes::main::{
-    recipients, settings, settings_activate, settings_add, settings_save,
+    index, recipients, settings, settings_activate, settings_add, settings_save,
 };
-use pushkind_emailer::routes::{index, login, logout, register, signin, signup};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use tera::Tera;
 
 pub mod db;
+pub mod forms;
 pub mod middleware;
 pub mod models;
 pub mod repository;
