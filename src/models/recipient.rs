@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use serde::Serialize;
 
-#[derive(Queryable, Selectable, Serialize)]
+#[derive(Queryable, Selectable, Serialize, Identifiable)]
 #[diesel(table_name = crate::schema::recipients)]
 #[diesel(belongs_to(Hub))]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
@@ -23,7 +23,7 @@ pub struct NewRecipient<'a> {
     pub hub_id: i32,
 }
 
-#[derive(Queryable, Selectable, Serialize)]
+#[derive(Queryable, Selectable, Serialize, Identifiable)]
 #[diesel(table_name = crate::schema::groups)]
 #[diesel(belongs_to(Hub))]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
@@ -43,7 +43,7 @@ pub struct NewGroup<'a> {
     pub hub_id: i32,
 }
 
-#[derive(Queryable, Selectable, Serialize)]
+#[derive(Identifiable, Queryable, Selectable, Associations, Insertable)]
 #[diesel(table_name = crate::schema::groups_recipients)]
 #[diesel(belongs_to(Recipient))]
 #[diesel(belongs_to(Group))]

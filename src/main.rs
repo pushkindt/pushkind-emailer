@@ -11,7 +11,10 @@ use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
 use pushkind_emailer::routes::auth::{login, logout, signin, signup};
 use pushkind_emailer::routes::main::index;
-use pushkind_emailer::routes::recipients::{recipients, recipients_add, recipients_delete};
+use pushkind_emailer::routes::recipients::{
+    recipients, recipients_add, recipients_assign, recipients_delete, recipients_group_add,
+    recipients_group_delete, recipients_unassign,
+};
 use pushkind_emailer::routes::settings::{
     settings, settings_activate, settings_add, settings_save,
 };
@@ -60,7 +63,11 @@ async fn main() -> std::io::Result<()> {
                     .service(settings_activate)
                     .service(settings_save)
                     .service(recipients_add)
-                    .service(recipients_delete),
+                    .service(recipients_delete)
+                    .service(recipients_group_add)
+                    .service(recipients_group_delete)
+                    .service(recipients_assign)
+                    .service(recipients_unassign),
             )
             .app_data(web::Data::new(pool.clone()))
     })
