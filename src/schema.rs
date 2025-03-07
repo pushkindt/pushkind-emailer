@@ -1,6 +1,25 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    email_recipients (id) {
+        id -> Integer,
+        email_id -> Integer,
+        address -> Text,
+        opened -> Bool,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    emails (id) {
+        id -> Integer,
+        user_id -> Integer,
+        message -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     groups (id) {
         id -> Integer,
         name -> Text,
@@ -53,6 +72,8 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(email_recipients -> emails (email_id));
+diesel::joinable!(emails -> users (user_id));
 diesel::joinable!(groups -> hubs (hub_id));
 diesel::joinable!(groups_recipients -> groups (group_id));
 diesel::joinable!(groups_recipients -> recipients (recipient_id));
@@ -60,6 +81,8 @@ diesel::joinable!(recipients -> hubs (hub_id));
 diesel::joinable!(users -> hubs (hub_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    email_recipients,
+    emails,
     groups,
     groups_recipients,
     hubs,
