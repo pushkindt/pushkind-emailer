@@ -1,0 +1,44 @@
+use diesel::prelude::*;
+use serde::Serialize;
+
+#[derive(Queryable, Selectable, Serialize)]
+#[diesel(table_name = crate::schema::emails)]
+#[diesel(belongs_to(User))]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct Email {
+    pub id: i32,
+    pub user_id: i32,
+    pub message: String,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::emails)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewEmail<'a> {
+    pub user_id: i32,
+    pub message: &'a str,
+    pub created_at: &'a chrono::NaiveDateTime,
+}
+
+#[derive(Queryable, Selectable, Serialize)]
+#[diesel(table_name = crate::schema::email_recipients)]
+#[diesel(belongs_to(Email))]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct EmailRecipient {
+    pub id: i32,
+    pub email_id: i32,
+    pub address: String,
+    pub opened: bool,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::email_recipients)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewEmailRecipient<'a> {
+    pub email_id: i32,
+    pub address: &'a str,
+    pub opened: bool,
+    pub updated_at: &'a chrono::NaiveDateTime,
+}
