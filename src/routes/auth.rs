@@ -67,12 +67,9 @@ pub async fn register(
         }
     };
 
-    match create_user(&mut conn, &form.email, &form.password) {
+    match create_user(&mut conn, &form) {
         Ok(_) => {
             add_flash_message(&mut session, "success", "Пользователь может войти.");
-            HttpResponse::SeeOther()
-                .insert_header((header::LOCATION, "/auth/signin"))
-                .finish()
         }
         Err(err) => {
             add_flash_message(
@@ -80,12 +77,11 @@ pub async fn register(
                 "danger",
                 &format!("Ошибка при создании пользователя: {}", err),
             );
-
-            HttpResponse::SeeOther()
-                .insert_header((header::LOCATION, "/auth/signup"))
-                .finish()
         }
     }
+    HttpResponse::SeeOther()
+        .insert_header((header::LOCATION, "/auth/signup"))
+        .finish()
 }
 
 #[post("/logout")]

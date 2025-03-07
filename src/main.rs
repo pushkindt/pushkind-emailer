@@ -10,8 +10,10 @@ use dotenvy::dotenv;
 use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
 use pushkind_emailer::routes::auth::{login, logout, signin, signup};
-use pushkind_emailer::routes::main::{
-    index, recipients, settings, settings_activate, settings_add, settings_save,
+use pushkind_emailer::routes::main::index;
+use pushkind_emailer::routes::recipients::{recipients, recipients_add, recipients_delete};
+use pushkind_emailer::routes::settings::{
+    settings, settings_activate, settings_add, settings_save,
 };
 
 #[actix_web::main]
@@ -56,7 +58,9 @@ async fn main() -> std::io::Result<()> {
                     .service(settings)
                     .service(settings_add)
                     .service(settings_activate)
-                    .service(settings_save),
+                    .service(settings_save)
+                    .service(recipients_add)
+                    .service(recipients_delete),
             )
             .app_data(web::Data::new(pool.clone()))
     })

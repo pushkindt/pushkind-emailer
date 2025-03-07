@@ -1,15 +1,23 @@
-use crate::models::user::{NewUser, User};
 use bcrypt::{DEFAULT_COST, hash, verify};
 use diesel::prelude::*;
+use log::error;
 
-pub fn create_user(conn: &mut SqliteConnection, email: &str, password: &str) -> QueryResult<User> {
+use crate::{
+    forms::auth::RegisterForm,
+    models::user::{NewUser, User},
+};
+
+pub fn create_user(conn: &mut SqliteConnection, form: &RegisterForm) -> QueryResult<User> {
     use crate::schema::users::dsl::{id, users};
 
-    let password = hash(password, DEFAULT_COST).expect("Error hashing password");
+    let hashed_password = hash(&form.password, DEFAULT_COST).map_err(|err| {
+        error!("Error hashing password: {}", err);
+        diesel::result::Error::RollbackTransaction
+    })?;
 
     let new_user = NewUser {
-        email,
-        password: &password,
+        email: &form.email,
+        password: &hashed_password,
     };
 
     diesel::insert_into(users).values(&new_user).execute(conn)?;

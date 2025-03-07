@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-{% include 'main/navigation.html' %}
+{% include 'navigation.html' %}
 
 <div class="container my-2">
     <div class="row mb-3">
@@ -10,7 +10,7 @@
             <form method="POST" action="/recipients/group/add">
                 <div class="row mb-3">
                     <div class="col">
-                        <input class="form-control" type="text" name="group_name" placeholder="Название" required>
+                        <input class="form-control" type="text" name="name" placeholder="Название" required>
                     </div>
                     <div class="col-3 text-end">
                         <button class="btn btn-primary" type="submit">Добавить</button>
@@ -35,28 +35,31 @@
             <form method="POST" action="/recipients/add">
                 <div class="row mb-3">
                     <div class="col">
-                        <input class="form-control" type="text" name="recipient_name" placeholder="Имя" required>
+                        <input class="form-control" type="text" name="name" placeholder="Имя" required>
                     </div>
                     <div class="col">
-                        <input class="form-control" type="email" name="recipient_email" placeholder="Электронный адрес" required>
+                        <input class="form-control" type="email" name="email" placeholder="Электронный адрес" required>
                     </div>
                     <div class="col-3 text-end">
                         <button class="btn btn-primary" type="submit">Добавить</button>
                     </div>
                 </div>
             </form>
-            <ul class="list-group">
-                
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        Получатель (email@address.com)
-                        <form method="POST" action="/recipients/delete" style="display:inline;">
-                            <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
-                        </form>
-                    </li>
-                
-            </ul>
+            {% if recipients %}
+                <ul class="list-group">
+                    {% for recipient in recipients %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{recipient.name}} ({{recipient.email}})
+                            <form method="POST" action="/recipients/delete" style="display:inline;">
+                                <input type="hidden" value="{{recipient.id}}" name="id">
+                                <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
         </div>
     </div>
     <h5>Группы получателей</h5>
@@ -95,8 +98,8 @@
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 Получатель (email@address.com)
                                 <form method="POST" action="/recipients/unassign" style="display:inline;">
-                                    <input type="hidden" name="role_id" value="1">
-                                    <input type="hidden" name="action_id" value="1">
+                                    <input type="hidden" name="group_id" value="1">
+                                    <input type="hidden" name="recipient_id" value="1">
                                     <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Убрать?')">
                                         <i class="bi bi-x-lg"></i>
                                     </button>

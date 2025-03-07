@@ -1,5 +1,6 @@
-use crate::models::hub::{Hub, NewHub};
 use diesel::prelude::*;
+
+use crate::models::hub::{Hub, NewHub};
 
 pub fn create_hub(conn: &mut SqliteConnection, name: &str) -> QueryResult<Hub> {
     use crate::schema::hubs::dsl::{hubs, id};
