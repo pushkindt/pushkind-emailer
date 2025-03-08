@@ -1,5 +1,14 @@
 {% extends 'base.html' %}
 
+{% block styles %}
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/css/selectize.bootstrap4.min.css"
+        integrity="sha512-MMojOrCQrqLg4Iarid2YMYyZ7pzjPeXKRvhW9nZqLo6kPBBTuvNET9DBVWptAo/Q20Fy11EIHM5ig4WlIrJfQw=="
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    />
+{% endblock %}
+
 {% block content %}
 {% include 'navigation.html' %}
 
@@ -21,7 +30,7 @@
             <form method="POST" action="/recipients/assign" id="recipients-assign-form">
                 <div class="row mb-3">
                     <div class="col">
-                        <select class="form-select" name="group_id" required id="recipients-assign-form-group-id">
+                        <select class="form-control" name="group_id" required id="recipients-assign-form-group-id">
                             <option disabled selected value="">Выбор группы</option>
                             {% for group_assignment in groups %}
                                 {% set group = group_assignment.0 %}
@@ -30,7 +39,7 @@
                         </select>
                     </div>
                     <div class="col">
-                        <select class="form-select" name="recipient_id" required id="recipients-assign-form-recipient-id">
+                        <select class="form-control" name="recipient_id" required id="recipients-assign-form-recipient-id">
                             <option disabled selected value="">Выбор получателя</option>
                             {% for recipient in recipients %}
                                 <option value="{{recipient.id}}">{{recipient.name}} ({{recipient.email}})</option>
@@ -132,4 +141,26 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+    <script
+        src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+        crossorigin="anonymous">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/js/standalone/selectize.min.js"
+        integrity="sha512-pF+DNRwavWMukUv/LyzDyDMn8U2uvqYQdJN0Zvilr6DDo/56xPDZdDoyPDYZRSL4aOKO/FGKXTpzDyQJ8je8Qw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+    </script>
+    <script>
+        $(document).ready(function () {
+
+            let recipient_select = $("#recipients-assign-form-recipient-id");
+            recipient_select.selectize({});
+            let group_select = $("#recipients-assign-form-group-id");
+            group_select.selectize({});
+
+        });
+    </script>
 {% endblock %}
