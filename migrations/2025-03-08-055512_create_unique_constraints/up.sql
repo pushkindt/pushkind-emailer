@@ -1,0 +1,30 @@
+-- Your SQL goes here
+DROP TABLE IF EXISTS recipients;
+CREATE TABLE recipients (
+    id INTEGER NOT NULL PRIMARY KEY,
+    `name` VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    hub_id INTEGER NOT NULL REFERENCES hubs(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (email, hub_id)
+);
+DROP TABLE IF EXISTS email_recipients;
+CREATE TABLE email_recipients (
+    id INTEGER NOT NULL PRIMARY KEY,
+    email_id INTEGER NOT NULL REFERENCES emails(id),
+    `address` VARCHAR(255) NOT NULL,
+    opened BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (email_id, `address`)
+);
+
+DROP TABLE IF EXISTS groups;
+CREATE TABLE groups (
+    id INTEGER NOT NULL PRIMARY KEY,
+    `name` VARCHAR(255) NOT NULL,
+    hub_id INTEGER NOT NULL REFERENCES hubs(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (`name`, hub_id)
+);
