@@ -26,6 +26,22 @@
                     </div>
                 </div>
             </form>
+            <h5>Получатели</h5>
+            <form method="POST" action="/recipients/add">
+                <div class="row mb-3">
+                    <div class="col">
+                        <input class="form-control" type="text" name="name" placeholder="Имя" required>
+                    </div>
+                    <div class="col">
+                        <input class="form-control" type="email" name="email" placeholder="Электронный адрес" required>
+                    </div>
+                    <div class="col-3 text-end">
+                        <button class="btn btn-primary" type="submit">Добавить</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="col-md-6">
             <h5>Группы получателей</h5>
             <form method="POST" action="/recipients/assign" id="recipients-assign-form">
                 <div class="row mb-3">
@@ -51,19 +67,22 @@
                     </div>
                 </div>
             </form>
-        </div>
-        <div class="col-md-6">
-            <h5>Получатели</h5>
-            <form method="POST" action="/recipients/add">
-                <div class="row mb-3">
+            <h5>Массовая загрузка/удаление</h5>
+            <form method="POST" action="/recipients/upload">
+                <div class="row">
                     <div class="col">
-                        <input class="form-control" type="text" name="name" placeholder="Имя" required>
-                    </div>
-                    <div class="col">
-                        <input class="form-control" type="email" name="email" placeholder="Электронный адрес" required>
+                        <input class="form-control" type="file" name="csv" id="uploadRecipients" accept=".csv">
+                        <small class="text-muted">Формат: "name";"email";"group1,group2"</small>
                     </div>
                     <div class="col-3 text-end">
-                        <button class="btn btn-primary" type="submit">Добавить</button>
+                        <button class="btn btn-primary" type="submit">Загрузить</button>
+                    </div>
+                </div>
+            </form>
+            <form method="POST" action="/recipients/clean">
+                <div class="row">
+                    <div class="col text-end">
+                        <button class="btn btn-danger" type="submit" onclick="return confirm('Удалить всё?')">Очистить</button>
                     </div>
                 </div>
             </form>

@@ -146,3 +146,16 @@ pub fn unassign_recipient_from_group(
     )
     .execute(conn)
 }
+
+pub fn clean_all_recipients_and_groups(
+    conn: &mut SqliteConnection,
+    hub: i32,
+) -> QueryResult<usize> {
+    use crate::schema::groups;
+    use crate::schema::groups_recipients;
+    use crate::schema::recipients;
+
+    diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub))).execute(conn)?;
+    diesel::delete(groups_recipients::table).execute(conn)?;
+    diesel::delete(groups::table.filter(groups::hub_id.eq(hub))).execute(conn)
+}

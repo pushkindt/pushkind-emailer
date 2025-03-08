@@ -12,9 +12,9 @@ use crate::forms::recipients::{
 use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::repository::recipient::{
-    assign_recipient_to_group, create_group, create_recipient, delete_group, delete_recipient,
-    get_hub_all_recipients, get_hub_group_recipients, get_hub_nogroup_recipients,
-    unassign_recipient_from_group,
+    assign_recipient_to_group, clean_all_recipients_and_groups, create_group, create_recipient,
+    delete_group, delete_recipient, get_hub_all_recipients, get_hub_group_recipients,
+    get_hub_nogroup_recipients, unassign_recipient_from_group,
 };
 
 #[get("/recipients")]
@@ -285,6 +285,47 @@ pub async fn recipients_unassign(
             &mut session,
             "danger",
             "Вы не можете удалять назначения группы.",
+        );
+    }
+
+    HttpResponse::SeeOther()
+        .insert_header((header::LOCATION, "/recipients"))
+        .finish()
+}
+
+#[post("/recipients/clean")]
+pub async fn recipients_clean(
+    user: AuthenticatedUser,
+    pool: web::Data<DbPool>,
+    mut session: Session,
+) -> impl Responder {
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
+            error!("Database connection error: {}", err); // Log the error for debugging
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    if let Some(hub_id) = user.0.hub_id {
+        match clean_all_recipients_and_groups(&mut conn, hub_id) {
+            Ok(_) => {
+                add_flash_message(&mut session, "success", "Все получатели и группы удалены.");
+            }
+            Err(err) => {
+                add_flash_message(
+                    &mut session,
+                    "danger",
+                    &format!("Ошибка при удалении групп и получателей: {}", err),
+                );
+            }
+        }
+    } else {
+        add_flash_message(
+            &mut session,
+            "danger",
+            "Вы не можете удалять группы и получатели.",
         );
     }
 
