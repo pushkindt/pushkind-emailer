@@ -13,7 +13,7 @@ use pushkind_emailer::routes::auth::{login, logout, signin, signup};
 use pushkind_emailer::routes::main::index;
 use pushkind_emailer::routes::recipients::{
     recipients, recipients_add, recipients_assign, recipients_clean, recipients_delete,
-    recipients_group_add, recipients_group_delete, recipients_unassign,
+    recipients_group_add, recipients_group_delete, recipients_unassign, recipients_upload,
 };
 use pushkind_emailer::routes::settings::{
     settings, settings_activate, settings_add, settings_save,
@@ -68,7 +68,8 @@ async fn main() -> std::io::Result<()> {
                     .service(recipients_group_delete)
                     .service(recipients_assign)
                     .service(recipients_unassign)
-                    .service(recipients_clean),
+                    .service(recipients_clean)
+                    .service(recipients_upload),
             )
             .app_data(web::Data::new(pool.clone()))
     })

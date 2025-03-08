@@ -1,20 +1,24 @@
+use std::io::Read;
+
+use actix_multipart::form::MultipartForm;
 use actix_session::Session;
 use actix_web::http::header;
 use actix_web::{HttpResponse, Responder, get, post, web};
-use log::error;
+use log::{error, info};
 use tera::Context;
 
 use crate::TEMPLATES;
 use crate::db::DbPool;
 use crate::forms::recipients::{
     AddGroupForm, AddRecipientForm, AssignGroupRecipientForm, DeleteGroupForm, DeleteRecipientForm,
+    UploadRecipientsForm,
 };
 use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::repository::recipient::{
     assign_recipient_to_group, clean_all_recipients_and_groups, create_group, create_recipient,
     delete_group, delete_recipient, get_hub_all_recipients, get_hub_group_recipients,
-    get_hub_nogroup_recipients, unassign_recipient_from_group,
+    get_hub_nogroup_recipients, parse_recipients_csv, unassign_recipient_from_group,
 };
 
 #[get("/recipients")]
@@ -327,6 +331,51 @@ pub async fn recipients_clean(
             "danger",
             "Вы не можете удалять группы и получатели.",
         );
+    }
+
+    HttpResponse::SeeOther()
+        .insert_header((header::LOCATION, "/recipients"))
+        .finish()
+}
+
+#[post("/recipients/upload")]
+pub async fn recipients_upload(
+    user: AuthenticatedUser,
+    pool: web::Data<DbPool>,
+    MultipartForm(mut form): MultipartForm<UploadRecipientsForm>,
+    mut session: Session,
+) -> impl Responder {
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
+            error!("Database connection error: {}", err); // Log the error for debugging
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    let mut csv_content = String::new();
+
+    match form.csv.file.read_to_string(&mut csv_content) {
+        Ok(_) => match parse_recipients_csv(&mut conn, user.0.hub_id.unwrap(), &csv_content) {
+            Ok(_) => {
+                add_flash_message(&mut session, "success", "Файл успешно загружен.");
+            }
+            Err(err) => {
+                add_flash_message(
+                    &mut session,
+                    "danger",
+                    &format!("Ошибка при загрузке файла: {}", err),
+                );
+            }
+        },
+        Err(err) => {
+            add_flash_message(
+                &mut session,
+                "danger",
+                &format!("Ошибка при чтении файла: {}", err),
+            );
+        }
     }
 
     HttpResponse::SeeOther()
