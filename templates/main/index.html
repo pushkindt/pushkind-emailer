@@ -17,8 +17,19 @@
             <div class="row mb-3 ps-3">
                 <a class="recipientsDropDown" href="#">Получатели</a>
                 <select class="form-control" id="recipients" multiple name="recipients" required>
-                    <option value="email@address.com">Получатель (email@address.com)</option>
-                    <option value="email1@address.com">Получатель1 (email1@address.com)</option>
+
+                    {% if recipients %}
+                        {% for recipient in recipients %}
+                            <option value="{{recipient.email}}">{{recipient.name}} ({{recipient.email}})</option>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if groups %}
+                        {% for group in groups %}
+                            <option value="{{group.id}}">Группа: {{group.name}}</option>
+                        {% endfor %}
+                    {% endif %}
+
                 </select>
                 <a id="recipientsNone" href="#" class="text-danger">убрать всех</a>
             </div>

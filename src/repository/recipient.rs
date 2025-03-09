@@ -288,3 +288,13 @@ fn insert_or_update_recipient_with_groups(
 
     Ok(())
 }
+
+pub fn get_hub_all_groups(conn: &mut SqliteConnection, hub: i32) -> QueryResult<Vec<Group>> {
+    use crate::schema::groups;
+
+    groups::table
+        .filter(groups::hub_id.eq(hub))
+        .select(Group::as_select())
+        .order(groups::name.desc())
+        .load::<Group>(conn)
+}
