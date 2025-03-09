@@ -245,6 +245,10 @@ fn insert_or_update_recipient_with_groups(
     .execute(conn)?;
 
     for group_name in group_names {
+        if group_name.is_empty() {
+            continue;
+        }
+
         // Check if group exists or insert new one
         let group_id = groups::table
             .filter(groups::name.eq(group_name))
