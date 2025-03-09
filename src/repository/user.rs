@@ -34,7 +34,11 @@ pub fn verify_password(stored_hash: &str, password: &str) -> bool {
     verify(password, stored_hash).unwrap_or(false)
 }
 
-pub fn set_user_hub(conn: &mut SqliteConnection, user_id: i32, hub_id: i32) -> QueryResult<usize> {
+pub fn set_user_hub(
+    conn: &mut SqliteConnection,
+    user_id: i32,
+    hub_id: Option<i32>,
+) -> QueryResult<usize> {
     use crate::schema::users::dsl::{hub_id as hub_id_col, users};
 
     diesel::update(users.find(user_id))

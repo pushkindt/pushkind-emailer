@@ -36,7 +36,7 @@ pub async fn recipients(
         }
     };
 
-    let flash_messages = get_flash_messages(&session);
+    let flash_messages = get_flash_messages(&mut session);
     let mut context = Context::new();
     context.insert("alerts", &flash_messages);
     context.insert("current_user", &user);
@@ -356,28 +356,35 @@ pub async fn recipients_upload(
 
     let mut csv_content = String::new();
 
-    match form.csv.file.read_to_string(&mut csv_content) {
-        Ok(_) => match parse_recipients_csv(&mut conn, user.0.hub_id.unwrap(), &csv_content) {
-            Ok(_) => {
-                add_flash_message(&mut session, "success", "Файл успешно загружен.");
-            }
+    if let Some(hub_id) = user.0.hub_id {
+        match form.csv.file.read_to_string(&mut csv_content) {
+            Ok(_) => match parse_recipients_csv(&mut conn, hub_id, &csv_content) {
+                Ok(_) => {
+                    add_flash_message(&mut session, "success", "Файл успешно загружен.");
+                }
+                Err(err) => {
+                    add_flash_message(
+                        &mut session,
+                        "danger",
+                        &format!("Ошибка при загрузке файла: {}", err),
+                    );
+                }
+            },
             Err(err) => {
                 add_flash_message(
                     &mut session,
                     "danger",
-                    &format!("Ошибка при загрузке файла: {}", err),
+                    &format!("Ошибка при чтении файла: {}", err),
                 );
             }
-        },
-        Err(err) => {
-            add_flash_message(
-                &mut session,
-                "danger",
-                &format!("Ошибка при чтении файла: {}", err),
-            );
         }
+    } else {
+        add_flash_message(
+            &mut session,
+            "danger",
+            "Вы не можете загружать группы и получатели.",
+        );
     }
-
     HttpResponse::SeeOther()
         .insert_header((header::LOCATION, "/recipients"))
         .finish()

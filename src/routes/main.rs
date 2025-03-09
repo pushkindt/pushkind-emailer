@@ -1,14 +1,29 @@
 use actix_session::Session;
-use actix_web::{HttpResponse, Responder, get};
+use actix_web::{HttpResponse, Responder, get, web};
+use log::{error, info};
 use tera::Context;
 
 use crate::TEMPLATES;
-use crate::models::alert::get_flash_messages;
+use crate::db::DbPool;
+use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 
 #[get("/")]
-pub async fn index(user: AuthenticatedUser, session: Session) -> impl Responder {
-    let flash_messages = get_flash_messages(&session);
+pub async fn index(
+    user: AuthenticatedUser,
+    pool: web::Data<DbPool>,
+    mut session: Session,
+) -> impl Responder {
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
+            error!("Database connection error: {}", err); // Log the error for debugging
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    let flash_messages = get_flash_messages(&mut session);
     let mut context = Context::new();
     context.insert("alerts", &flash_messages);
     context.insert("current_user", &user);

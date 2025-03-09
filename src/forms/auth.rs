@@ -10,4 +10,5 @@ pub struct LoginForm {
 pub struct RegisterForm {
     pub email: String,
     pub password: String,
+    pub secret: String,
 }

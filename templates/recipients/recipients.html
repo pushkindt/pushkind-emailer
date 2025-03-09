@@ -48,18 +48,22 @@
                     <div class="col">
                         <select class="form-control" name="group_id" required id="recipients-assign-form-group-id">
                             <option disabled selected value="">Выбор группы</option>
-                            {% for group_assignment in groups %}
-                                {% set group = group_assignment.0 %}
-                                <option value="{{group.id}}">{{group.name}}</option>
-                            {% endfor %}
+                            {% if groups %}
+                                {% for group_assignment in groups %}
+                                    {% set group = group_assignment.0 %}
+                                    <option value="{{group.id}}">{{group.name}}</option>
+                                {% endfor %}
+                            {% endif %}
                         </select>
                     </div>
                     <div class="col">
                         <select class="form-control" name="recipient_id" required id="recipients-assign-form-recipient-id">
                             <option disabled selected value="">Выбор получателя</option>
-                            {% for recipient in recipients %}
-                                <option value="{{recipient.id}}">{{recipient.name}} ({{recipient.email}})</option>
-                            {% endfor %}
+                            {% if recipients %}
+                                {% for recipient in recipients %}
+                                    <option value="{{recipient.id}}">{{recipient.name}} ({{recipient.email}})</option>
+                                {% endfor %}
+                            {% endif %}
                         </select>
                     </div>
                     <div class="col-3 text-end">

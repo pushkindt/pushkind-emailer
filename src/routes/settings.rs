@@ -6,10 +6,10 @@ use tera::Context;
 
 use crate::TEMPLATES;
 use crate::db::DbPool;
-use crate::forms::settings::{ActivateHubForm, AddHubForm, SaveHubForm};
+use crate::forms::settings::{ActivateHubForm, AddHubForm, DeleteHubForm, SaveHubForm};
 use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
-use crate::repository::hub::{create_hub, get_hub, list_hubs, update_hub};
+use crate::repository::hub::{create_hub, delete_hub, get_hub, list_hubs, update_hub};
 use crate::repository::user::set_user_hub;
 
 #[get("/settings")]
@@ -35,7 +35,7 @@ pub async fn settings(
         }
     };
 
-    let flash_messages = get_flash_messages(&session);
+    let flash_messages = get_flash_messages(&mut session);
     let mut context = Context::new();
     context.insert("alerts", &flash_messages);
     context.insert("hubs", &hubs);
@@ -104,7 +104,7 @@ pub async fn settings_activate(
         }
     };
 
-    match set_user_hub(&mut conn, user.0.id, form.hub_id) {
+    match set_user_hub(&mut conn, user.0.id, Some(form.hub_id)) {
         Ok(_) => {
             add_flash_message(&mut session, "success", "Хаб выбран.");
         }
@@ -146,6 +146,39 @@ pub async fn settings_save(
                 &mut session,
                 "danger",
                 &format!("Ошибка при изменении хаба: {}", err),
+            );
+        }
+    };
+    HttpResponse::SeeOther()
+        .insert_header((header::LOCATION, "/settings"))
+        .finish()
+}
+
+#[post("/settings/delete")]
+pub async fn settings_delete(
+    user: AuthenticatedUser,
+    pool: web::Data<DbPool>,
+    web::Form(form): web::Form<DeleteHubForm>,
+    mut session: Session,
+) -> impl Responder {
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
+            error!("Database connection error: {}", err); // Log the error for debugging
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    match delete_hub(&mut conn, user.0.id, form.id) {
+        Ok(_) => {
+            add_flash_message(&mut session, "success", "Хаб удалён.");
+        }
+        Err(err) => {
+            add_flash_message(
+                &mut session,
+                "danger",
+                &format!("Ошибка при удалении хаба: {}", err),
             );
         }
     };

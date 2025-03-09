@@ -37,3 +37,8 @@ impl Into<Hub> for SaveHubForm {
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct DeleteHubForm {
+    pub id: i32,
+}

@@ -67,17 +67,23 @@ pub async fn register(
         }
     };
 
-    match create_user(&mut conn, &form) {
-        Ok(_) => {
-            add_flash_message(&mut session, "success", "Пользователь может войти.");
+    let secret = std::env::var("SECRET_KEY");
+
+    if form.secret == secret.as_deref().unwrap_or("") {
+        match create_user(&mut conn, &form) {
+            Ok(_) => {
+                add_flash_message(&mut session, "success", "Пользователь может войти.");
+            }
+            Err(err) => {
+                add_flash_message(
+                    &mut session,
+                    "danger",
+                    &format!("Ошибка при создании пользователя: {}", err),
+                );
+            }
         }
-        Err(err) => {
-            add_flash_message(
-                &mut session,
-                "danger",
-                &format!("Ошибка при создании пользователя: {}", err),
-            );
-        }
+    } else {
+        add_flash_message(&mut session, "danger", "Неверный секретный ключ.");
     }
     HttpResponse::SeeOther()
         .insert_header((header::LOCATION, "/auth/signup"))
@@ -93,13 +99,13 @@ pub async fn logout(user: Identity) -> impl Responder {
 }
 
 #[get("/signin")]
-pub async fn signin(user: Option<Identity>, session: Session) -> impl Responder {
+pub async fn signin(user: Option<Identity>, mut session: Session) -> impl Responder {
     if let Some(_) = user {
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, "/"))
             .finish()
     } else {
-        let flash_messages = get_flash_messages(&session);
+        let flash_messages = get_flash_messages(&mut session);
 
         let mut context = Context::new();
 
@@ -114,13 +120,13 @@ pub async fn signin(user: Option<Identity>, session: Session) -> impl Responder 
 }
 
 #[get("/signup")]
-pub async fn signup(user: Option<Identity>, session: Session) -> impl Responder {
+pub async fn signup(user: Option<Identity>, mut session: Session) -> impl Responder {
     if let Some(_) = user {
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, "/"))
             .finish()
     } else {
-        let flash_messages = get_flash_messages(&session);
+        let flash_messages = get_flash_messages(&mut session);
 
         let mut context = Context::new();
 

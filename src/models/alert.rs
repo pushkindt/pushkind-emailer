@@ -7,7 +7,7 @@ pub struct Alert {
     pub message: String,
 }
 
-pub fn add_flash_message(session: &Session, category: &str, message: &str) {
+pub fn add_flash_message(session: &mut Session, category: &str, message: &str) {
     let mut messages: Vec<Alert> = match session.get("flash_messages") {
         Ok(Some(msgs)) => msgs, // If messages exist, use them
         Ok(None) => vec![],     // If no messages exist, initialize an empty Vec
@@ -22,7 +22,7 @@ pub fn add_flash_message(session: &Session, category: &str, message: &str) {
     let _ = session.insert("flash_messages", messages); // Store updated messages
 }
 
-pub fn get_flash_messages(session: &Session) -> Vec<Alert> {
+pub fn get_flash_messages(session: &mut Session) -> Vec<Alert> {
     let messages: Vec<Alert> = match session.get("flash_messages") {
         Ok(Some(msgs)) => msgs, // If messages exist, use them
         Ok(None) => vec![],     // If no messages exist, initialize an empty Vec
