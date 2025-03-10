@@ -14,39 +14,39 @@
 
 <div class="container my-2">
     <div class="row mb-3">
-        <div class="col-md-6">
+        <div class="col-lg-6">
             <h5>Группы</h5>
             <form method="POST" action="/recipients/group/add">
                 <div class="row mb-3">
-                    <div class="col">
-                        <input class="form-control" type="text" name="name" placeholder="Название" required>
+                    <div class="col-lg">
+                        <input class="form-control my-1" type="text" name="name" placeholder="Название" required>
                     </div>
-                    <div class="col-3 text-end">
-                        <button class="btn btn-primary" type="submit">Добавить</button>
+                    <div class="col-lg-3 text-end">
+                        <button class="btn btn-primary my-1" type="submit">Добавить</button>
                     </div>
                 </div>
             </form>
             <h5>Получатели</h5>
             <form method="POST" action="/recipients/add">
                 <div class="row mb-3">
-                    <div class="col">
-                        <input class="form-control" type="text" name="name" placeholder="Имя" required>
+                    <div class="col-lg">
+                        <input class="form-control my-1" type="text" name="name" placeholder="Имя" required>
                     </div>
-                    <div class="col">
-                        <input class="form-control" type="email" name="email" placeholder="Электронный адрес" required>
+                    <div class="col-lg">
+                        <input class="form-control my-1" type="email" name="email" placeholder="Электронный адрес" required>
                     </div>
-                    <div class="col-3 text-end">
-                        <button class="btn btn-primary" type="submit">Добавить</button>
+                    <div class="col-lg-3 text-end">
+                        <button class="btn btn-primary my-1" type="submit">Добавить</button>
                     </div>
                 </div>
             </form>
         </div>
-        <div class="col-md-6">
+        <div class="col-lg-6">
             <h5>Группы получателей</h5>
             <form method="POST" action="/recipients/assign" id="recipients-assign-form">
                 <div class="row mb-3">
-                    <div class="col">
-                        <select class="form-control" name="group_id" required id="recipients-assign-form-group-id">
+                    <div class="col-lg">
+                        <select class="form-control my-1" name="group_id" required id="recipients-assign-form-group-id">
                             <option disabled selected value="">Выбор группы</option>
                             {% if groups %}
                                 {% for group_assignment in groups %}
@@ -56,8 +56,8 @@
                             {% endif %}
                         </select>
                     </div>
-                    <div class="col">
-                        <select class="form-control" name="recipient_id" required id="recipients-assign-form-recipient-id">
+                    <div class="col-lg">
+                        <select class="form-control my-1" name="recipient_id" required id="recipients-assign-form-recipient-id">
                             <option disabled selected value="">Выбор получателя</option>
                             {% if recipients %}
                                 {% for recipient in recipients %}
@@ -66,27 +66,27 @@
                             {% endif %}
                         </select>
                     </div>
-                    <div class="col-3 text-end">
-                        <button class="btn btn-primary" type="submit">Назначить</button>
+                    <div class="col-lg-3 text-end">
+                        <button class="btn btn-primary my-1" type="submit">Назначить</button>
                     </div>
                 </div>
             </form>
             <h5>Массовая загрузка/удаление</h5>
             <form method="POST" action="/recipients/upload" enctype="multipart/form-data">
-                <div class="row">
-                    <div class="col">
-                        <input class="form-control" type="file" name="csv" id="uploadRecipients" accept=".csv" required>
+                <div class="row mb-3">
+                    <div class="col-lg">
+                        <input class="form-control my-1" type="file" name="csv" id="uploadRecipients" accept=".csv" required>
                         <small class="text-muted">Формат: "name","email","group1,group2"</small>
                     </div>
-                    <div class="col-3 text-end">
-                        <button class="btn btn-primary" type="submit">Загрузить</button>
+                    <div class="col-lg-3 text-end">
+                        <button class="btn btn-primary my-1" type="submit">Загрузить</button>
                     </div>
                 </div>
             </form>
             <form method="POST" action="/recipients/clean">
-                <div class="row">
-                    <div class="col text-end">
-                        <button class="btn btn-danger" type="submit" onclick="return confirm('Удалить всё?')">Очистить</button>
+                <div class="row mb-3">
+                    <div class="col-lg text-end">
+                        <button class="btn btn-danger my-1" type="submit" onclick="return confirm('Удалить всё?')">Очистить</button>
                     </div>
                 </div>
             </form>
