@@ -30,6 +30,7 @@ jobs:
         run: |
           ssh cicd@admin.pushkind.com "supervisorctl stop emailer_dev"
           scp ./target/release/pushkind-emailer cicd@admin.pushkind.com:/var/www5/html/
+          scp ./target/release/send_email cicd@admin.pushkind.com:/var/www5/html/
           scp -r ./assets/ cicd@admin.pushkind.com:/var/www5/html/
           scp -r ./templates/ cicd@admin.pushkind.com:/var/www5/html/
           scp -r ./migrations/ cicd@admin.pushkind.com:/var/www5/html/
