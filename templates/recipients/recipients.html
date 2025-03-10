@@ -109,7 +109,7 @@
                                     {% for recipient in no_group_recipients %}
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                             {{recipient.name}} ({{recipient.email}})
-                                            <form method="POST" action="/recipients/delete" style="display:inline;">
+                                            <form method="POST" action="/recipients/delete" class="d-inline">
                                                 <input type="hidden" value="{{recipient.id}}" name="id">
                                                 <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
                                                     <i class="bi bi-x-lg"></i>
@@ -134,7 +134,7 @@
                             </h2>
                             <div id="recipientGroupAssignment{{group.id}}" class="accordion-collapse collapse" data-bs-parent="#recipientGroupAccordion">
                                 <div class="accordion-body">
-                                    <form method="POST" action="/recipients/group/delete" class="mb-3">
+                                    <form method="POST" action="/recipients/group/delete" class="d-inline">
                                         <input type="hidden" value="{{group.id}}" name="id">
                                         <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
                                             <i class="bi bi-x-lg"></i>

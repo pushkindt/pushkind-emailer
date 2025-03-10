@@ -1,3 +1,138 @@
+use std::error::Error;
+
 use diesel::prelude::*;
 
-use crate::models::email::{Email, EmailRecipient, NewEmail, NewEmailRecipient};
+use crate::{
+    forms::main::SendEmailForm,
+    models::{
+        email::{Email, EmailRecipient, NewEmail, NewEmailRecipient},
+        recipient::Recipient,
+    },
+};
+
+pub fn get_user_all_emails_with_recipients(
+    conn: &mut SqliteConnection,
+    user_id: i32,
+) -> QueryResult<Vec<(Email, Vec<EmailRecipient>)>> {
+    use crate::schema::emails;
+
+    // Read all emails for a user sorted by timestamp
+    let all_emails: Vec<Email> = emails::table
+        .filter(emails::user_id.eq(user_id))
+        .order(emails::created_at.desc())
+        .select(Email::as_select()) // Ensure Diesel knows we're selecting the full Email struct
+        .load(conn)?;
+
+    // Load all recipients belonging to the fetched emails
+    let email_recipients: Vec<EmailRecipient> = EmailRecipient::belonging_to(&all_emails)
+        .select(EmailRecipient::as_select()) // Ensure Diesel knows we're selecting the full EmailRecipient struct
+        .load(conn)?;
+
+    // Group recipients by email and return
+    Ok(email_recipients
+        .grouped_by(&all_emails)
+        .into_iter()
+        .zip(all_emails)
+        .map(|(recipients, email)| (email, recipients))
+        .collect())
+}
+
+fn create_email_recipient(
+    conn: &mut SqliteConnection,
+    email_id: i32,
+    address: &str,
+    opened: bool,
+    updated_at: &chrono::NaiveDateTime,
+) -> QueryResult<EmailRecipient> {
+    use crate::schema::email_recipients;
+
+    let new_email_recipient = NewEmailRecipient {
+        email_id: email_id,
+        address: address,
+        opened: opened,
+        updated_at: updated_at,
+    };
+
+    diesel::insert_into(email_recipients::table)
+        .values(&new_email_recipient)
+        .execute(conn)?;
+
+    email_recipients::table
+        .filter(email_recipients::email_id.eq(email_id))
+        .filter(email_recipients::address.eq(address))
+        .first(conn)
+}
+
+pub fn create_email(
+    conn: &mut SqliteConnection,
+    email_form: &SendEmailForm,
+    user_id: i32,
+) -> Result<Email, Box<dyn Error>> {
+    use crate::schema::emails;
+    use crate::schema::groups_recipients;
+    use crate::schema::recipients;
+
+    let created_at = chrono::Utc::now().naive_utc();
+
+    let new_email = NewEmail {
+        user_id: user_id,
+        message: &email_form.message,
+        created_at: &created_at,
+        is_sent: false,
+    };
+
+    diesel::insert_into(emails::table)
+        .values(&new_email)
+        .execute(conn)?;
+
+    let email: Email = emails::table
+        .filter(emails::user_id.eq(user_id))
+        .filter(emails::created_at.eq(created_at))
+        .filter(emails::message.eq(&new_email.message))
+        .order(emails::created_at.desc())
+        .first(conn)?;
+
+    for recipient in &email_form.recipients {
+        // if recipient is an email and exists in the database create a new EmailRecipient
+        // if recipient is not an email but a group id then fetch the group and create a new EmailRecipient for each member
+        if recipient.contains('@') {
+            let recipient = recipient.trim();
+            let recipient: Recipient = recipients::table
+                .filter(recipients::email.eq(recipient))
+                .select(Recipient::as_select())
+                .first(conn)?;
+
+            create_email_recipient(conn, email.id, &recipient.email, false, &created_at)?;
+        } else {
+            let group_id = recipient.parse::<i32>()?;
+
+            let group_members: Vec<Recipient> = groups_recipients::table
+                .filter(groups_recipients::group_id.eq(group_id))
+                .inner_join(
+                    recipients::table.on(groups_recipients::recipient_id.eq(recipients::id)),
+                )
+                .select(Recipient::as_select())
+                .load(conn)?;
+
+            for member in group_members {
+                create_email_recipient(conn, email.id, &member.email, false, &created_at)?;
+            }
+        }
+    }
+
+    Ok(email)
+}
+
+pub fn remove_email(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<usize> {
+    use crate::schema::{email_recipients, emails};
+
+    diesel::delete(emails::table.filter(emails::id.eq(email_id))).execute(conn)?;
+    diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(email_id)))
+        .execute(conn)
+}
+
+pub fn get_email_by_id(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<Email> {
+    use crate::schema::emails;
+
+    emails::table.filter(emails::id.eq(email_id)).first(conn)
+}

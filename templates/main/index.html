@@ -13,7 +13,7 @@
     {% include 'navigation.html' %}
 
     <div class="container my-2">
-        <form method="POST" action="/send">
+        <form method="POST" action="/send_email">
             <div class="row mb-3 ps-3">
                 <a class="recipientsDropDown" href="#">Получатели</a>
                 <select class="form-control" id="recipients" multiple name="recipients" required>
@@ -35,7 +35,8 @@
             </div>
             <div class="row">
                 <div class="col">
-                    <textarea class="form-control" rows=10 id="message"></textarea>
+                    <textarea class="form-control" rows=10 id="message-input" required></textarea>
+                    <input type="hidden" id="message" name="message" required>
                 </div>
                 <div class="col border rounded" id="message-rendered">
                 </div>
@@ -60,28 +61,47 @@
 
     <div class="container">
         <div class="accordion" id="email-accordion">
-
-                <div class="accordion-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse1" aria-expanded="false" aria-controls="email-collapse1">
-                            #1 от 2025-01-01
-                        </button>
-                    </h2>
-                    <div id="email-collapse1" class="accordion-collapse collapse" data-bs-parent="#email-accordion">
-                        <div class="accordion-body">
-                            <div class="row">
-                                <div class="col">
-                                    Email Message
-                                </div>
-                                <div class="col">
-                                    <ul>
-                                        <li class="text-success">Получатель (email@address.com)</li>
-                                    </ul>
+            {% if emails %}
+                {% for email_recipients in emails %}
+                    {% set email = email_recipients.0 %}
+                    {% set recipients = email_recipients.1 %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false" aria-controls="email-collapse{{email.id}}">
+                                #{{email.id}} от {{email.created_at}}
+                            </button>
+                        </h2>
+                        <div id="email-collapse{{email.id}}" class="accordion-collapse collapse" data-bs-parent="#email-accordion">
+                            <div class="accordion-body">
+                                <form method="POST" action="/delete_email" class="d-inline">
+                                    <input type="hidden" value="{{email.id}}" name="id">
+                                    <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </form>
+                                <form method="POST" action="/retry_email" class="d-inline">
+                                    <input type="hidden" value="{{email.id}}" name="id">
+                                    <button class="btn btn-warning btn-sm" type="submit" onclick="return confirm('Добавить в очередь отправки?')">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </form>
+                                <div class="row">
+                                    <div class="col">
+                                        {{ email.message | safe }}
+                                    </div>
+                                    <div class="col">
+                                        <ul>
+                                            {% for recipient in recipients %}
+                                                <li class="{% if recipient.opened %}text-success{% endif %}">{{ recipient.address }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                {% endfor %}
+            {% endif %}
         </div>
     </div>
 
@@ -112,12 +132,15 @@
                 recipientsSelectize.clear(false);
             });
 
-            const edit_message = document.getElementById('message');
+            const edit_message = document.getElementById('message-input');
+            const message_send = document.getElementById('message');
             const render_message = document.getElementById('message-rendered');
             render_message.innerHTML = marked.parse(edit_message.value);
 
             edit_message.addEventListener("input", function () {
-                render_message.innerHTML = marked.parse(edit_message.value);
+                const rendered_message = marked.parse(edit_message.value);
+                render_message.innerHTML = rendered_message;
+                message_send.value = rendered_message;
             });
 
         });

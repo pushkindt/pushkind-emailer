@@ -16,6 +16,7 @@ diesel::table! {
         user_id -> Integer,
         message -> Text,
         created_at -> Timestamp,
+        is_sent -> Bool,
     }
 }
 

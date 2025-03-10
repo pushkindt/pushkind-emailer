@@ -1,9 +1,11 @@
 use diesel::prelude::*;
 use serde::Serialize;
 
-#[derive(Queryable, Selectable, Serialize)]
+use crate::models::hub::Hub;
+
+#[derive(Queryable, Selectable, Serialize, Associations, Identifiable)]
 #[diesel(table_name = crate::schema::users)]
-#[diesel(belongs_to(Hub))]
+#[diesel(belongs_to(Hub, foreign_key = hub_id))]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct User {
     pub id: i32,

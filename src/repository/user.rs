@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub fn create_user(conn: &mut SqliteConnection, form: &RegisterForm) -> QueryResult<User> {
-    use crate::schema::users::dsl::{id, users};
+    use crate::schema::users;
 
     let hashed_password = hash(&form.password, DEFAULT_COST).map_err(|err| {
         error!("Error hashing password: {}", err);
@@ -20,9 +20,13 @@ pub fn create_user(conn: &mut SqliteConnection, form: &RegisterForm) -> QueryRes
         password: &hashed_password,
     };
 
-    diesel::insert_into(users).values(&new_user).execute(conn)?;
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .execute(conn)?;
 
-    users.order(id.desc()).first(conn)
+    users::table
+        .filter(users::email.eq(&form.email))
+        .first(conn)
 }
 
 pub fn find_user_by_email(conn: &mut SqliteConnection, uname: &str) -> QueryResult<User> {

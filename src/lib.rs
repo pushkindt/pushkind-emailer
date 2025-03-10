@@ -8,6 +8,7 @@ pub mod models;
 pub mod repository;
 pub mod routes;
 pub mod schema;
+pub mod utils;
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {

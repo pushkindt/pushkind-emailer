@@ -9,8 +9,9 @@ use dotenvy::dotenv;
 
 use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
+use pushkind_emailer::models::zmq::ZmqConfig;
 use pushkind_emailer::routes::auth::{login, logout, register, signin, signup};
-use pushkind_emailer::routes::main::index;
+use pushkind_emailer::routes::main::{delete_email, index, retry_email, send_email};
 use pushkind_emailer::routes::recipients::{
     recipients, recipients_add, recipients_assign, recipients_clean, recipients_delete,
     recipients_group_add, recipients_group_delete, recipients_unassign, recipients_upload,
@@ -27,6 +28,7 @@ async fn main() -> std::io::Result<()> {
     let port = env::var("PORT").unwrap_or("8080".to_string());
     let port = port.parse::<u16>().expect("PORT must be a number");
     let address = env::var("ADDRESS").unwrap_or("127.0.0.1".to_string());
+    let zmq_address = env::var("ZMQ_ADDRESS").unwrap_or("tcp://127.0.0.1:5555".to_string());
 
     let pool = establish_connection_pool(database_url);
 
@@ -34,6 +36,10 @@ async fn main() -> std::io::Result<()> {
     let secret_key = match secret_key {
         Ok(key) => Key::from(key.as_bytes()),
         Err(_) => Key::generate(),
+    };
+
+    let zmq_config = ZmqConfig {
+        address: zmq_address,
     };
 
     HttpServer::new(move || {
@@ -58,6 +64,9 @@ async fn main() -> std::io::Result<()> {
                 web::scope("")
                     .wrap(RedirectUnauthorized)
                     .service(index)
+                    .service(send_email)
+                    .service(delete_email)
+                    .service(retry_email)
                     .service(recipients)
                     .service(settings)
                     .service(settings_add)
@@ -74,6 +83,7 @@ async fn main() -> std::io::Result<()> {
                     .service(recipients_upload),
             )
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(zmq_config.clone()))
     })
     .bind((address, port))?
     .run()
