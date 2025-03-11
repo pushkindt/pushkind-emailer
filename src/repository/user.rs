@@ -49,3 +49,9 @@ pub fn set_user_hub(
         .set(hub_id_col.eq(hub_id))
         .execute(conn)
 }
+
+pub fn get_user(conn: &mut SqliteConnection, user_id: i32) -> QueryResult<User> {
+    use crate::schema::users::dsl::users;
+
+    users.find(user_id).first(conn)
+}

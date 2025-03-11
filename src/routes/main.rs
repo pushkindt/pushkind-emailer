@@ -11,7 +11,7 @@ use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::models::zmq::ZmqConfig;
 use crate::repository::email::{
-    create_email, get_email_by_id, get_user_all_emails_with_recipients, remove_email,
+    create_email, get_email, get_user_all_emails_with_recipients, remove_email,
 };
 use crate::repository::recipient::{get_hub_all_groups, get_hub_all_recipients};
 use crate::utils::send_zmq_email_id;
@@ -183,7 +183,7 @@ pub async fn retry_email(
     };
 
     if let Some(_) = user.0.hub_id {
-        match get_email_by_id(&mut conn, form.id) {
+        match get_email(&mut conn, form.id) {
             Ok(email) if email.user_id == user.0.id => {
                 match send_zmq_email_id(email.id, &zmq_config) {
                     Ok(_) => {

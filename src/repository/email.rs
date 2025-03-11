@@ -131,8 +131,19 @@ pub fn remove_email(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<u
         .execute(conn)
 }
 
-pub fn get_email_by_id(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<Email> {
+pub fn get_email(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<Email> {
     use crate::schema::emails;
 
     emails::table.filter(emails::id.eq(email_id)).first(conn)
+}
+
+pub fn get_email_recipients(
+    conn: &mut SqliteConnection,
+    email_id: i32,
+) -> QueryResult<Vec<EmailRecipient>> {
+    use crate::schema::email_recipients;
+
+    email_recipients::table
+        .filter(email_recipients::email_id.eq(email_id))
+        .load(conn)
 }
