@@ -13,6 +13,7 @@ pub struct Email {
     pub message: String,
     pub created_at: chrono::NaiveDateTime,
     pub is_sent: bool,
+    pub subject: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -23,6 +24,7 @@ pub struct NewEmail<'a> {
     pub message: &'a str,
     pub created_at: &'a chrono::NaiveDateTime,
     pub is_sent: bool,
+    pub subject: Option<&'a str>,
 }
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
@@ -35,6 +37,7 @@ pub struct EmailRecipient {
     pub address: String,
     pub opened: bool,
     pub updated_at: chrono::NaiveDateTime,
+    pub is_sent: bool,
 }
 
 #[derive(Insertable)]
@@ -45,4 +48,5 @@ pub struct NewEmailRecipient<'a> {
     pub address: &'a str,
     pub opened: bool,
     pub updated_at: &'a chrono::NaiveDateTime,
+    pub is_sent: bool,
 }

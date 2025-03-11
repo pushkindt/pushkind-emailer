@@ -22,18 +22,18 @@ pub struct SaveHubForm {
     pub port: Option<i32>,
 }
 
-impl Into<Hub> for SaveHubForm {
-    fn into(self) -> Hub {
+impl From<SaveHubForm> for Hub {
+    fn from(val: SaveHubForm) -> Self {
         Hub {
-            id: self.id,
-            name: self.name,
-            login: self.login,
-            password: self.password,
-            sender: self.sender,
-            server: self.server,
-            port: self.port,
+            id: val.id,
+            name: val.name,
+            login: val.login,
+            password: val.password,
+            sender: val.sender,
+            server: val.server,
+            port: val.port,
             created_at: None,
-            updated_at: None,
+            updated_at: Some(chrono::Utc::now().naive_utc()),
         }
     }
 }

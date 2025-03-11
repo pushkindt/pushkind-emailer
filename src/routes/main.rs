@@ -12,6 +12,7 @@ use crate::models::auth::AuthenticatedUser;
 use crate::models::zmq::ZmqConfig;
 use crate::repository::email::{
     create_email, get_email, get_user_all_emails_with_recipients, remove_email,
+    set_email_recipient_opened_status,
 };
 use crate::repository::recipient::{get_hub_all_groups, get_hub_all_recipients};
 use crate::utils::send_zmq_email_id;
@@ -89,7 +90,7 @@ pub async fn send_email(
         }
     };
 
-    if let Some(_) = user.0.hub_id {
+    if user.0.hub_id.is_some() {
         match create_email(&mut conn, &form, user.0.id) {
             Ok(email) => {
                 match send_zmq_email_id(email.id, &zmq_config) {
@@ -143,7 +144,7 @@ pub async fn delete_email(
         }
     };
 
-    if let Some(_) = user.0.hub_id {
+    if user.0.hub_id.is_some() {
         match remove_email(&mut conn, form.id) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Сообщение удалено.");
@@ -182,7 +183,7 @@ pub async fn retry_email(
         }
     };
 
-    if let Some(_) = user.0.hub_id {
+    if user.0.hub_id.is_some() {
         match get_email(&mut conn, form.id) {
             Ok(email) if email.user_id == user.0.id => {
                 match send_zmq_email_id(email.id, &zmq_config) {
@@ -228,4 +229,25 @@ pub async fn retry_email(
     HttpResponse::SeeOther()
         .insert_header((header::LOCATION, "/"))
         .finish()
+}
+
+#[get("/track/{recipient_id}")]
+pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) -> impl Responder {
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(err) => {
+            error!("Database connection error: {}", err); // Log the error for debugging
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    match set_email_recipient_opened_status(&mut conn, recipient_id.into_inner(), true) {
+        Ok(_) => {
+            HttpResponse::Ok().content_type("image/svg+xml").body("<?xml version=\"1.0\" encoding=\"UTF-8\"?><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>")
+        }
+        Err(err) => {
+            error!("Database connection error: {}", err); // Log the error for debugging
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }

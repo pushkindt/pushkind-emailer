@@ -7,6 +7,7 @@ diesel::table! {
         address -> Text,
         opened -> Bool,
         updated_at -> Timestamp,
+        is_sent -> Bool,
     }
 }
 
@@ -17,6 +18,7 @@ diesel::table! {
         message -> Text,
         created_at -> Timestamp,
         is_sent -> Bool,
+        subject -> Nullable<Text>,
     }
 }
 

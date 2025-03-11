@@ -4,7 +4,7 @@ use actix_multipart::form::MultipartForm;
 use actix_session::Session;
 use actix_web::http::header;
 use actix_web::{HttpResponse, Responder, get, post, web};
-use log::{error, info};
+use log::error;
 use tera::Context;
 
 use crate::TEMPLATES;
@@ -119,7 +119,7 @@ pub async fn recipients_delete(
         }
     };
 
-    if let Some(_) = user.0.hub_id {
+    if user.0.hub_id.is_some() {
         match delete_recipient(&mut conn, form.id) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Получатель удален.");
@@ -195,7 +195,7 @@ pub async fn recipients_group_delete(
         }
     };
 
-    if let Some(_) = user.0.hub_id {
+    if user.0.hub_id.is_some() {
         match delete_group(&mut conn, form.id) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Группа удалена.");
@@ -233,7 +233,7 @@ pub async fn recipients_assign(
         }
     };
 
-    if let Some(_) = user.0.hub_id {
+    if user.0.hub_id.is_some() {
         match assign_recipient_to_group(&mut conn, &form) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Группа назначена получателю.");
@@ -271,7 +271,7 @@ pub async fn recipients_unassign(
         }
     };
 
-    if let Some(_) = user.0.hub_id {
+    if user.0.hub_id.is_some() {
         match unassign_recipient_from_group(&mut conn, &form) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Назначение группы удалено.");

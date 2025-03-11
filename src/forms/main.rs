@@ -5,6 +5,7 @@ pub struct SendEmailForm {
     #[serde(default)]
     pub recipients: Vec<String>,
     pub message: String,
+    pub subject: Option<String>,
 }
 
 #[derive(Deserialize)]

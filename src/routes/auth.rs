@@ -100,7 +100,7 @@ pub async fn logout(user: Identity) -> impl Responder {
 
 #[get("/signin")]
 pub async fn signin(user: Option<Identity>, mut session: Session) -> impl Responder {
-    if let Some(_) = user {
+    if user.is_some() {
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, "/"))
             .finish()
@@ -121,7 +121,7 @@ pub async fn signin(user: Option<Identity>, mut session: Session) -> impl Respon
 
 #[get("/signup")]
 pub async fn signup(user: Option<Identity>, mut session: Session) -> impl Responder {
-    if let Some(_) = user {
+    if user.is_some() {
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, "/"))
             .finish()

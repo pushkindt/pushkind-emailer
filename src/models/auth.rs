@@ -35,6 +35,6 @@ impl FromRequest for AuthenticatedUser {
                 Err(_) => return ready(Err(ErrorUnauthorized("Invalid user"))),
             }
         }
-        ready(Err(ErrorUnauthorized("Unauthorized").into()))
+        ready(Err(ErrorUnauthorized("Unauthorized")))
     }
 }

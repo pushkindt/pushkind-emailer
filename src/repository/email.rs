@@ -47,10 +47,11 @@ fn create_email_recipient(
     use crate::schema::email_recipients;
 
     let new_email_recipient = NewEmailRecipient {
-        email_id: email_id,
-        address: address,
-        opened: opened,
-        updated_at: updated_at,
+        email_id,
+        address,
+        opened,
+        updated_at,
+        is_sent: false,
     };
 
     diesel::insert_into(email_recipients::table)
@@ -75,10 +76,11 @@ pub fn create_email(
     let created_at = chrono::Utc::now().naive_utc();
 
     let new_email = NewEmail {
-        user_id: user_id,
+        user_id,
         message: &email_form.message,
         created_at: &created_at,
         is_sent: false,
+        subject: email_form.subject.as_deref(),
     };
 
     diesel::insert_into(emails::table)
@@ -146,4 +148,40 @@ pub fn get_email_recipients(
     email_recipients::table
         .filter(email_recipients::email_id.eq(email_id))
         .load(conn)
+}
+
+pub fn set_email_sent_status(
+    conn: &mut SqliteConnection,
+    email_id: i32,
+    status: bool,
+) -> QueryResult<usize> {
+    use crate::schema::emails;
+
+    diesel::update(emails::table.filter(emails::id.eq(email_id)))
+        .set(emails::is_sent.eq(status))
+        .execute(conn)
+}
+
+pub fn set_email_recipient_sent_status(
+    conn: &mut SqliteConnection,
+    recipient_id: i32,
+    status: bool,
+) -> QueryResult<usize> {
+    use crate::schema::email_recipients;
+
+    diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
+        .set(email_recipients::is_sent.eq(status))
+        .execute(conn)
+}
+
+pub fn set_email_recipient_opened_status(
+    conn: &mut SqliteConnection,
+    recipient_id: i32,
+    status: bool,
+) -> QueryResult<usize> {
+    use crate::schema::email_recipients;
+
+    diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
+        .set(email_recipients::opened.eq(status))
+        .execute(conn)
 }

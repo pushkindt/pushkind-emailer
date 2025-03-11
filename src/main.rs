@@ -11,7 +11,7 @@ use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
 use pushkind_emailer::models::zmq::ZmqConfig;
 use pushkind_emailer::routes::auth::{login, logout, register, signin, signup};
-use pushkind_emailer::routes::main::{delete_email, index, retry_email, send_email};
+use pushkind_emailer::routes::main::{delete_email, index, retry_email, send_email, track_email};
 use pushkind_emailer::routes::recipients::{
     recipients, recipients_add, recipients_assign, recipients_clean, recipients_delete,
     recipients_group_add, recipients_group_delete, recipients_unassign, recipients_upload,
@@ -67,6 +67,7 @@ async fn main() -> std::io::Result<()> {
                     .service(send_email)
                     .service(delete_email)
                     .service(retry_email)
+                    .service(track_email)
                     .service(recipients)
                     .service(settings)
                     .service(settings_add)

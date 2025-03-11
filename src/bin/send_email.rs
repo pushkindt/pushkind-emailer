@@ -1,14 +1,19 @@
+use std::convert::TryInto;
 use std::env;
 use std::error::Error;
-use std::{thread, time};
+use std::sync::Arc;
 
 use dotenvy::dotenv;
 use log::{error, info};
-use mail_send::mail_builder::MessageBuilder;
-
 use mail_send::SmtpClientBuilder;
+use mail_send::mail_builder::MessageBuilder;
+use tokio::sync::Mutex;
+use zmq;
+
 use pushkind_emailer::db::{DbPool, establish_connection_pool, get_db_connection};
-use pushkind_emailer::repository::email::{get_email, get_email_recipients};
+use pushkind_emailer::repository::email::{
+    get_email, get_email_recipients, set_email_recipient_sent_status, set_email_sent_status,
+};
 use pushkind_emailer::repository::hub::get_hub;
 use pushkind_emailer::repository::user::get_user;
 
@@ -29,8 +34,6 @@ async fn send_smtp_message(
         .html_body(body)
         .text_body(body);
 
-    // Connect to the SMTP submissions port, upgrade to TLS and
-    // authenticate using the provided credentials.
     SmtpClientBuilder::new(smtp_host, smtp_port)
         .implicit_tls(true)
         .credentials((smtp_username, smtp_password))
@@ -40,59 +43,78 @@ async fn send_smtp_message(
         .await
 }
 
-async fn send_email(email_id: i32, db_pool: &DbPool) -> Result<(), Box<dyn Error>> {
-    let mut conn = get_db_connection(db_pool)?;
+async fn send_email(
+    email_id: i32,
+    db_pool: Arc<Mutex<DbPool>>,
+    mail_tracking_url: &str,
+) -> Result<(), Box<dyn Error>> {
+    let pool = db_pool.lock().await;
+    let mut conn = get_db_connection(&pool)?;
 
     let email = get_email(&mut conn, email_id)?;
     let user = get_user(&mut conn, email.user_id)?;
     let recipients = get_email_recipients(&mut conn, email_id)?;
 
-    let hub_id: i32 = user
-        .hub_id
-        .ok_or_else(|| Box::<dyn Error>::from("Expected a number, found None"))?;
+    let hub = get_hub(&mut conn, user.hub_id.ok_or("Hub ID is missing")?)?;
 
-    let hub = get_hub(&mut conn, hub_id)?;
-
-    let body = email.message;
-
-    let smtp_host = hub
-        .server
-        .ok_or_else(|| Box::<dyn Error>::from("Expected smtp server, found None"))?;
-    let smtp_port: i32 = hub
+    let smtp_host = hub.server.ok_or("SMTP server is missing")?;
+    let smtp_port: u16 = hub
         .port
-        .ok_or_else(|| Box::<dyn Error>::from("Expected smtp port, found None"))?;
-    let smtp_username = hub
-        .login
-        .ok_or_else(|| Box::<dyn Error>::from("Expected smtp login, found None"))?;
-    let smtp_password = hub
-        .password
-        .ok_or_else(|| Box::<dyn Error>::from("Expected smtp password, found None"))?;
+        .ok_or("SMTP port is missing")?
+        .try_into()
+        .map_err(|_| "Invalid SMTP port")?;
+    let smtp_username = hub.login.ok_or("SMTP login is missing")?;
+    let smtp_password = hub.password.ok_or("SMTP password is missing")?;
     let from = hub.sender.unwrap_or_default();
 
-    println!("Sending email for email_id {} for hub {}", email_id, hub.id);
+    info!("Sending email for email_id {} via hub {}", email_id, hub.id);
+
+    let email_subject = email.subject.unwrap_or_default();
+
     for recipient in recipients {
-        let result = send_smtp_message(
+        let body = format!(
+            "{}<img src=\"{}{}\">",
+            &email.message, mail_tracking_url, recipient.id
+        );
+
+        if let Err(e) = send_smtp_message(
             &smtp_host,
-            smtp_port.try_into().unwrap(),
+            smtp_port,
             &smtp_username,
             &smtp_password,
             &from,
             &recipient.address,
-            "Pushkind-Emailer",
+            &email_subject,
             &body,
         )
-        .await;
+        .await
+        {
+            error!("Failed to send email to {}: {}", recipient.address, e);
+            continue;
+        }
 
-        match result {
-            Ok(_) => {
-                println!("Email sent successfully to {}", recipient.address);
-            }
-            Err(e) => {
-                println!("Failed to send email to {}: {}", recipient.address, e);
-            }
+        info!("Email sent successfully to {}", recipient.address);
+
+        if let Err(e) = set_email_recipient_sent_status(&mut conn, recipient.id, true) {
+            error!(
+                "Failed to update sent status for recipient {}: {}",
+                recipient.id, e
+            );
         }
     }
-    println!("Finished processing email_id: {}", email_id);
+
+    if let Err(e) = set_email_sent_status(&mut conn, email_id, true) {
+        error!(
+            "Failed to update email sent status for email {}: {}",
+            email_id, e
+        );
+    } else {
+        info!(
+            "Email sent status updated successfully for email {}",
+            email_id
+        );
+    }
+
     Ok(())
 }
 
@@ -101,8 +123,10 @@ async fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenv().ok(); // Load .env file
 
-    let database_url = env::var("DATABASE_URL").unwrap_or("app.db".to_string());
-    let zmq_address = env::var("ZMQ_ADDRESS").unwrap_or("tcp://127.0.0.1:5555".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
+    let zmq_address =
+        env::var("ZMQ_ADDRESS").unwrap_or_else(|_| "tcp://127.0.0.1:5555".to_string());
+    let mail_tracking_url = env::var("MAIL_TRACKING_URL").unwrap_or_default();
 
     let context = zmq::Context::new();
     let responder = context.socket(zmq::PULL).expect("Cannot create zmq socket");
@@ -110,16 +134,24 @@ async fn main() {
         .bind(&zmq_address)
         .expect("Cannot bind to zmq port");
 
-    let pool = establish_connection_pool(database_url);
+    let pool = Arc::new(Mutex::new(establish_connection_pool(database_url)));
+
     info!("Starting email worker");
+
     loop {
         let mut buffer = [0; 4];
         match responder.recv_into(&mut buffer, 0) {
             Ok(_) => {
-                let email_id: i32 = i32::from_be_bytes(buffer);
-                if let Err(e) = send_email(email_id, &pool).await {
-                    error!("Error sending email message: {}", e);
-                }
+                let email_id = i32::from_be_bytes(buffer);
+                let pool_clone = Arc::clone(&pool);
+                let mail_tracking_url_clone = mail_tracking_url.clone();
+
+                tokio::spawn(async move {
+                    if let Err(e) = send_email(email_id, pool_clone, &mail_tracking_url_clone).await
+                    {
+                        error!("Error sending email message: {}", e);
+                    }
+                });
             }
             Err(e) => {
                 error!("Error receiving message: {}", e);
