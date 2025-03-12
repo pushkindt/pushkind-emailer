@@ -14,7 +14,9 @@ use crate::repository::email::{
     create_email, get_email, get_user_all_emails_with_recipients, remove_email,
     reset_email_sent_and_opened_status, set_email_recipient_opened_status,
 };
-use crate::repository::recipient::{get_hub_all_groups, get_hub_all_recipients};
+use crate::repository::recipient::{
+    get_hub_all_groups, get_hub_all_recipients, get_hub_all_recipients_fields,
+};
 use crate::utils::send_zmq_email_id;
 
 #[get("/")]
@@ -43,6 +45,9 @@ pub async fn index(
         }
         if let Ok(emails) = get_user_all_emails_with_recipients(&mut conn, user.0.id) {
             context.insert("emails", &emails);
+        }
+        if let Ok(custom_fields) = get_hub_all_recipients_fields(&mut conn, hub_id) {
+            context.insert("custom_fields", &custom_fields);
         }
     }
 

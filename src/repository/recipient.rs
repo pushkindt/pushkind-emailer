@@ -380,3 +380,18 @@ pub fn get_hub_all_groups(conn: &mut SqliteConnection, hub: i32) -> QueryResult<
         .order(groups::name.desc())
         .load::<Group>(conn)
 }
+
+pub fn get_hub_all_recipients_fields(
+    conn: &mut SqliteConnection,
+    hub: i32,
+) -> QueryResult<Vec<String>> {
+    use crate::schema::recipient_fields;
+    use crate::schema::recipients;
+
+    recipients::table
+        .filter(recipients::hub_id.eq(hub))
+        .inner_join(recipient_fields::table.on(recipients::id.eq(recipient_fields::recipient_id)))
+        .select(recipient_fields::field)
+        .distinct()
+        .load::<String>(conn)
+}

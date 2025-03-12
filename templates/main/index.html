@@ -148,7 +148,11 @@
 
             let recipients = $("#recipients");
             recipients.selectize({
-                searchField: ["text", "opt1", "opt2"],
+                searchField: ["text",
+                    {% for field in custom_fields %}
+                        "{{field}}",
+                    {% endfor %}
+                ],
                 render: {
                     option: function(item, escape) {
                         let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';

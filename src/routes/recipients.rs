@@ -16,8 +16,9 @@ use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::repository::recipient::{
     assign_recipient_to_group, clean_all_recipients_and_groups, create_group, create_recipient,
-    delete_group, delete_recipient, get_hub_all_recipients, get_hub_group_recipients,
-    get_hub_nogroup_recipients, unassign_recipient_from_group, update_recipients_from_csv,
+    delete_group, delete_recipient, get_hub_all_recipients, get_hub_all_recipients_fields,
+    get_hub_group_recipients, get_hub_nogroup_recipients, unassign_recipient_from_group,
+    update_recipients_from_csv,
 };
 
 #[get("/recipients")]
@@ -46,6 +47,9 @@ pub async fn recipients(
         }
         if let Ok(groups) = get_hub_group_recipients(&mut conn, hub_id) {
             context.insert("groups", &groups);
+        }
+        if let Ok(custom_fields) = get_hub_all_recipients_fields(&mut conn, hub_id) {
+            context.insert("custom_fields", &custom_fields);
         }
     }
 
