@@ -54,6 +54,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    recipient_fields (recipient_id, field) {
+        recipient_id -> Integer,
+        field -> Text,
+        value -> Text,
+    }
+}
+
+diesel::table! {
     recipients (id) {
         id -> Integer,
         name -> Text,
@@ -80,6 +88,7 @@ diesel::joinable!(emails -> users (user_id));
 diesel::joinable!(groups -> hubs (hub_id));
 diesel::joinable!(groups_recipients -> groups (group_id));
 diesel::joinable!(groups_recipients -> recipients (recipient_id));
+diesel::joinable!(recipient_fields -> recipients (recipient_id));
 diesel::joinable!(recipients -> hubs (hub_id));
 diesel::joinable!(users -> hubs (hub_id));
 
@@ -89,6 +98,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     groups,
     groups_recipients,
     hubs,
+    recipient_fields,
     recipients,
     users,
 );

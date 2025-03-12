@@ -1,23 +1,36 @@
+use std::collections::HashMap;
+
 use diesel::prelude::*;
 use diesel::result::Error;
 use serde::Deserialize;
 
 use crate::{
     forms::recipients::{AddGroupForm, AddRecipientForm, AssignGroupRecipientForm},
-    models::recipient::{Group, GroupRecipient, NewGroup, NewRecipient, Recipient},
+    models::recipient::{Group, GroupRecipient, NewGroup, NewRecipient, Recipient, RecipientField},
 };
 
 pub fn get_hub_all_recipients(
     conn: &mut SqliteConnection,
     hub: i32,
-) -> QueryResult<Vec<Recipient>> {
+) -> QueryResult<Vec<(Recipient, Vec<RecipientField>)>> {
     use crate::schema::recipients;
 
-    recipients::table
+    let recipients = recipients::table
         .filter(recipients::hub_id.eq(hub))
         .select(Recipient::as_select())
         .order(recipients::name.desc())
-        .load::<Recipient>(conn)
+        .load::<Recipient>(conn)?;
+
+    let recipient_fields = RecipientField::belonging_to(&recipients)
+        .select(RecipientField::as_select())
+        .load(conn)?;
+
+    Ok(recipient_fields
+        .grouped_by(&recipients)
+        .into_iter()
+        .zip(recipients)
+        .map(|(fields, recipient)| (recipient, fields))
+        .collect::<Vec<(Recipient, Vec<RecipientField>)>>())
 }
 
 pub fn get_hub_nogroup_recipients(
@@ -177,20 +190,66 @@ pub fn clean_all_recipients_and_groups(
 struct RecipientCSV {
     name: String,
     email: String,
-    groups: String, // comma separated group names
+    groups: Vec<String>,
+    optional_fields: HashMap<String, String>,
 }
 
-pub fn parse_recipients_csv(
+fn parse_recipients_csv(csv: &str) -> Result<Vec<RecipientCSV>, Box<dyn std::error::Error>> {
+    let mut rdr = csv::Reader::from_reader(csv.as_bytes());
+
+    let headers = rdr.headers()?.clone();
+    let mut recipients = Vec::new();
+
+    for result in rdr.records() {
+        let record = result?;
+        let mut optional_fields = HashMap::new();
+
+        let mut name = String::new();
+        let mut email = String::new();
+        let mut groups = Vec::new();
+
+        for (i, field) in record.iter().enumerate() {
+            match headers.get(i) {
+                Some("name") => name = field.to_string(),
+                Some("email") => email = field.to_string(),
+                Some("groups") => {
+                    groups = field
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                }
+                Some(header) => {
+                    if field.len() == 0 {
+                        continue;
+                    }
+                    optional_fields.insert(header.to_string(), field.to_string());
+                }
+                None => continue,
+            }
+        }
+
+        recipients.push(RecipientCSV {
+            name,
+            email,
+            groups,
+            optional_fields,
+        });
+    }
+
+    Ok(recipients)
+}
+
+pub fn update_recipients_from_csv(
     conn: &mut SqliteConnection,
     hub_id: i32,
     csv: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut rdr = csv::Reader::from_reader(csv.as_bytes());
-    for result in rdr.deserialize() {
-        let record: RecipientCSV = result?;
+    let recipients = parse_recipients_csv(csv)?;
 
+    for recipient in recipients {
         conn.transaction::<_, Error, _>(|conn| {
-            insert_or_update_recipient_with_groups(conn, hub_id, record)
+            insert_or_update_recipient_with_groups(conn, hub_id, recipient)
         })?;
     }
     Ok(())
@@ -234,6 +293,7 @@ fn insert_or_update_recipient_with_groups(
     csv: RecipientCSV,
 ) -> Result<(), Error> {
     use crate::schema::groups_recipients;
+    use crate::schema::recipient_fields;
     use crate::schema::recipients;
 
     let existing_recipient = recipients::table
@@ -269,19 +329,12 @@ fn insert_or_update_recipient_with_groups(
         }
     };
 
-    let group_names: Vec<&str> = csv
-        .groups
-        .split(',')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
-
     diesel::delete(
         groups_recipients::table.filter(groups_recipients::recipient_id.eq(recipient_id)),
     )
     .execute(conn)?;
 
-    for group_name in group_names {
+    for group_name in &csv.groups {
         let group_id = get_or_insert_group(conn, group_name, hub_id)?;
 
         // Insert new group-recipient relation
@@ -292,6 +345,21 @@ fn insert_or_update_recipient_with_groups(
 
         diesel::insert_into(groups_recipients::table)
             .values(&new_group_recipient)
+            .execute(conn)?;
+    }
+
+    diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(recipient_id)))
+        .execute(conn)?;
+
+    for (field, value) in csv.optional_fields {
+        let new_field = RecipientField {
+            recipient_id,
+            field,
+            value,
+        };
+
+        diesel::insert_into(recipient_fields::table)
+            .values(&new_field)
             .execute(conn)?;
     }
 

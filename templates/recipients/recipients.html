@@ -60,8 +60,15 @@
                         <select class="form-control my-1" name="recipient_id" required id="recipients-assign-form-recipient-id">
                             <option disabled selected value="">Выбор получателя</option>
                             {% if recipients %}
-                                {% for recipient in recipients %}
-                                    <option value="{{recipient.id}}">{{recipient.name}} ({{recipient.email}})</option>
+                                {% for recipient_fields in recipients %}
+                                    {% set recipient = recipient_fields.0 %}
+                                    {% set fields = recipient_fields.1 %}
+                                    <option
+                                        value="{{recipient.id}}"
+                                        data-data='{ "fields": {{fields | json_encode() | safe}} }'
+                                    >
+                                        {{recipient.name}} ({{recipient.email}})
+                                    </option>
                                 {% endfor %}
                             {% endif %}
                         </select>
@@ -76,7 +83,7 @@
                 <div class="row mb-3">
                     <div class="col-lg">
                         <input class="form-control my-1" type="file" name="csv" id="uploadRecipients" accept=".csv" required>
-                        <small class="text-muted">Формат: "name","email","group1,group2"</small>
+                        <small class="text-muted">Формат: "name","email","group1,group2";"произвольные поля"</small>
                     </div>
                     <div class="col-lg-3 text-end">
                         <button class="btn btn-primary my-1" type="submit">Загрузить</button>
@@ -180,7 +187,26 @@
         $(document).ready(function () {
 
             let recipient_select = $("#recipients-assign-form-recipient-id");
-            recipient_select.selectize({});
+            recipient_select.selectize({
+                render: {
+                    option: function(item, escape) {
+                        let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
+
+                        if (item.fields) {
+                            console.log(item.fields)
+                            result += '<br><small>';
+                            for (const field of item.fields) {
+                                result += field.field + ': ' + field.value + ' ';
+                            }
+                            result += '</small>';
+                        }
+
+
+                        result += '</div>';
+                        return result
+                    }
+                }
+            });
             let group_select = $("#recipients-assign-form-group-id");
             group_select.selectize({});
 

@@ -17,7 +17,7 @@ use crate::models::auth::AuthenticatedUser;
 use crate::repository::recipient::{
     assign_recipient_to_group, clean_all_recipients_and_groups, create_group, create_recipient,
     delete_group, delete_recipient, get_hub_all_recipients, get_hub_group_recipients,
-    get_hub_nogroup_recipients, parse_recipients_csv, unassign_recipient_from_group,
+    get_hub_nogroup_recipients, unassign_recipient_from_group, update_recipients_from_csv,
 };
 
 #[get("/recipients")]
@@ -321,7 +321,7 @@ pub async fn recipients_upload(
 
     if let Some(hub_id) = user.0.hub_id {
         match form.csv.file.read_to_string(&mut csv_content) {
-            Ok(_) => match parse_recipients_csv(&mut conn, hub_id, &csv_content) {
+            Ok(_) => match update_recipients_from_csv(&mut conn, hub_id, &csv_content) {
                 Ok(_) => {
                     add_flash_message(&mut session, "success", "Файл успешно загружен.");
                 }

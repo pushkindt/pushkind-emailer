@@ -55,3 +55,14 @@ pub struct GroupRecipient {
     pub group_id: i32,
     pub recipient_id: i32,
 }
+
+#[derive(Identifiable, Queryable, Selectable, Associations, Insertable, Serialize)]
+#[diesel(table_name = crate::schema::recipient_fields)]
+#[diesel(belongs_to(Recipient, foreign_key = recipient_id))]
+#[diesel(primary_key(recipient_id, field))]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct RecipientField {
+    pub recipient_id: i32,
+    pub field: String,
+    pub value: String,
+}

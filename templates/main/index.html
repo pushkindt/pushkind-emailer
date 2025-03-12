@@ -19,8 +19,15 @@
                 <select class="form-control" id="recipients" multiple name="recipients" required>
 
                     {% if recipients %}
-                        {% for recipient in recipients %}
-                            <option value="{{recipient.email}}">{{recipient.name}} ({{recipient.email}})</option>
+                        {% for recipient_fields in recipients %}
+                            {% set recipient = recipient_fields.0 %}
+                            {% set fields = recipient_fields.1 %}
+                            <option
+                                value="{{recipient.email}}"
+                                data-data='{ "fields": {{fields | json_encode() | safe}} }'
+                            >
+                                {{recipient.name}} ({{recipient.email}})
+                            </option>
                         {% endfor %}
                     {% endif %}
 
@@ -140,7 +147,26 @@
         $(document).ready(function () {
 
             let recipients = $("#recipients");
-            recipients.selectize({});
+            recipients.selectize({
+                render: {
+                    option: function(item, escape) {
+                        let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
+
+                        if (item.fields) {
+                            console.log(item.fields)
+                            result += '<br><small>';
+                            for (const field of item.fields) {
+                                result += field.field + ': ' + field.value + ' ';
+                            }
+                            result += '</small>';
+                        }
+
+
+                        result += '</div>';
+                        return result
+                    }
+                }
+            });
             let recipientsSelectize = recipients[0].selectize;
 
             $(".recipientsDropDown").click(function(e) {
