@@ -24,7 +24,7 @@
                             {% set fields = recipient_fields.1 %}
                             <option
                                 value="{{recipient.email}}"
-                                data-data='{ "fields": {{fields | json_encode() | safe}} }'
+                                data-data='{{fields | json_encode() | safe}}'
                             >
                                 {{recipient.name}} ({{recipient.email}})
                             </option>
@@ -148,20 +148,18 @@
 
             let recipients = $("#recipients");
             recipients.selectize({
+                searchField: ["text", "opt1", "opt2"],
                 render: {
                     option: function(item, escape) {
                         let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
-
-                        if (item.fields) {
-                            console.log(item.fields)
-                            result += '<br><small>';
-                            for (const field of item.fields) {
-                                result += field.field + ': ' + field.value + ' ';
+                        result += '<br><small>';
+                        for (const field in item) {
+                            if (["text", "value", "disabled", "$order"].includes(field)) {
+                                continue;
                             }
-                            result += '</small>';
+                            result += escape(field) + ': ' + escape(item[field]) + ' ';
                         }
-
-
+                        result += '</small>';
                         result += '</div>';
                         return result
                     }

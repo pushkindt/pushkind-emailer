@@ -12,7 +12,7 @@ use crate::{
 pub fn get_hub_all_recipients(
     conn: &mut SqliteConnection,
     hub: i32,
-) -> QueryResult<Vec<(Recipient, Vec<RecipientField>)>> {
+) -> QueryResult<Vec<(Recipient, HashMap<String, String>)>> {
     use crate::schema::recipients;
 
     let recipients = recipients::table
@@ -29,8 +29,13 @@ pub fn get_hub_all_recipients(
         .grouped_by(&recipients)
         .into_iter()
         .zip(recipients)
-        .map(|(fields, recipient)| (recipient, fields))
-        .collect::<Vec<(Recipient, Vec<RecipientField>)>>())
+        .map(|(fields, recipient)| {
+            (
+                recipient,
+                fields.into_iter().map(|rf| (rf.field, rf.value)).collect(),
+            )
+        })
+        .collect::<Vec<(Recipient, HashMap<String, String>)>>())
 }
 
 pub fn get_hub_nogroup_recipients(
