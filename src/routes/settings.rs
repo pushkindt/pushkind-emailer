@@ -5,7 +5,7 @@ use log::error;
 use tera::Context;
 
 use crate::TEMPLATES;
-use crate::db::DbPool;
+use crate::db::{DbPool, get_db_connection};
 use crate::forms::settings::{ActivateHubForm, AddHubForm, DeleteHubForm, SaveHubForm};
 use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
@@ -18,13 +18,9 @@ pub async fn settings(
     mut session: Session,
     pool: web::Data<DbPool>,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     let hubs = match list_hubs(&mut conn) {
@@ -42,8 +38,8 @@ pub async fn settings(
     context.insert("current_user", &user);
     context.insert("current_page", "settings");
 
-    if user.0.hub_id.is_some() {
-        if let Ok(hub) = get_hub(&mut conn, user.0.hub_id.unwrap()) {
+    if let Some(hub_id) = user.0.hub_id {
+        if let Ok(hub) = get_hub(&mut conn, hub_id) {
             context.insert("current_hub", &hub);
         }
     }
@@ -62,13 +58,9 @@ pub async fn settings_add(
     web::Form(form): web::Form<AddHubForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     match create_hub(&mut conn, &form.hub_name) {
@@ -95,13 +87,9 @@ pub async fn settings_activate(
     web::Form(form): web::Form<ActivateHubForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     match set_user_hub(&mut conn, user.0.id, Some(form.hub_id)) {
@@ -128,13 +116,9 @@ pub async fn settings_save(
     web::Form(form): web::Form<SaveHubForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     match update_hub(&mut conn, &form.into()) {
@@ -161,13 +145,9 @@ pub async fn settings_delete(
     web::Form(form): web::Form<DeleteHubForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     match delete_hub(&mut conn, user.0.id, form.id) {

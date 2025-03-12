@@ -4,11 +4,10 @@ use actix_multipart::form::MultipartForm;
 use actix_session::Session;
 use actix_web::http::header;
 use actix_web::{HttpResponse, Responder, get, post, web};
-use log::error;
 use tera::Context;
 
 use crate::TEMPLATES;
-use crate::db::DbPool;
+use crate::db::{DbPool, get_db_connection};
 use crate::forms::recipients::{
     AddGroupForm, AddRecipientForm, AssignGroupRecipientForm, DeleteGroupForm, DeleteRecipientForm,
     UploadRecipientsForm,
@@ -27,13 +26,9 @@ pub async fn recipients(
     mut session: Session,
     pool: web::Data<DbPool>,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     let flash_messages = get_flash_messages(&mut session);
@@ -68,13 +63,9 @@ pub async fn recipients_add(
     web::Form(form): web::Form<AddRecipientForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if let Some(hub_id) = user.0.hub_id {
@@ -110,13 +101,9 @@ pub async fn recipients_delete(
     web::Form(form): web::Form<DeleteRecipientForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if user.0.hub_id.is_some() {
@@ -148,13 +135,9 @@ pub async fn recipients_group_add(
     web::Form(form): web::Form<AddGroupForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if let Some(hub_id) = user.0.hub_id {
@@ -186,13 +169,9 @@ pub async fn recipients_group_delete(
     web::Form(form): web::Form<DeleteGroupForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if user.0.hub_id.is_some() {
@@ -224,13 +203,9 @@ pub async fn recipients_assign(
     web::Form(form): web::Form<AssignGroupRecipientForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if user.0.hub_id.is_some() {
@@ -262,13 +237,9 @@ pub async fn recipients_unassign(
     web::Form(form): web::Form<AssignGroupRecipientForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if user.0.hub_id.is_some() {
@@ -303,13 +274,9 @@ pub async fn recipients_clean(
     pool: web::Data<DbPool>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if let Some(hub_id) = user.0.hub_id {
@@ -345,13 +312,9 @@ pub async fn recipients_upload(
     MultipartForm(mut form): MultipartForm<UploadRecipientsForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     let mut csv_content = String::new();

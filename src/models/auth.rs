@@ -1,9 +1,11 @@
+use std::future::{Ready, ready};
+
 use actix_identity::Identity;
 use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::web;
 use actix_web::{Error, FromRequest, HttpRequest, dev::Payload};
+use diesel::prelude::*;
 use serde::Serialize;
-use std::future::{Ready, ready};
 
 use crate::db::DbPool;
 use crate::models::user::User;
@@ -16,12 +18,13 @@ impl FromRequest for AuthenticatedUser {
     type Future = Ready<Result<Self, Self::Error>>;
 
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        let identity = Identity::from_request(req, &mut Payload::None).into_inner();
-        let pool = req.app_data::<web::Data<DbPool>>().cloned();
+        let identity = Identity::from_request(req, &mut Payload::None)
+            .into_inner()
+            .map(|i| i.id().ok());
+        let pool = req.app_data::<web::Data<DbPool>>();
 
-        if let (Ok(Some(uid)), Some(pool)) = (identity.map(|i| i.id().ok()), pool) {
-            use crate::schema::users::dsl::*;
-            use diesel::prelude::*;
+        if let (Ok(Some(uid)), Some(pool)) = (identity, pool) {
+            use crate::schema::users;
 
             let mut conn = match pool.get() {
                 Ok(conn) => conn,
@@ -30,7 +33,10 @@ impl FromRequest for AuthenticatedUser {
                 }
             };
 
-            match users.filter(email.eq(&uid)).first::<User>(&mut conn) {
+            match users::table
+                .filter(users::email.eq(&uid))
+                .first::<User>(&mut conn)
+            {
                 Ok(user) => return ready(Ok(AuthenticatedUser(user))),
                 Err(_) => return ready(Err(ErrorUnauthorized("Invalid user"))),
             }

@@ -7,9 +7,10 @@ use log::error;
 use tera::Context;
 
 use crate::TEMPLATES;
-use crate::db::DbPool;
+use crate::db::{DbPool, get_db_connection};
 use crate::forms::auth::{LoginForm, RegisterForm};
 use crate::models::alert::{add_flash_message, get_flash_messages};
+use crate::models::config::ServerConfig;
 use crate::repository::user::{create_user, find_user_by_email, verify_password};
 
 #[post("/login")]
@@ -19,25 +20,24 @@ pub async fn login(
     web::Form(form): web::Form<LoginForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     match find_user_by_email(&mut conn, &form.email) {
         Ok(user) => {
             if verify_password(&user.password, &form.password) {
-                Identity::login(&request.extensions(), user.email).unwrap();
+                if let Err(err) = Identity::login(&request.extensions(), user.email) {
+                    error!("Failed to log in user {}: {}", &form.email, err);
+                    return HttpResponse::InternalServerError().finish();
+                }
 
                 HttpResponse::SeeOther()
                     .insert_header((header::LOCATION, "/"))
                     .finish()
             } else {
-                add_flash_message(&mut session, "danger", "Не верный пароль.");
+                add_flash_message(&mut session, "danger", "Неверный пароль.");
                 HttpResponse::SeeOther()
                     .insert_header((header::LOCATION, "/auth/signin"))
                     .finish()
@@ -55,21 +55,16 @@ pub async fn login(
 #[post("/register")]
 pub async fn register(
     pool: web::Data<DbPool>,
+    config: web::Data<ServerConfig>,
     web::Form(form): web::Form<RegisterForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
-    let secret = std::env::var("SECRET_KEY");
-
-    if form.secret == secret.as_deref().unwrap_or("") {
+    if form.secret == config.secret {
         match create_user(&mut conn, &form) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Пользователь может войти.");
@@ -101,41 +96,41 @@ pub async fn logout(user: Identity) -> impl Responder {
 #[get("/signin")]
 pub async fn signin(user: Option<Identity>, mut session: Session) -> impl Responder {
     if user.is_some() {
-        HttpResponse::SeeOther()
+        return HttpResponse::SeeOther()
             .insert_header((header::LOCATION, "/"))
-            .finish()
-    } else {
-        let flash_messages = get_flash_messages(&mut session);
-
-        let mut context = Context::new();
-
-        context.insert("alerts", &flash_messages);
-
-        HttpResponse::Ok().body(
-            TEMPLATES
-                .render("auth/login.html", &context)
-                .unwrap_or_default(),
-        )
+            .finish();
     }
+
+    let flash_messages = get_flash_messages(&mut session);
+
+    let mut context = Context::new();
+
+    context.insert("alerts", &flash_messages);
+
+    HttpResponse::Ok().body(
+        TEMPLATES
+            .render("auth/login.html", &context)
+            .unwrap_or_default(),
+    )
 }
 
 #[get("/signup")]
 pub async fn signup(user: Option<Identity>, mut session: Session) -> impl Responder {
     if user.is_some() {
-        HttpResponse::SeeOther()
+        return HttpResponse::SeeOther()
             .insert_header((header::LOCATION, "/"))
-            .finish()
-    } else {
-        let flash_messages = get_flash_messages(&mut session);
-
-        let mut context = Context::new();
-
-        context.insert("alerts", &flash_messages);
-
-        HttpResponse::Ok().body(
-            TEMPLATES
-                .render("auth/register.html", &context)
-                .unwrap_or_default(),
-        )
+            .finish();
     }
+
+    let flash_messages = get_flash_messages(&mut session);
+
+    let mut context = Context::new();
+
+    context.insert("alerts", &flash_messages);
+
+    HttpResponse::Ok().body(
+        TEMPLATES
+            .render("auth/register.html", &context)
+            .unwrap_or_default(),
+    )
 }

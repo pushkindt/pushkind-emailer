@@ -49,7 +49,7 @@ async fn send_email(
     mail_tracking_url: &str,
 ) -> Result<(), Box<dyn Error>> {
     let pool = db_pool.lock().await;
-    let mut conn = get_db_connection(&pool)?;
+    let mut conn = get_db_connection(&pool).ok_or("Cannot get connection from the pool")?;
 
     let email = get_email(&mut conn, email_id)?;
     let user = get_user(&mut conn, email.user_id)?;
@@ -134,7 +134,15 @@ async fn main() {
         .bind(&zmq_address)
         .expect("Cannot bind to zmq port");
 
-    let pool = Arc::new(Mutex::new(establish_connection_pool(database_url)));
+    let pool = match establish_connection_pool(database_url) {
+        Ok(pool) => pool,
+        Err(e) => {
+            error!("Failed to establish database connection: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let pool = Arc::new(Mutex::new(pool));
 
     info!("Starting email worker");
 

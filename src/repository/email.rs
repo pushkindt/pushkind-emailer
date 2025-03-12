@@ -185,3 +185,19 @@ pub fn set_email_recipient_opened_status(
         .set(email_recipients::opened.eq(status))
         .execute(conn)
 }
+
+pub fn reset_email_sent_and_opened_status(
+    conn: &mut SqliteConnection,
+    email_id: i32,
+) -> QueryResult<usize> {
+    use crate::schema::email_recipients;
+
+    set_email_sent_status(conn, email_id, false)?;
+
+    diesel::update(email_recipients::table.filter(email_recipients::email_id.eq(email_id)))
+        .set((
+            email_recipients::opened.eq(false),
+            email_recipients::is_sent.eq(false),
+        ))
+        .execute(conn)
+}

@@ -7,9 +7,10 @@ use actix_web::cookie::Key;
 use actix_web::{App, HttpServer, middleware, web};
 use dotenvy::dotenv;
 
+use log::error;
 use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
-use pushkind_emailer::models::zmq::ZmqConfig;
+use pushkind_emailer::models::config::ServerConfig;
 use pushkind_emailer::routes::auth::{login, logout, register, signin, signup};
 use pushkind_emailer::routes::main::{delete_email, index, retry_email, send_email, track_email};
 use pushkind_emailer::routes::recipients::{
@@ -26,20 +27,27 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok(); // Load .env file
     let database_url = env::var("DATABASE_URL").unwrap_or("app.db".to_string());
     let port = env::var("PORT").unwrap_or("8080".to_string());
-    let port = port.parse::<u16>().expect("PORT must be a number");
+    let port = port.parse::<u16>().unwrap_or(8080);
     let address = env::var("ADDRESS").unwrap_or("127.0.0.1".to_string());
     let zmq_address = env::var("ZMQ_ADDRESS").unwrap_or("tcp://127.0.0.1:5555".to_string());
 
-    let pool = establish_connection_pool(database_url);
+    let pool = match establish_connection_pool(database_url) {
+        Ok(pool) => pool,
+        Err(e) => {
+            error!("Failed to establish database connection: {}", e);
+            std::process::exit(1);
+        }
+    };
 
-    let secret_key = env::var("SECRET_KEY");
-    let secret_key = match secret_key {
+    let secret = env::var("SECRET_KEY");
+    let secret_key = match &secret {
         Ok(key) => Key::from(key.as_bytes()),
         Err(_) => Key::generate(),
     };
 
-    let zmq_config = ZmqConfig {
-        address: zmq_address,
+    let zmq_config = ServerConfig {
+        zmq_address,
+        secret: secret.unwrap_or_default(),
     };
 
     HttpServer::new(move || {

@@ -5,14 +5,14 @@ use log::error;
 use tera::Context;
 
 use crate::TEMPLATES;
-use crate::db::DbPool;
+use crate::db::{DbPool, get_db_connection};
 use crate::forms::main::{DeleteEmailForm, SendEmailForm};
 use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
-use crate::models::zmq::ZmqConfig;
+use crate::models::config::ServerConfig;
 use crate::repository::email::{
     create_email, get_email, get_user_all_emails_with_recipients, remove_email,
-    set_email_recipient_opened_status,
+    reset_email_sent_and_opened_status, set_email_recipient_opened_status,
 };
 use crate::repository::recipient::{get_hub_all_groups, get_hub_all_recipients};
 use crate::utils::send_zmq_email_id;
@@ -23,13 +23,9 @@ pub async fn index(
     pool: web::Data<DbPool>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     let flash_messages = get_flash_messages(&mut session);
@@ -61,17 +57,13 @@ pub async fn index(
 pub async fn send_email(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    zmq_config: web::Data<ZmqConfig>,
+    zmq_config: web::Data<ServerConfig>,
     form: web::Bytes,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     let form = String::from_utf8_lossy(&form);
@@ -135,13 +127,9 @@ pub async fn delete_email(
     web::Form(form): web::Form<DeleteEmailForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if user.0.hub_id.is_some() {
@@ -170,30 +158,35 @@ pub async fn delete_email(
 pub async fn retry_email(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    zmq_config: web::Data<ZmqConfig>,
+    zmq_config: web::Data<ServerConfig>,
     web::Form(form): web::Form<DeleteEmailForm>,
     mut session: Session,
 ) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            add_flash_message(&mut session, "danger", "Ошибка сервера. Попробуйте позже.");
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     if user.0.hub_id.is_some() {
         match get_email(&mut conn, form.id) {
             Ok(email) if email.user_id == user.0.id => {
                 match send_zmq_email_id(email.id, &zmq_config) {
-                    Ok(_) => {
-                        add_flash_message(
-                            &mut session,
-                            "success",
-                            "Сообщение добавлено в очередь на отправку.",
-                        );
-                    }
+                    Ok(_) => match reset_email_sent_and_opened_status(&mut conn, email.id) {
+                        Ok(_) => {
+                            add_flash_message(
+                                &mut session,
+                                "success",
+                                "Сообщение добавлено в очередь на отправку.",
+                            );
+                        }
+                        Err(err) => {
+                            add_flash_message(
+                                &mut session,
+                                "danger",
+                                &format!("Ошибка при добавлении сообщения в очередь: {}", err),
+                            );
+                        }
+                    },
                     Err(err) => {
                         add_flash_message(
                             &mut session,
@@ -233,12 +226,9 @@ pub async fn retry_email(
 
 #[get("/track/{recipient_id}")]
 pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) -> impl Responder {
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(err) => {
-            error!("Database connection error: {}", err); // Log the error for debugging
-            return HttpResponse::InternalServerError().finish();
-        }
+    let mut conn = match get_db_connection(&pool) {
+        Some(conn) => conn,
+        None => return HttpResponse::InternalServerError().finish(),
     };
 
     match set_email_recipient_opened_status(&mut conn, recipient_id.into_inner(), true) {

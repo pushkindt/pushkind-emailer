@@ -20,6 +20,7 @@ pub struct SaveHubForm {
     pub sender: Option<String>,
     pub server: Option<String>,
     pub port: Option<i32>,
+    pub created_at: Option<chrono::NaiveDateTime>,
 }
 
 impl From<SaveHubForm> for Hub {
@@ -32,7 +33,7 @@ impl From<SaveHubForm> for Hub {
             sender: val.sender,
             server: val.server,
             port: val.port,
-            created_at: None,
+            created_at: val.created_at,
             updated_at: Some(chrono::Utc::now().naive_utc()),
         }
     }

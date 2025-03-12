@@ -196,12 +196,43 @@ pub fn parse_recipients_csv(
     Ok(())
 }
 
+fn get_or_insert_group(
+    conn: &mut SqliteConnection,
+    group_name: &str,
+    hub_id: i32,
+) -> Result<i32, Error> {
+    use crate::schema::groups;
+
+    if let Some(group_id) = groups::table
+        .filter(groups::name.eq(group_name))
+        .select(groups::id)
+        .first::<i32>(conn)
+        .optional()?
+    {
+        return Ok(group_id);
+    }
+
+    let new_group = NewGroup {
+        name: group_name,
+        hub_id,
+    };
+
+    diesel::insert_into(groups::table)
+        .values(&new_group)
+        .execute(conn)?;
+
+    groups::table
+        .filter(groups::name.eq(group_name))
+        .filter(groups::hub_id.eq(hub_id))
+        .select(groups::id)
+        .first::<i32>(conn)
+}
+
 fn insert_or_update_recipient_with_groups(
     conn: &mut SqliteConnection,
     hub_id: i32,
     csv: RecipientCSV,
 ) -> Result<(), Error> {
-    use crate::schema::groups;
     use crate::schema::groups_recipients;
     use crate::schema::recipients;
 
@@ -211,33 +242,39 @@ fn insert_or_update_recipient_with_groups(
         .first::<(i32, String)>(conn)
         .optional()?;
 
-    let recipient_id = if let Some((existing_id, existing_name)) = existing_recipient {
-        // Update recipient's name if different
-        if existing_name != csv.name {
-            diesel::update(recipients::table.filter(recipients::id.eq(existing_id)))
-                .set(recipients::name.eq(&csv.name))
-                .execute(conn)?;
+    let recipient_id = match existing_recipient {
+        Some((existing_id, existing_name)) => {
+            if existing_name != csv.name {
+                diesel::update(recipients::table.filter(recipients::id.eq(existing_id)))
+                    .set(recipients::name.eq(&csv.name))
+                    .execute(conn)?;
+            }
+            existing_id
         }
-        existing_id
-    } else {
-        // Insert new recipient and get its ID
-        let new_recipient = NewRecipient {
-            name: &csv.name,
-            email: &csv.email,
-            hub_id,
-        };
+        None => {
+            let new_recipient = NewRecipient {
+                name: &csv.name,
+                email: &csv.email,
+                hub_id,
+            };
 
-        diesel::insert_into(recipients::table)
-            .values(&new_recipient)
-            .execute(conn)?;
+            diesel::insert_into(recipients::table)
+                .values(&new_recipient)
+                .execute(conn)?;
 
-        recipients::table
-            .filter(recipients::email.eq(&csv.email))
-            .select(recipients::id)
-            .first::<i32>(conn)?
+            recipients::table
+                .filter(recipients::email.eq(&csv.email))
+                .select(recipients::id)
+                .first::<i32>(conn)?
+        }
     };
 
-    let group_names: Vec<&str> = csv.groups.split(',').map(|s| s.trim()).collect();
+    let group_names: Vec<&str> = csv
+        .groups
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
 
     diesel::delete(
         groups_recipients::table.filter(groups_recipients::recipient_id.eq(recipient_id)),
@@ -245,35 +282,7 @@ fn insert_or_update_recipient_with_groups(
     .execute(conn)?;
 
     for group_name in group_names {
-        if group_name.is_empty() {
-            continue;
-        }
-
-        // Check if group exists or insert new one
-        let group_id = groups::table
-            .filter(groups::name.eq(group_name))
-            .select(groups::id)
-            .first::<i32>(conn)
-            .optional()?
-            .unwrap_or_else(|| {
-                // Insert new group
-                let new_group = NewGroup {
-                    name: group_name,
-                    hub_id,
-                };
-                diesel::insert_into(groups::table)
-                    .values(&new_group)
-                    .execute(conn)
-                    .unwrap();
-
-                // Get newly created group ID
-                groups::table
-                    .filter(groups::name.eq(group_name))
-                    .filter(groups::hub_id.eq(hub_id))
-                    .select(groups::id)
-                    .first::<i32>(conn)
-                    .unwrap()
-            });
+        let group_id = get_or_insert_group(conn, group_name, hub_id)?;
 
         // Insert new group-recipient relation
         let new_group_recipient = GroupRecipient {

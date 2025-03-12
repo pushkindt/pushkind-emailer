@@ -40,6 +40,7 @@
         <form method="POST" action="/settings/save" class="my-2">
             <div class="row mb-3">
                 <input type="hidden" name="id" value="{{current_hub.id}}">
+                <input type="hidden" name="created_at" value="{{current_hub.created_at}}">
                 <label for="editHubName" class="col-sm-2 col-form-label">Название</label>
                 <div class="col-sm-10">
                     <input type="text" class="form-control" id="editHubName" name="name" required value="{{current_hub.name}}">
