@@ -25,7 +25,7 @@ pub struct NewRecipient<'a> {
     pub hub_id: i32,
 }
 
-#[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
+#[derive(Queryable, Selectable, Serialize, Identifiable, Associations, Clone)]
 #[diesel(table_name = crate::schema::groups)]
 #[diesel(belongs_to(Hub, foreign_key = hub_id))]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]

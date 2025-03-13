@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use diesel::prelude::*;
 use diesel::result::Error;
@@ -12,46 +12,62 @@ use crate::{
 pub fn get_hub_all_recipients(
     conn: &mut SqliteConnection,
     hub: i32,
-) -> QueryResult<Vec<(Recipient, HashMap<String, String>)>> {
-    use crate::schema::recipients;
+) -> QueryResult<Vec<(Recipient, HashMap<String, String>, Vec<Group>)>> {
+    use crate::schema::{groups, recipients};
 
+    // Load recipients
     let recipients = recipients::table
         .filter(recipients::hub_id.eq(hub))
         .select(Recipient::as_select())
         .order(recipients::name.desc())
         .load::<Recipient>(conn)?;
 
+    // Load recipient fields (key-value pairs)
     let recipient_fields = RecipientField::belonging_to(&recipients)
         .select(RecipientField::as_select())
-        .load(conn)?;
+        .load::<RecipientField>(conn)?
+        .grouped_by(&recipients);
 
-    Ok(recipient_fields
-        .grouped_by(&recipients)
+    // Load GroupRecipient entries for these recipients
+    let group_recipients = GroupRecipient::belonging_to(&recipients)
+        .select(GroupRecipient::as_select())
+        .load::<GroupRecipient>(conn)?;
+
+    // Extract unique group IDs to avoid redundant queries
+    let group_ids: HashSet<i32> = group_recipients.iter().map(|gr| gr.group_id).collect();
+
+    // Load groups based on the extracted unique group IDs
+    let groups = groups::table
+        .filter(groups::id.eq_any(&group_ids))
+        .select(Group::as_select())
+        .load::<Group>(conn)?;
+
+    // Create a HashMap for quick lookup of Group by group_id
+    let group_map: HashMap<i32, Group> = groups.into_iter().map(|g| (g.id, g)).collect();
+
+    // Group the groups by recipient_id using HashMap
+    let mut recipient_groups: HashMap<i32, Vec<Group>> = HashMap::new();
+    for gr in group_recipients {
+        if let Some(group) = group_map.get(&gr.group_id) {
+            recipient_groups
+                .entry(gr.recipient_id)
+                .or_insert_with(Vec::new)
+                .push(group.clone());
+        }
+    }
+
+    // Combine everything into the expected structure
+    Ok(recipients
         .into_iter()
-        .zip(recipients)
-        .map(|(fields, recipient)| {
-            (
-                recipient,
-                fields.into_iter().map(|rf| (rf.field, rf.value)).collect(),
-            )
+        .zip(recipient_fields.into_iter())
+        .map(|(recipient, fields)| {
+            let field_map = fields.into_iter().map(|rf| (rf.field, rf.value)).collect();
+            let groups = recipient_groups
+                .remove(&recipient.id)
+                .unwrap_or_else(Vec::new);
+            (recipient, field_map, groups)
         })
-        .collect::<Vec<(Recipient, HashMap<String, String>)>>())
-}
-
-pub fn get_hub_nogroup_recipients(
-    conn: &mut SqliteConnection,
-    hub: i32,
-) -> QueryResult<Vec<Recipient>> {
-    use crate::schema::groups_recipients;
-    use crate::schema::recipients;
-
-    recipients::table
-        .left_join(groups_recipients::table.on(recipients::id.eq(groups_recipients::recipient_id)))
-        .filter(recipients::hub_id.eq(hub))
-        .filter(groups_recipients::recipient_id.is_null()) // Filter for unassigned recipients
-        .select(Recipient::as_select()) // Select all recipient fields
-        .order(recipients::name.desc())
-        .load::<Recipient>(conn)
+        .collect())
 }
 
 pub fn get_hub_group_recipients(

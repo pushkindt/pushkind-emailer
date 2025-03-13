@@ -13,19 +13,8 @@
 {% include 'navigation.html' %}
 
 <div class="container my-2">
-    <div class="row mb-3">
+    <div class="row">
         <div class="col-lg-6">
-            <h5>Группы</h5>
-            <form method="POST" action="/recipients/group/add">
-                <div class="row mb-3">
-                    <div class="col-lg">
-                        <input class="form-control my-1" type="text" name="name" placeholder="Название" required>
-                    </div>
-                    <div class="col-lg-3 text-end">
-                        <button class="btn btn-primary my-1" type="submit">Добавить</button>
-                    </div>
-                </div>
-            </form>
             <h5>Получатели</h5>
             <form method="POST" action="/recipients/add">
                 <div class="row mb-3">
@@ -42,48 +31,11 @@
             </form>
         </div>
         <div class="col-lg-6">
-            <h5>Группы получателей</h5>
-            <form method="POST" action="/recipients/assign" id="recipients-assign-form">
-                <div class="row mb-3">
-                    <div class="col-lg">
-                        <select class="form-control my-1" name="group_id" required id="recipients-assign-form-group-id">
-                            <option disabled selected value="">Выбор группы</option>
-                            {% if groups %}
-                                {% for group_assignment in groups %}
-                                    {% set group = group_assignment.0 %}
-                                    <option value="{{group.id}}">{{group.name}}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                    </div>
-                    <div class="col-lg">
-                        <select class="form-control my-1" name="recipient_id" required id="recipients-assign-form-recipient-id">
-                            <option disabled selected value="">Выбор получателя</option>
-                            {% if recipients %}
-                                {% for recipient_fields in recipients %}
-                                    {% set recipient = recipient_fields.0 %}
-                                    {% set fields = recipient_fields.1 %}
-                                    <option
-                                        value="{{recipient.id}}"
-                                        data-data='{{fields | json_encode() | safe}}'
-                                    >
-                                        {{recipient.name}} ({{recipient.email}})
-                                    </option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                    </div>
-                    <div class="col-lg-3 text-end">
-                        <button class="btn btn-primary my-1" type="submit">Назначить</button>
-                    </div>
-                </div>
-            </form>
             <h5>Массовая загрузка/удаление</h5>
             <form method="POST" action="/recipients/upload" enctype="multipart/form-data">
-                <div class="row mb-3">
+                <div class="row">
                     <div class="col-lg">
                         <input class="form-control my-1" type="file" name="csv" id="uploadRecipients" accept=".csv" required>
-                        <small class="text-muted">Формат: "name","email","group1,group2","произвольные","поля"</small>
                     </div>
                     <div class="col-lg-3 text-end">
                         <button class="btn btn-primary my-1" type="submit">Загрузить</button>
@@ -91,86 +43,65 @@
                 </div>
             </form>
             <form method="POST" action="/recipients/clean">
-                <div class="row mb-3">
-                    <div class="col-lg text-end">
+                <div class="row">
+                    <div class="col-lg">
+                        <small class="text-muted">"name","email","group1,group2","произвольные","поля"</small>
+                    </div>
+                    <div class="col-lg-3 text-end">
                         <button class="btn btn-danger my-1" type="submit" onclick="return confirm('Удалить всё?')">Очистить</button>
                     </div>
                 </div>
             </form>
         </div>
     </div>
-    
-    <div class="row mb-3">
-        <div class="col">
-            <div class="accordion" id="recipientGroupAccordion">
-                {% if no_group_recipients %}
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#noGroupRecipients" aria-expanded="false" aria-controls="noGroupRecipients">
-                                <strong>Без группы</strong>
-                            </button>
-                        </h2>
-                        <div id="noGroupRecipients" class="accordion-collapse collapse" data-bs-parent="#recipientGroupAccordion">
-                            <div class="accordion-body">
-                                <ul class="list-group">
-                                    {% for recipient in no_group_recipients %}
-                                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                                            {{recipient.name}} ({{recipient.email}})
-                                            <form method="POST" action="/recipients/delete" class="d-inline">
-                                                <input type="hidden" value="{{recipient.id}}" name="id">
-                                                <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
-                                                    <i class="bi bi-x-lg"></i>
-                                                </button>
-                                            </form>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-                {% if groups %}
-                    {% for group_assignment in groups %}
-                        {% set group = group_assignment.0 %}
-                        {% set recipients = group_assignment.1 %}
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#recipientGroupAssignment{{group.id}}" aria-expanded="false" aria-controls="recipientGroupAssignment{{group.id}}">
-                                    <strong>{{group.name}}</strong>
-                                </button>
-                            </h2>
-                            <div id="recipientGroupAssignment{{group.id}}" class="accordion-collapse collapse" data-bs-parent="#recipientGroupAccordion">
-                                <div class="accordion-body">
-                                    <form method="POST" action="/recipients/group/delete" class="d-inline">
-                                        <input type="hidden" value="{{group.id}}" name="id">
-                                        <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
-                                            <i class="bi bi-x-lg"></i>
-                                        </button>
-                                    </form>
-                                    <ul class="list-group">
-                                        {% for recipient in recipients %}
-                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                {{recipient.name}} ({{recipient.email}})
-                                                <form method="POST" action="/recipients/unassign" style="display:inline;">
-                                                    <input type="hidden" name="group_id" value="{{group.id}}">
-                                                    <input type="hidden" name="recipient_id" value="{{recipient.id}}">
-                                                    <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Убрать?')">
-                                                        <i class="bi bi-x-lg"></i>
-                                                    </button>
-                                                </form>
-                                            </li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            </div>
-        </div>
-    </div>
 </div>
 
+{% if recipients %}
+    <div class="container border bg-white">
+    
+        <div class="row mb-3 fw-bold">
+            <div class="col overflow-hidden">
+                Имя
+            </div>
+            <div class="col overflow-hidden">
+                Email
+            </div>
+            <div class="col overflow-hidden">
+                Группы
+            </div>
+            <div class="col overflow-hidden">
+                Теги
+            </div>
+        </div>
+        {% for recipient_fields_groups in recipients %}
+            {% set recipient = recipient_fields_groups.0 %}
+            {% set fields = recipient_fields_groups.1 %}
+            {% set groups = recipient_fields_groups.2 %}
+            <div class="row mb-3 border-bottom">
+                <div class="col overflow-hidden">
+                    {{recipient.name}}
+                </div>
+                <div class="col overflow-hidden">
+                    {{recipient.email}}
+                </div>
+                <div class="col overflow-hidden">
+                    {% if groups %}
+                        {% for group in groups %}
+                            <span class="badge rounded-pill text-bg-light">{{group.name}}</span>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="col overflow-hidden">
+                    {% if fields %}
+                        {% for key, value in fields %}
+                            <span class="badge rounded-pill text-bg-light">{{key}}: {{value}}</span>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -185,32 +116,6 @@
     </script>
     <script>
         $(document).ready(function () {
-
-            let recipient_select = $("#recipients-assign-form-recipient-id");
-            recipient_select.selectize({
-                searchField: ["text",
-                    {% for field in custom_fields %}
-                        "{{field}}",
-                    {% endfor %}
-                ],
-                render: {
-                    option: function(item, escape) {
-                        let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
-                        result += '<br><small>';
-                        for (const field in item) {
-                            if (["text", "value", "disabled", "$order"].includes(field)) {
-                                continue;
-                            }
-                            result += escape(field) + ': ' + escape(item[field]) + ' ';
-                        }
-                        result += '</small>';
-                        result += '</div>';
-                        return result
-                    }
-                }
-            });
-            let group_select = $("#recipients-assign-form-group-id");
-            group_select.selectize({});
 
         });
     </script>

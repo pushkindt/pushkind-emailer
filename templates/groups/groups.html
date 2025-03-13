@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block styles %}
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/css/selectize.bootstrap4.min.css"
+        integrity="sha512-MMojOrCQrqLg4Iarid2YMYyZ7pzjPeXKRvhW9nZqLo6kPBBTuvNET9DBVWptAo/Q20Fy11EIHM5ig4WlIrJfQw=="
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    />
+{% endblock %}
+
+{% block content %}
+{% include 'navigation.html' %}
+
+<div class="container my-2">
+    <div class="row">
+        <div class="col-lg-6">
+            <h5>Группы</h5>
+            <form method="POST" action="/groups/add">
+                <div class="row">
+                    <div class="col-lg">
+                        <input class="form-control my-1" type="text" name="name" placeholder="Название" required>
+                    </div>
+                    <div class="col-lg-3 text-end">
+                        <button class="btn btn-primary my-1" type="submit">Добавить</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="col-lg-6">
+            <h5>Назначить группу</h5>
+            <form method="POST" action="/groups/assign" id="recipients-assign-form">
+                <div class="row mb-3">
+                    <div class="col-lg">
+                        <select class="form-control my-1" name="group_id" required id="recipients-assign-form-group-id">
+                            <option disabled selected value="">Выбор группы</option>
+                            {% if groups %}
+                                {% for group_assignment in groups %}
+                                    {% set group = group_assignment.0 %}
+                                    <option value="{{group.id}}">{{group.name}}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-lg">
+                        <select class="form-control my-1" name="recipient_id" required id="recipients-assign-form-recipient-id">
+                            <option disabled selected value="">Выбор получателя</option>
+                            {% if recipients %}
+                                {% for recipient_fields in recipients %}
+                                    {% set recipient = recipient_fields.0 %}
+                                    {% set fields = recipient_fields.1 %}
+                                    <option
+                                        value="{{recipient.id}}"
+                                        data-data='{{fields | json_encode() | safe}}'
+                                    >
+                                        {{recipient.name}} ({{recipient.email}})
+                                    </option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-lg-3 text-end">
+                        <button class="btn btn-primary my-1" type="submit">Назначить</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col">
+            <div class="accordion" id="recipientGroupAccordion">
+                {% if groups %}
+                    {% for group_assignment in groups %}
+                        {% set group = group_assignment.0 %}
+                        {% set recipients = group_assignment.1 %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#recipientGroupAssignment{{group.id}}" aria-expanded="false" aria-controls="recipientGroupAssignment{{group.id}}">
+                                    <strong>{{group.name}}</strong>
+                                </button>
+                            </h2>
+                            <div id="recipientGroupAssignment{{group.id}}" class="accordion-collapse collapse" data-bs-parent="#recipientGroupAccordion">
+                                <div class="accordion-body">
+                                    <div class="row border-bottom mb-1 pb-1">
+                                        <div class="auto">
+                                            <form method="POST" action="/groups/delete" class="d-inline">
+                                                <input type="hidden" value="{{group.id}}" name="id">
+                                                <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                    <ul class="list-group">
+                                        {% for recipient in recipients %}
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                {{recipient.name}} ({{recipient.email}})
+                                                <form method="POST" action="/groups/unassign" style="display:inline;">
+                                                    <input type="hidden" name="group_id" value="{{group.id}}">
+                                                    <input type="hidden" name="recipient_id" value="{{recipient.id}}">
+                                                    <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Убрать?')">
+                                                        <i class="bi bi-slash-circle"></i>
+                                                    </button>
+                                                </form>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script
+        src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+        crossorigin="anonymous">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/js/standalone/selectize.min.js"
+        integrity="sha512-pF+DNRwavWMukUv/LyzDyDMn8U2uvqYQdJN0Zvilr6DDo/56xPDZdDoyPDYZRSL4aOKO/FGKXTpzDyQJ8je8Qw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+    </script>
+    <script>
+        $(document).ready(function () {
+
+            let recipient_select = $("#recipients-assign-form-recipient-id");
+            recipient_select.selectize({
+                searchField: ["text",
+                    {% for field in custom_fields %}
+                        "{{field}}",
+                    {% endfor %}
+                ],
+                render: {
+                    option: function(item, escape) {
+                        let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
+                        result += '<br><small>';
+                        for (const field in item) {
+                            if (["text", "value", "disabled", "$order"].includes(field)) {
+                                continue;
+                            }
+                            result += escape(field) + ': ' + escape(item[field]) + ' ';
+                        }
+                        result += '</small>';
+                        result += '</div>';
+                        return result
+                    }
+                }
+            });
+            let group_select = $("#recipients-assign-form-group-id");
+            group_select.selectize({});
+
+        });
+    </script>
+{% endblock %}
