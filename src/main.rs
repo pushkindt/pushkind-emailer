@@ -17,7 +17,8 @@ use pushkind_emailer::routes::groups::{
 };
 use pushkind_emailer::routes::main::{delete_email, index, retry_email, send_email, track_email};
 use pushkind_emailer::routes::recipients::{
-    recipients, recipients_add, recipients_clean, recipients_delete, recipients_upload,
+    recipients, recipients_add, recipients_clean, recipients_delete, recipients_modal,
+    recipients_save, recipients_upload,
 };
 use pushkind_emailer::routes::settings::{
     settings, settings_activate, settings_add, settings_delete, settings_save,
@@ -88,6 +89,8 @@ async fn main() -> std::io::Result<()> {
                     .service(recipients_delete)
                     .service(recipients_clean)
                     .service(recipients_upload)
+                    .service(recipients_modal)
+                    .service(recipients_save)
                     .service(groups)
                     .service(groups_add)
                     .service(groups_delete)

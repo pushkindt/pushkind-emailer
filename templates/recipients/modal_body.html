@@ -1,0 +1,29 @@
+<div class="modal-body">
+    <form action="/recipients/save" method="POST">
+        <input type="hidden" value="{{recipient.id}}" name="id" required>
+        <div class="row mb-3">
+            <label for="modalUserName" class="col-md-2 col-form-label">Имя</label>
+            <div class="col-md-10">
+                <input name="name" type="text" class="form-control" id="modalUserName" value="{{recipient.name}}" placeholder="Имя" required>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <label for="modalUserEmail" class="col-md-2 col-form-label">Электронный адрес</label>
+            <div class="col-md-10">
+                <input name="email" type="email" class="form-control" id="modalUserEmail" value="{{recipient.email}}" placeholder="Электронный адрес" required>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col">
+                <button class="btn btn-primary" type="submit">Сохранить</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<form action="/recipients/delete" method="POST">
+    <input type="hidden" value="{{recipient.id}}" name="id" required>
+    <div class="modal-footer">
+        <button class="btn btn-danger" type="submit" onclick="return confirm('Удалить?')">Удалить</button>
+    </div>
+</form>

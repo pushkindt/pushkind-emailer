@@ -5,7 +5,10 @@ use diesel::result::Error;
 use serde::Deserialize;
 
 use crate::{
-    forms::recipients::{AddGroupForm, AddRecipientForm, AssignGroupRecipientForm},
+    forms::{
+        groups::{AddGroupForm, AssignGroupRecipientForm},
+        recipients::{AddRecipientForm, SaveRecipientForm},
+    },
     models::recipient::{Group, GroupRecipient, NewGroup, NewRecipient, Recipient, RecipientField},
 };
 
@@ -200,11 +203,29 @@ pub fn clean_all_recipients_and_groups(
 ) -> QueryResult<usize> {
     use crate::schema::groups;
     use crate::schema::groups_recipients;
+    use crate::schema::recipient_fields;
     use crate::schema::recipients;
 
+    // get all recipient ids
+    let recipient_ids = recipients::table
+        .filter(recipients::hub_id.eq(hub))
+        .select(recipients::id)
+        .load::<i32>(conn)?;
+
     diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub))).execute(conn)?;
-    diesel::delete(groups_recipients::table).execute(conn)?;
-    diesel::delete(groups::table.filter(groups::hub_id.eq(hub))).execute(conn)
+    diesel::delete(groups::table.filter(groups::hub_id.eq(hub))).execute(conn)?;
+
+    // delete all recipient fields
+    diesel::delete(
+        recipient_fields::table.filter(recipient_fields::recipient_id.eq_any(&recipient_ids)),
+    )
+    .execute(conn)?;
+
+    // delete all groups_recipients
+    diesel::delete(
+        groups_recipients::table.filter(groups_recipients::recipient_id.eq_any(&recipient_ids)),
+    )
+    .execute(conn)
 }
 
 #[derive(Debug, Deserialize)]
@@ -410,4 +431,25 @@ pub fn get_hub_all_recipients_fields(
         .select(recipient_fields::field)
         .distinct()
         .load::<String>(conn)
+}
+
+pub fn get_recipient(conn: &mut SqliteConnection, recipient_id: i32) -> QueryResult<Recipient> {
+    use crate::schema::recipients;
+
+    recipients::table
+        .filter(recipients::id.eq(recipient_id))
+        .first::<Recipient>(conn)
+}
+
+pub fn save_recipient(
+    conn: &mut SqliteConnection,
+    recipient: &SaveRecipientForm,
+) -> QueryResult<usize> {
+    use crate::schema::recipients;
+    diesel::update(recipients::table.filter(recipients::id.eq(recipient.id)))
+        .set((
+            recipients::name.eq(&recipient.name),
+            recipients::email.eq(&recipient.email),
+        ))
+        .execute(conn)
 }

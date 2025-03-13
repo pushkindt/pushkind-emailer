@@ -5,7 +5,7 @@ use tera::Context;
 
 use crate::TEMPLATES;
 use crate::db::{DbPool, get_db_connection};
-use crate::forms::recipients::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
+use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
 use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::repository::recipient::{

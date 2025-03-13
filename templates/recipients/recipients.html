@@ -77,7 +77,7 @@
             {% set recipient = recipient_fields_groups.0 %}
             {% set fields = recipient_fields_groups.1 %}
             {% set groups = recipient_fields_groups.2 %}
-            <div class="row mb-3 border-bottom">
+            <div class="row mb-3 border-bottom selectable" data-bs-toggle="modal" data-bs-target="#recipientModal" hx-post="/recipients/modal/{{recipient.id}}" hx-swap="innerHTML" hx-target="#recipientModalBody">
                 <div class="col overflow-hidden">
                     {{recipient.name}}
                 </div>
@@ -101,7 +101,22 @@
             </div>
         {% endfor %}
     </div>
+
+    <div class="modal fade" id="recipientModal" tabindex="-1" aria-labelledby="recipientModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="recipientModalLabel">Редактировать получателя</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div id="recipientModalBody">
+                </div>
+            </div>
+        </div>
+    </div>
+
 {% endif %}
+
 {% endblock %}
 
 {% block scripts %}
