@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use diesel::prelude::*;
 use diesel::result::Error;
-use log::info;
 use serde::Deserialize;
 
 use crate::{
