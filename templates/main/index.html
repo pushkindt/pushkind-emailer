@@ -14,9 +14,9 @@
 
     <div class="container my-2">
         <form method="POST" action="/send_email">
-            <div class="row mb-3 ps-3">
+            <div class="row mb-3">
                 <a class="recipientsDropDown" href="#">Получатели</a>
-                <select class="form-control" id="recipients" multiple name="recipients" required>
+                <select id="recipients" multiple name="recipients" required>
 
                     {% if recipients %}
                         {% for recipient_fields in recipients %}
@@ -45,7 +45,7 @@
                     <input type="text" name="subject" class="form-control my-1" placeholder="Тема">
                 </div>
             </div>
-            <div class="row">
+            <div class="row g-1">
                 <div class="col">
                     <textarea class="form-control" rows=10 id="message-input" required placeholder="Содержание"></textarea>
                     <input type="hidden" id="message" name="message" required>
