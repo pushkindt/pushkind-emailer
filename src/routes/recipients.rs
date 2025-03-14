@@ -14,8 +14,9 @@ use crate::forms::recipients::{
 use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::repository::recipient::{
-    clean_all_recipients_and_groups, create_recipient, delete_recipient, get_hub_all_recipients,
-    get_recipient, save_recipient, update_recipients_from_csv,
+    clean_all_recipients_and_groups, create_recipient, delete_recipient, get_hub_all_groups,
+    get_hub_all_recipients, get_recipient, get_recipient_fields, get_recipient_group_ids,
+    save_recipient, update_recipients_from_csv,
 };
 
 #[get("/recipients")]
@@ -217,8 +218,21 @@ pub async fn recipients_modal(
     };
 
     let mut context = Context::new();
-    if let Ok(recipient) = get_recipient(&mut conn, recipient_id.into_inner()) {
+
+    let recipient_id = recipient_id.into_inner();
+
+    if let Ok(recipient) = get_recipient(&mut conn, recipient_id) {
         context.insert("recipient", &recipient);
+
+        if let Ok(fields) = get_recipient_fields(&mut conn, recipient_id) {
+            context.insert("recipient_fields", &fields);
+        }
+        if let Ok(groups) = get_recipient_group_ids(&mut conn, recipient_id) {
+            context.insert("recipient_groups", &groups);
+        }
+        if let Ok(groups) = get_hub_all_groups(&mut conn, recipient.hub_id) {
+            context.insert("groups", &groups);
+        }
     }
 
     HttpResponse::Ok().body(
@@ -232,12 +246,26 @@ pub async fn recipients_modal(
 pub async fn recipients_save(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    web::Form(form): web::Form<SaveRecipientForm>,
+    form: web::Bytes,
     mut session: Session,
 ) -> impl Responder {
     let mut conn = match get_db_connection(&pool) {
         Some(conn) => conn,
         None => return HttpResponse::InternalServerError().finish(),
+    };
+
+    let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {
+        Ok(form) => form,
+        Err(err) => {
+            add_flash_message(
+                &mut session,
+                "danger",
+                &format!("Ошибка при обработке формы: {}", err),
+            );
+            return HttpResponse::SeeOther()
+                .insert_header((header::LOCATION, "/recipients"))
+                .finish();
+        }
     };
 
     if user.0.hub_id.is_some() {

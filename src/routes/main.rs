@@ -71,9 +71,7 @@ pub async fn send_email(
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    let form = String::from_utf8_lossy(&form);
-
-    let form: SendEmailForm = match serde_html_form::from_str(&form) {
+    let form: SendEmailForm = match serde_html_form::from_bytes(&form) {
         Ok(form) => form,
         Err(err) => {
             add_flash_message(

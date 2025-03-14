@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use diesel::prelude::*;
 use diesel::result::Error;
+use log::info;
 use serde::Deserialize;
 
 use crate::{
@@ -441,15 +442,66 @@ pub fn get_recipient(conn: &mut SqliteConnection, recipient_id: i32) -> QueryRes
         .first::<Recipient>(conn)
 }
 
+pub fn get_recipient_fields(
+    conn: &mut SqliteConnection,
+    recipient_id: i32,
+) -> QueryResult<Vec<RecipientField>> {
+    use crate::schema::recipient_fields;
+
+    recipient_fields::table
+        .filter(recipient_fields::recipient_id.eq(recipient_id))
+        .load::<RecipientField>(conn)
+}
+
+pub fn get_recipient_group_ids(
+    conn: &mut SqliteConnection,
+    recipient_id: i32,
+) -> QueryResult<HashSet<i32>> {
+    use crate::schema::groups_recipients;
+
+    let result = groups_recipients::table
+        .filter(groups_recipients::recipient_id.eq(recipient_id))
+        .select(groups_recipients::group_id)
+        .load::<i32>(conn)?
+        .into_iter()
+        .collect::<HashSet<i32>>();
+    Ok(result)
+}
+
 pub fn save_recipient(
     conn: &mut SqliteConnection,
     recipient: &SaveRecipientForm,
 ) -> QueryResult<usize> {
+    use crate::schema::groups;
+    use crate::schema::groups_recipients;
     use crate::schema::recipients;
+
     diesel::update(recipients::table.filter(recipients::id.eq(recipient.id)))
         .set((
             recipients::name.eq(&recipient.name),
             recipients::email.eq(&recipient.email),
         ))
+        .execute(conn)?;
+
+    let groups = groups::table
+        .filter(groups::id.eq_any(&recipient.groups))
+        .select(groups::id)
+        .load::<i32>(conn)?;
+
+    diesel::delete(
+        groups_recipients::table.filter(groups_recipients::recipient_id.eq(recipient.id)),
+    )
+    .execute(conn)?;
+
+    diesel::insert_into(groups_recipients::table)
+        .values(
+            groups
+                .iter()
+                .map(|group_id| GroupRecipient {
+                    recipient_id: recipient.id,
+                    group_id: *group_id,
+                })
+                .collect::<Vec<GroupRecipient>>(),
+        )
         .execute(conn)
 }

@@ -13,6 +13,20 @@
                 <input name="email" type="email" class="form-control" id="modalUserEmail" value="{{recipient.email}}" placeholder="Электронный адрес" required>
             </div>
         </div>
+
+        <div class="row mb-3">
+            <label for="recipients-assign-form-group-id" class="col-md-2 col-form-label">Группы</label>
+            <div class="col-md-10">
+                <select multiple class="form-control my-1" name="groups" id="recipients-assign-form-group-id">
+                    {% if groups %}
+                        {% for group in groups %}
+                            <option value="{{group.id}}" {% if recipient_groups is containing(group.id) %} selected {% endif %}>{{group.name}}</option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+        </div>
+
         <div class="row mb-3">
             <div class="col">
                 <button class="btn btn-primary" type="submit">Сохранить</button>
