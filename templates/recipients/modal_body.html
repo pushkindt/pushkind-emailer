@@ -20,33 +20,43 @@
                 <select multiple class="form-control my-1" name="groups" id="recipients-assign-form-group-id">
                     {% if groups %}
                         {% for group in groups %}
-                            <option value="{{group.id}}" {% if recipient_groups is containing(group.id) %} selected {% endif %}>{{group.name}}</option>
+                            <option value="{{group.id}}" {% if recipient_groups and recipient_groups is containing(group.id) %} selected {% endif %}>{{group.name}}</option>
                         {% endfor %}
                     {% endif %}
                 </select>
             </div>
         </div>
 
-
+        <div id="custom-fields">
         {% if recipient_fields %}
             {% for field in recipient_fields %}
 
                 <div class="row mb-3">
                     <div class="col">
-                        <input type="text" disabled class="form-control" value="{{field.field}}">
+                        <input type="text" class="form-control" value="{{field.field}}" name="field" required placeholder="Поле">
                     </div>
                     <div class="col">
-                        <input type="text" disabled class="form-control" value="{{field.value}}">
+                        <input type="text" class="form-control" value="{{field.value}}" name="value" required" placeholder="Значение">
+                    </div>
+                    <div class="col-auto">
+                        <a href="#" class="btn btn-danger btn-sm" onclick="removeCustomField(this)">
+                            <i class="bi bi-slash-circle"></i>
+                        </a>
                     </div>
                 </div>
 
             {% endfor %}
         {% endif %}
-
+        </div>
 
         <div class="row mb-3">
             <div class="col">
                 <button class="btn btn-primary" type="submit">Сохранить</button>
+            </div>
+            <div class="col-auto">
+                <a href="#" class="btn btn-primary btn-sm" onclick="addCustomField(this)">
+                    <i class="bi bi-plus"></i>
+                </a>
             </div>
         </div>
     </form>
