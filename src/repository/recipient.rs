@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use diesel::prelude::*;
 use diesel::result::Error;
+use log::info;
 use serde::Deserialize;
 
 use crate::{
@@ -329,13 +330,37 @@ fn get_or_insert_group(
         .first::<i32>(conn)
 }
 
+pub fn update_recipient_custom_fields(
+    conn: &mut SqliteConnection,
+    recipient_id: i32,
+    fields: HashMap<String, String>,
+) -> Result<(), Error> {
+    use crate::schema::recipient_fields;
+
+    diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(recipient_id)))
+        .execute(conn)?;
+
+    for (field, value) in fields {
+        let new_field = RecipientField {
+            recipient_id,
+            field,
+            value,
+        };
+
+        diesel::insert_into(recipient_fields::table)
+            .values(&new_field)
+            .execute(conn)?;
+    }
+
+    Ok(())
+}
+
 fn insert_or_update_recipient_with_groups(
     conn: &mut SqliteConnection,
     hub_id: i32,
     csv: RecipientCSV,
 ) -> Result<(), Error> {
     use crate::schema::groups_recipients;
-    use crate::schema::recipient_fields;
     use crate::schema::recipients;
 
     let existing_recipient = recipients::table
@@ -390,20 +415,7 @@ fn insert_or_update_recipient_with_groups(
             .execute(conn)?;
     }
 
-    diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(recipient_id)))
-        .execute(conn)?;
-
-    for (field, value) in csv.optional_fields {
-        let new_field = RecipientField {
-            recipient_id,
-            field,
-            value,
-        };
-
-        diesel::insert_into(recipient_fields::table)
-            .values(&new_field)
-            .execute(conn)?;
-    }
+    update_recipient_custom_fields(conn, recipient_id, csv.optional_fields)?;
 
     Ok(())
 }
@@ -470,10 +482,13 @@ pub fn get_recipient_group_ids(
 pub fn save_recipient(
     conn: &mut SqliteConnection,
     recipient: &SaveRecipientForm,
-) -> QueryResult<usize> {
+) -> Result<(), Error> {
     use crate::schema::groups;
     use crate::schema::groups_recipients;
     use crate::schema::recipients;
+
+    info!("Custom recipient fields: {:?}", &recipient.field);
+    info!("Custom recipient values: {:?}", &recipient.value);
 
     diesel::update(recipients::table.filter(recipients::id.eq(recipient.id)))
         .set((
@@ -502,5 +517,16 @@ pub fn save_recipient(
                 })
                 .collect::<Vec<GroupRecipient>>(),
         )
-        .execute(conn)
+        .execute(conn)?;
+
+    let fields: HashMap<String, String> = recipient
+        .field
+        .iter()
+        .zip(recipient.value.iter())
+        .map(|(field, value)| (field.to_string(), value.to_string()))
+        .collect();
+
+    update_recipient_custom_fields(conn, recipient.id, fields)?;
+
+    Ok(())
 }

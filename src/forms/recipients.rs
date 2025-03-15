@@ -25,4 +25,8 @@ pub struct SaveRecipientForm {
     pub email: String,
     #[serde(default)]
     pub groups: Vec<i32>,
+    #[serde(default)]
+    pub field: Vec<String>,
+    #[serde(default)]
+    pub value: Vec<String>,
 }
