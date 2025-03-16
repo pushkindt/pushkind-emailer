@@ -26,13 +26,15 @@ async fn send_smtp_message(
     to: &str,
     subject: &str,
     body: &str,
+    message_id: i32,
 ) -> Result<(), mail_send::Error> {
     let message = MessageBuilder::new()
         .from((from, smtp_username))
         .to(vec![("", to)])
         .subject(subject)
         .html_body(body)
-        .text_body(body);
+        .text_body(body)
+        .message_id(format!("{message_id}@pushkind-emailer.pushkind.com"));
 
     SmtpClientBuilder::new(smtp_host, smtp_port)
         .implicit_tls(true)
@@ -86,6 +88,7 @@ async fn send_email(
             &recipient.address,
             &email_subject,
             &body,
+            recipient.id,
         )
         .await
         {
