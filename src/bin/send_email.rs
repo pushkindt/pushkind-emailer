@@ -60,9 +60,9 @@ async fn send_email(
 
     let hub = get_hub(&mut conn, user.hub_id.ok_or("Hub ID is missing")?)?;
 
-    let smtp_host = hub.server.ok_or("SMTP server is missing")?;
+    let smtp_host = hub.smtp_server.ok_or("SMTP server is missing")?;
     let smtp_port: u16 = hub
-        .port
+        .smtp_port
         .ok_or("SMTP port is missing")?
         .try_into()
         .map_err(|_| "Invalid SMTP port")?;
