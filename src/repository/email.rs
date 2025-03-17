@@ -41,7 +41,6 @@ fn create_email_recipient(
     conn: &mut SqliteConnection,
     email_id: i32,
     address: &str,
-    opened: bool,
     updated_at: &chrono::NaiveDateTime,
 ) -> QueryResult<EmailRecipient> {
     use crate::schema::email_recipients;
@@ -49,9 +48,10 @@ fn create_email_recipient(
     let new_email_recipient = NewEmailRecipient {
         email_id,
         address,
-        opened,
+        opened: false,
         updated_at,
         is_sent: false,
+        replied: false,
     };
 
     diesel::insert_into(email_recipients::table)
@@ -104,7 +104,7 @@ pub fn create_email(
                 .select(Recipient::as_select())
                 .first(conn)?;
 
-            create_email_recipient(conn, email.id, &recipient.email, false, &created_at)?;
+            create_email_recipient(conn, email.id, &recipient.email, &created_at)?;
         } else {
             let group_id = recipient.parse::<i32>()?;
 
@@ -117,7 +117,7 @@ pub fn create_email(
                 .load(conn)?;
 
             for member in group_members {
-                create_email_recipient(conn, email.id, &member.email, false, &created_at)?;
+                create_email_recipient(conn, email.id, &member.email, &created_at)?;
             }
         }
     }
@@ -199,5 +199,43 @@ pub fn reset_email_sent_and_opened_status(
             email_recipients::opened.eq(false),
             email_recipients::is_sent.eq(false),
         ))
+        .execute(conn)
+}
+
+pub fn get_hub_email_recipients_not_replied(
+    conn: &mut SqliteConnection,
+    hub_id: i32,
+) -> QueryResult<Vec<EmailRecipient>> {
+    use crate::schema::email_recipients;
+    use crate::schema::emails;
+    use crate::schema::users;
+
+    email_recipients::table
+        .inner_join(emails::table.on(email_recipients::email_id.eq(emails::id)))
+        .inner_join(users::table.on(emails::user_id.eq(users::id)))
+        .filter(users::hub_id.eq(hub_id))
+        .filter(email_recipients::replied.eq(false))
+        .select(EmailRecipient::as_select())
+        .load(conn)
+}
+
+pub fn set_email_recipient_replied_status(
+    conn: &mut SqliteConnection,
+    email_id: i32,
+    recipient_id: i32,
+) -> QueryResult<usize> {
+    use crate::schema::email_recipients;
+    use crate::schema::emails;
+
+    diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
+        .set((
+            email_recipients::replied.eq(true),
+            email_recipients::is_sent.eq(true),
+            email_recipients::opened.eq(true),
+        ))
+        .execute(conn)?;
+
+    diesel::update(emails::table.filter(emails::id.eq(email_id)))
+        .set(emails::is_sent.eq(true))
         .execute(conn)
 }

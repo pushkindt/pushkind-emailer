@@ -65,15 +65,27 @@
                 </div>
             </div>
             <div class="row mb-3">
-                <label for="editHubServer" class="col-sm-2 col-form-label">Сервер</label>
+                <label for="editHubSmtpServer" class="col-sm-2 col-form-label">SMTP сервер</label>
                 <div class="col-sm-10">
-                    <input type="text" class="form-control" id="editHubServer" name="server" value="{{current_hub.server}}">
+                    <input type="text" class="form-control" id="editHubSmtpServer" name="smtp_server" value="{{current_hub.smtp_server}}">
                 </div>
             </div>
             <div class="row mb-3">
-                <label for="editHubPort" class="col-sm-2 col-form-label">Порт</label>
+                <label for="editHubSmtpPort" class="col-sm-2 col-form-label">SMTP порт</label>
                 <div class="col-sm-10">
-                    <input type="number" min="0" max="65535" step="1" class="form-control" id="editHubPort" name="port" value="{{current_hub.port}}">
+                    <input type="number" min="0" max="65535" step="1" class="form-control" id="editHubSmtpPort" name="smtp_port" value="{{current_hub.smtp_port | default(value=0)}}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="editHubImapServer" class="col-sm-2 col-form-label">IMAP сервер</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" id="editHubImapServer" name="imap_server" value="{{current_hub.imap_server}}">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="editHubImapPort" class="col-sm-2 col-form-label">IMAP порт</label>
+                <div class="col-sm-10">
+                    <input type="number" min="0" max="65535" step="1" class="form-control" id="editHubImapPort" name="imap_port" value="{{current_hub.imap_port | default(value=0)}}">
                 </div>
             </div>
             <div class="row">

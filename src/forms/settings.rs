@@ -1,5 +1,6 @@
-use crate::models::hub::Hub;
 use serde::Deserialize;
+
+use crate::models::hub::Hub;
 
 #[derive(Deserialize)]
 pub struct AddHubForm {
@@ -18,8 +19,10 @@ pub struct SaveHubForm {
     pub login: Option<String>,
     pub password: Option<String>,
     pub sender: Option<String>,
-    pub server: Option<String>,
-    pub port: Option<i32>,
+    pub smtp_server: Option<String>,
+    pub smtp_port: Option<i32>,
+    pub imap_server: Option<String>,
+    pub imap_port: Option<i32>,
     pub created_at: Option<chrono::NaiveDateTime>,
 }
 
@@ -31,8 +34,10 @@ impl From<SaveHubForm> for Hub {
             login: val.login,
             password: val.password,
             sender: val.sender,
-            server: val.server,
-            port: val.port,
+            smtp_server: val.smtp_server,
+            smtp_port: val.smtp_port,
+            imap_server: val.imap_server,
+            imap_port: val.imap_port,
             created_at: val.created_at,
             updated_at: Some(chrono::Utc::now().naive_utc()),
         }

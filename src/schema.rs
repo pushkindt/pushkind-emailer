@@ -8,6 +8,7 @@ diesel::table! {
         opened -> Bool,
         updated_at -> Timestamp,
         is_sent -> Bool,
+        replied -> Bool,
     }
 }
 
@@ -46,10 +47,12 @@ diesel::table! {
         login -> Nullable<Text>,
         password -> Nullable<Text>,
         sender -> Nullable<Text>,
-        server -> Nullable<Text>,
-        port -> Nullable<Integer>,
+        smtp_server -> Nullable<Text>,
+        smtp_port -> Nullable<Integer>,
         created_at -> Nullable<Timestamp>,
         updated_at -> Nullable<Timestamp>,
+        imap_server -> Nullable<Text>,
+        imap_port -> Nullable<Integer>,
     }
 }
 

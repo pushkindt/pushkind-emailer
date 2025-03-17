@@ -113,10 +113,17 @@
                                     <div class="col">
                                         <ul>
                                             {% for recipient in recipients %}
-                                                <li class="{% if recipient.opened %}text-success{% endif %}">
+                                                <li class="{% if recipient.is_sent %}text-success{% endif %}">
                                                     {{ recipient.address }}
-                                                    {% if recipient.is_sent %}
-                                                        <i class="bi bi-envelope-check-fill"></i>
+                                                    {% if recipient.opened %}
+                                                        <i class="bi bi-envelope-check-fill" title="Сообщение просмотрено"></i>
+                                                    {% else %}
+                                                        <i class="bi bi-envelope-check" title="Сообщение не просмотрено"></i>
+                                                    {% endif %}
+                                                    {% if recipient.replied %}
+                                                        <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
+                                                    {% else %}
+                                                        <i class="bi bi-reply" title="Ответ на сообщение не получен"></i>
                                                     {% endif %}
                                                 </li>
                                             {% endfor %}

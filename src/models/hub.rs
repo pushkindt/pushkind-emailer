@@ -10,10 +10,12 @@ pub struct Hub {
     pub login: Option<String>,
     pub password: Option<String>,
     pub sender: Option<String>,
-    pub server: Option<String>,
-    pub port: Option<i32>,
+    pub smtp_server: Option<String>,
+    pub smtp_port: Option<i32>,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub updated_at: Option<chrono::NaiveDateTime>,
+    pub imap_server: Option<String>,
+    pub imap_port: Option<i32>,
 }
 
 #[derive(Insertable)]

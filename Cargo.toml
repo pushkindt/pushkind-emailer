@@ -34,3 +34,7 @@ native-tls = { version = "0.2.14", optional = true }
 [[bin]]
 name = "send_email"
 required-features = ["send-email"]
+
+[[bin]]
+name = "check_reply"
+required-features = ["send-email"]

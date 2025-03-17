@@ -38,6 +38,7 @@ pub struct EmailRecipient {
     pub opened: bool,
     pub updated_at: chrono::NaiveDateTime,
     pub is_sent: bool,
+    pub replied: bool,
 }
 
 #[derive(Insertable)]
@@ -49,4 +50,5 @@ pub struct NewEmailRecipient<'a> {
     pub opened: bool,
     pub updated_at: &'a chrono::NaiveDateTime,
     pub is_sent: bool,
+    pub replied: bool,
 }
