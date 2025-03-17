@@ -26,7 +26,7 @@ async fn send_smtp_message(
     to: &str,
     subject: &str,
     body: &str,
-    message_id: i32,
+    message_id: &str,
 ) -> Result<(), mail_send::Error> {
     let message = MessageBuilder::new()
         .from((from, smtp_username))
@@ -34,7 +34,7 @@ async fn send_smtp_message(
         .subject(subject)
         .html_body(body)
         .text_body(body)
-        .message_id(format!("{message_id}@pushkind-emailer.pushkind.com"));
+        .message_id(message_id);
 
     SmtpClientBuilder::new(smtp_host, smtp_port)
         .implicit_tls(true)
@@ -49,6 +49,7 @@ async fn send_email(
     email_id: i32,
     db_pool: Arc<Mutex<DbPool>>,
     mail_tracking_url: &str,
+    mail_message_id: &str,
 ) -> Result<(), Box<dyn Error>> {
     let pool = db_pool.lock().await;
     let mut conn = get_db_connection(&pool).ok_or("Cannot get connection from the pool")?;
@@ -88,7 +89,7 @@ async fn send_email(
             &recipient.address,
             &email_subject,
             &body,
-            recipient.id,
+            &format!("{}{}", recipient.id, mail_message_id),
         )
         .await
         {
@@ -130,6 +131,7 @@ async fn main() {
     let zmq_address =
         env::var("ZMQ_ADDRESS").unwrap_or_else(|_| "tcp://127.0.0.1:5555".to_string());
     let mail_tracking_url = env::var("MAIL_TRACKING_URL").unwrap_or_default();
+    let mail_message_id = env::var("MAIL_MESSAGE_ID").unwrap_or_default();
 
     let context = zmq::Context::new();
     let responder = context.socket(zmq::PULL).expect("Cannot create zmq socket");
@@ -156,9 +158,16 @@ async fn main() {
                 let email_id = i32::from_be_bytes(buffer);
                 let pool_clone = Arc::clone(&pool);
                 let mail_tracking_url_clone = mail_tracking_url.clone();
+                let mail_message_id_clone = mail_message_id.clone();
 
                 tokio::spawn(async move {
-                    if let Err(e) = send_email(email_id, pool_clone, &mail_tracking_url_clone).await
+                    if let Err(e) = send_email(
+                        email_id,
+                        pool_clone,
+                        &mail_tracking_url_clone,
+                        &mail_message_id_clone,
+                    )
+                    .await
                     {
                         error!("Error sending email message: {}", e);
                     }

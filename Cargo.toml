@@ -5,7 +5,7 @@ edition = "2024"
 default-run = "pushkind-emailer"
 
 [features]
-send-email = ["mail-send", "tokio"]
+send-email = ["mail-send", "tokio", "imap", "native-tls"]
 
 [dependencies]
 actix-session = { version = "0.10.1", features = ["cookie-session"] }
@@ -28,6 +28,8 @@ zmq = "0.10.0"
 mail-send = { version = "0.5.0", optional = true }
 serde_html_form = "0.2.7"
 tokio = { version = "1.44.1", features = ["full"], optional = true }
+imap = { version = "2.4.1", optional = true }
+native-tls = { version = "0.2.14", optional = true }
 
 [[bin]]
 name = "send_email"
