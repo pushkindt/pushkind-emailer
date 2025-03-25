@@ -14,6 +14,7 @@ pub struct Recipient {
     pub hub_id: i32,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub updated_at: Option<chrono::NaiveDateTime>,
+    pub unsubscribed_at: Option<chrono::NaiveDateTime>,
 }
 
 #[derive(Insertable)]

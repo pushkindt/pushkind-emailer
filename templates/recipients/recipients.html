@@ -84,7 +84,7 @@
             {% set fields = recipient_fields_groups.1 %}
             {% set groups = recipient_fields_groups.2 %}
             <div class="row mb-3 border-bottom selectable" data-bs-toggle="modal" data-bs-target="#recipientModal" hx-post="/recipients/modal/{{recipient.id}}" hx-swap="innerHTML" hx-target="#recipientModalBody">
-                <div class="col overflow-hidden">
+                <div class="col overflow-hidden {% if recipient.unsubscribed_at %}text-decoration-line-through{%endif%}">
                     {{recipient.name}}
                 </div>
                 <div class="col overflow-hidden">

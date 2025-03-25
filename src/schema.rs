@@ -72,6 +72,7 @@ diesel::table! {
         hub_id -> Integer,
         created_at -> Nullable<Timestamp>,
         updated_at -> Nullable<Timestamp>,
+        unsubscribed_at -> Nullable<Timestamp>,
     }
 }
 

@@ -5,6 +5,9 @@
             <label for="modalUserName" class="col-md-2 col-form-label">Имя</label>
             <div class="col-md-10">
                 <input name="name" type="text" class="form-control" id="modalUserName" value="{{recipient.name}}" placeholder="Имя" required>
+                {% if recipient.unsubscribed_at %}
+                    <small class="text-body-secondary">Получатель отписался {{recipient.unsubscribed_at}}</small>
+                {% endif %}
             </div>
         </div>
         <div class="row mb-3">

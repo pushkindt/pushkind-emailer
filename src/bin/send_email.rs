@@ -6,7 +6,10 @@ use std::sync::Arc;
 use dotenvy::dotenv;
 use log::{error, info};
 use mail_send::SmtpClientBuilder;
-use mail_send::mail_builder::MessageBuilder;
+use mail_send::mail_builder::{
+    MessageBuilder,
+    headers::{HeaderType, url::URL},
+};
 use tokio::sync::Mutex;
 use zmq;
 
@@ -27,6 +30,7 @@ async fn send_smtp_message(
     subject: &str,
     body: &str,
     message_id: &str,
+    mail_unsubscribe_url: &str,
 ) -> Result<(), mail_send::Error> {
     let message = MessageBuilder::new()
         .from((from, smtp_username))
@@ -34,7 +38,11 @@ async fn send_smtp_message(
         .subject(subject)
         .html_body(body)
         .text_body(body)
-        .message_id(message_id);
+        .message_id(message_id)
+        .header(
+            "List-Unsubscribe",
+            HeaderType::from(URL::new(mail_unsubscribe_url)),
+        );
 
     SmtpClientBuilder::new(smtp_host, smtp_port)
         .implicit_tls(true)
@@ -50,6 +58,7 @@ async fn send_email(
     db_pool: Arc<Mutex<DbPool>>,
     mail_tracking_url: &str,
     mail_message_id: &str,
+    mail_unsubscribe_url: &str,
 ) -> Result<(), Box<dyn Error>> {
     let pool = db_pool.lock().await;
     let mut conn = get_db_connection(&pool).ok_or("Cannot get connection from the pool")?;
@@ -90,6 +99,7 @@ async fn send_email(
             &email_subject,
             &body,
             &format!("{}{}", recipient.id, mail_message_id),
+            &mail_unsubscribe_url,
         )
         .await
         {
@@ -130,8 +140,9 @@ async fn main() {
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
     let zmq_address =
         env::var("ZMQ_ADDRESS").unwrap_or_else(|_| "tcp://127.0.0.1:5555".to_string());
-    let mail_tracking_url = env::var("MAIL_TRACKING_URL").unwrap_or_default();
-    let mail_message_id = env::var("MAIL_MESSAGE_ID").unwrap_or_default();
+    let mail_tracking_url = Arc::from(env::var("MAIL_TRACKING_URL").unwrap_or_default());
+    let mail_message_id = Arc::from(env::var("MAIL_MESSAGE_ID").unwrap_or_default());
+    let mail_unsubscribe_url = Arc::from(env::var("MAIL_UNSUBSCRIBE_URL").unwrap_or_default());
 
     let context = zmq::Context::new();
     let responder = context.socket(zmq::PULL).expect("Cannot create zmq socket");
@@ -157,15 +168,17 @@ async fn main() {
             Ok(_) => {
                 let email_id = i32::from_be_bytes(buffer);
                 let pool_clone = Arc::clone(&pool);
-                let mail_tracking_url_clone = mail_tracking_url.clone();
-                let mail_message_id_clone = mail_message_id.clone();
+                let mail_tracking_url = Arc::clone(&mail_tracking_url);
+                let mail_message_id = Arc::clone(&mail_message_id);
+                let mail_unsubscribe_url = Arc::clone(&mail_unsubscribe_url);
 
                 tokio::spawn(async move {
                     if let Err(e) = send_email(
                         email_id,
                         pool_clone,
-                        &mail_tracking_url_clone,
-                        &mail_message_id_clone,
+                        &mail_tracking_url,
+                        &mail_message_id,
+                        &mail_unsubscribe_url,
                     )
                     .await
                     {
