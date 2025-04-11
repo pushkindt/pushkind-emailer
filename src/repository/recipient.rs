@@ -213,8 +213,11 @@ pub fn clean_all_recipients_and_groups(
         .select(recipients::id)
         .load::<i32>(conn)?;
 
-    diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub))).execute(conn)?;
-    diesel::delete(groups::table.filter(groups::hub_id.eq(hub))).execute(conn)?;
+    // delete all groups_recipients
+    diesel::delete(
+        groups_recipients::table.filter(groups_recipients::recipient_id.eq_any(&recipient_ids)),
+    )
+    .execute(conn)?;
 
     // delete all recipient fields
     diesel::delete(
@@ -222,11 +225,8 @@ pub fn clean_all_recipients_and_groups(
     )
     .execute(conn)?;
 
-    // delete all groups_recipients
-    diesel::delete(
-        groups_recipients::table.filter(groups_recipients::recipient_id.eq_any(&recipient_ids)),
-    )
-    .execute(conn)
+    diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub))).execute(conn)?;
+    diesel::delete(groups::table.filter(groups::hub_id.eq(hub))).execute(conn)
 }
 
 #[derive(Debug, Deserialize)]
