@@ -45,18 +45,6 @@
                     <div class="col-lg">
                         <select class="form-control my-1" name="recipient_id" required id="recipients-assign-form-recipient-id">
                             <option disabled selected value="">Выбор получателя</option>
-                            {% if recipients %}
-                                {% for recipient_fields in recipients %}
-                                    {% set recipient = recipient_fields.0 %}
-                                    {% set fields = recipient_fields.1 %}
-                                    <option
-                                        value="{{recipient.id}}"
-                                        data-data='{{fields | json_encode() | safe}}'
-                                    >
-                                        {{recipient.name}} ({{recipient.email}})
-                                    </option>
-                                {% endfor %}
-                            {% endif %}
                         </select>
                     </div>
                     <div class="col-lg-3 text-end">
@@ -142,17 +130,19 @@
 
             let recipient_select = $("#recipients-assign-form-recipient-id");
             recipient_select.selectize({
-                searchField: ["text",
+                valueField: "id",
+                labelField: "name",
+                searchField: ["name", "email",
                     {% for field in custom_fields %}
                         "{{field}}",
                     {% endfor %}
                 ],
                 render: {
                     option: function(item, escape) {
-                        let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
+                        let result = `<div class="border-bottom"><strong>${escape(item.name)} (${escape(item.email)})</strong>`;
                         result += '<br><small>';
                         for (const field in item) {
-                            if (["text", "value", "disabled", "$order"].includes(field)) {
+                            if (["id", "name", "email", "$order"].includes(field)) {
                                 continue;
                             }
                             result += escape(field) + ': ' + escape(item[field]) + ' ';
@@ -161,7 +151,23 @@
                         result += '</div>';
                         return result
                     }
-                }
+                },
+                options: [
+                    {% if recipients %}
+                        {% for recipient_fields in recipients %}
+                            {% set recipient = recipient_fields.0 %}
+                            {% set fields = recipient_fields.1 %}
+                            {
+                                ...{
+                                    "id": "{{recipient.id}}",
+                                    "name": "{{recipient.name}}",
+                                    "email": "{{recipient.email}}",
+                                },
+                                ...{{fields | json_encode() | safe}}
+                            },
+                        {% endfor %}
+                    {% endif %}
+                ]
             });
             let group_select = $("#recipients-assign-form-group-id");
             group_select.selectize({});
