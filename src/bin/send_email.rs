@@ -85,7 +85,7 @@ async fn send_email(
 
     for recipient in recipients {
         let body = format!(
-            "{}<img width=\"1\" height=\"1\" style=\"border:none\" src=\"{}{}\">",
+            "{}<img border=\"0\" width=\"1\" height=\"1\" style=\"border:none\" src=\"{}{}\">",
             &email.message, mail_tracking_url, recipient.id
         );
 
