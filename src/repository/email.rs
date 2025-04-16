@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, io::Read};
 
 use diesel::prelude::*;
 
@@ -66,7 +66,7 @@ fn create_email_recipient(
 
 pub fn create_email(
     conn: &mut SqliteConnection,
-    email_form: &SendEmailForm,
+    mut email_form: SendEmailForm,
     user_id: i32,
 ) -> Result<Email, Box<dyn Error>> {
     use crate::schema::emails;
@@ -75,12 +75,30 @@ pub fn create_email(
 
     let created_at = chrono::Utc::now().naive_utc();
 
+    let mut buf: Vec<u8> = Vec::new();
+    let (attachment, file_name, file_mime) = match email_form.attachment.file.read_to_end(&mut buf)
+    {
+        Ok(_) => (
+            Some(buf),
+            email_form.attachment.file_name,
+            email_form
+                .attachment
+                .content_type
+                .as_ref()
+                .map(|x| x.essence_str()),
+        ),
+        Err(_) => (None, None, None),
+    };
+
     let new_email = NewEmail {
         user_id,
         message: &email_form.message,
         created_at: &created_at,
         is_sent: false,
         subject: email_form.subject.as_deref(),
+        attachment: attachment.as_ref(),
+        attachment_name: file_name.as_deref(),
+        attachment_mime: file_mime,
     };
 
     diesel::insert_into(emails::table)

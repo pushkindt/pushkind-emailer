@@ -20,6 +20,9 @@ diesel::table! {
         created_at -> Timestamp,
         is_sent -> Bool,
         subject -> Nullable<Text>,
+        attachment -> Nullable<Binary>,
+        attachment_name -> Nullable<Text>,
+        attachment_mime -> Nullable<Text>,
     }
 }
 

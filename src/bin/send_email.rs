@@ -31,8 +31,11 @@ async fn send_smtp_message(
     body: &str,
     message_id: &str,
     mail_unsubscribe_url: &str,
+    attachment: Option<&[u8]>,
+    attachment_name: Option<&str>,
+    attachment_mime: Option<&str>,
 ) -> Result<(), mail_send::Error> {
-    let message = MessageBuilder::new()
+    let mut message = MessageBuilder::new()
         .from((from, smtp_username))
         .to(vec![("", to)])
         .subject(subject)
@@ -44,6 +47,13 @@ async fn send_smtp_message(
             HeaderType::from(URL::new(mail_unsubscribe_url)),
         );
 
+    if attachment.is_some() && attachment_name.is_some() && attachment_mime.is_some() {
+        message = message.attachment(
+            attachment_mime.unwrap(),
+            attachment_name.unwrap(),
+            attachment.unwrap(),
+        );
+    }
     SmtpClientBuilder::new(smtp_host, smtp_port)
         .implicit_tls(true)
         .credentials((smtp_username, smtp_password))
@@ -100,6 +110,9 @@ async fn send_email(
             &body,
             &format!("{}{}", recipient.id, mail_message_id),
             &mail_unsubscribe_url,
+            email.attachment.as_deref(),
+            email.attachment_name.as_deref(),
+            email.attachment_mime.as_deref(),
         )
         .await
         {

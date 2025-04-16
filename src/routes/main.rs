@@ -79,7 +79,7 @@ pub async fn send_email(
     };
 
     if user.0.hub_id.is_some() {
-        match create_email(&mut conn, &form, user.0.id) {
+        match create_email(&mut conn, form.0, user.0.id) {
             Ok(email) => match send_zmq_email_id(email.id, &zmq_config) {
                 Ok(_) => {
                     return HttpResponse::Ok().body("Сообщение создано.");

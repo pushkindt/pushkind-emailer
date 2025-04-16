@@ -14,6 +14,9 @@ pub struct Email {
     pub created_at: chrono::NaiveDateTime,
     pub is_sent: bool,
     pub subject: Option<String>,
+    pub attachment: Option<Vec<u8>>,
+    pub attachment_name: Option<String>,
+    pub attachment_mime: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -25,6 +28,9 @@ pub struct NewEmail<'a> {
     pub created_at: &'a chrono::NaiveDateTime,
     pub is_sent: bool,
     pub subject: Option<&'a str>,
+    pub attachment: Option<&'a Vec<u8>>,
+    pub attachment_name: Option<&'a str>,
+    pub attachment_mime: Option<&'a str>,
 }
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
