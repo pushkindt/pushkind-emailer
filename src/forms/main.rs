@@ -1,11 +1,13 @@
+use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(MultipartForm)]
 pub struct SendEmailForm {
-    #[serde(default)]
-    pub recipients: Vec<String>,
-    pub message: String,
-    pub subject: Option<String>,
+    pub message: Text<String>,
+    pub subject: Text<Option<String>>,
+    #[multipart(limit = "10MB")]
+    pub attachment: TempFile,
+    pub recipients: MpJson<Vec<String>>,
 }
 
 #[derive(Deserialize)]

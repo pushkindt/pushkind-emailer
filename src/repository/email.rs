@@ -94,7 +94,7 @@ pub fn create_email(
         .order(emails::created_at.desc())
         .first(conn)?;
 
-    for recipient in &email_form.recipients {
+    for recipient in &email_form.recipients.0 {
         // if recipient is an email and exists in the database create a new EmailRecipient
         // if recipient is not an email but a group id then fetch the group and create a new EmailRecipient for each member
         if recipient.contains('@') {

@@ -1,3 +1,6 @@
+use std::error::Error;
+
+use actix_multipart::form::MultipartForm;
 use actix_session::Session;
 use actix_web::http::header;
 use actix_web::{HttpResponse, Responder, get, post, web};
@@ -63,64 +66,38 @@ pub async fn send_email(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
     zmq_config: web::Data<ServerConfig>,
-    form: web::Bytes,
-    mut session: Session,
+    form: Result<MultipartForm<SendEmailForm>, Box<dyn Error>>,
 ) -> impl Responder {
     let mut conn = match get_db_connection(&pool) {
         Some(conn) => conn,
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    let form: SendEmailForm = match serde_html_form::from_bytes(&form) {
+    let form = match form {
         Ok(form) => form,
-        Err(err) => {
-            add_flash_message(
-                &mut session,
-                "danger",
-                &format!("Ошибка при обработке формы: {}", err),
-            );
-            return HttpResponse::SeeOther()
-                .insert_header((header::LOCATION, "/"))
-                .finish();
-        }
+        Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {}", err)),
     };
 
     if user.0.hub_id.is_some() {
         match create_email(&mut conn, &form, user.0.id) {
-            Ok(email) => {
-                match send_zmq_email_id(email.id, &zmq_config) {
-                    Ok(_) => {
-                        add_flash_message(
-                            &mut session,
-                            "success",
-                            "Сообщение добавлено в очередь на отправку.",
-                        );
-                    }
-                    Err(err) => {
-                        add_flash_message(
-                            &mut session,
-                            "danger",
-                            &format!("Ошибка при добавлении сообщения в очередь: {}", err),
-                        );
-                    }
+            Ok(email) => match send_zmq_email_id(email.id, &zmq_config) {
+                Ok(_) => {
+                    return HttpResponse::Ok().body("Сообщение создано.");
                 }
-                add_flash_message(&mut session, "success", "Сообщение создано.");
-            }
+                Err(err) => {
+                    return HttpResponse::Ok().body(format!(
+                        "Ошибка при добавлении сообщения в очередь: {}",
+                        err
+                    ));
+                }
+            },
             Err(err) => {
-                add_flash_message(
-                    &mut session,
-                    "danger",
-                    &format!("Ошибка при создании сообщения: {}", err),
-                );
+                return HttpResponse::Ok().body(format!("Ошибка при создании сообщения: {}", err));
             }
         }
     } else {
-        add_flash_message(&mut session, "danger", "Вы не можете отправлять сообщения.");
+        return HttpResponse::Ok().body("Вы не можете отправлять сообщения.");
     }
-
-    HttpResponse::SeeOther()
-        .insert_header((header::LOCATION, "/"))
-        .finish()
 }
 
 #[post("/delete_email")]

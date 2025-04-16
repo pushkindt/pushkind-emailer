@@ -13,10 +13,10 @@
     {% include 'navigation.html' %}
 
     <div class="container my-2">
-        <form method="POST" action="/send_email">
+        <form id="send-email-form" action="/send_email" method="POST" enctype="multipart/form-data">
             <div class="row mb-3">
                 <a class="recipientsDropDown" href="#">Получатели</a>
-                <select id="recipients" multiple name="recipients" required>
+                <select id="recipients-input" multiple required>
                 </select>
                 <a id="recipientsNone" href="#" class="text-danger">убрать всех</a>
             </div>
@@ -33,7 +33,7 @@
                 <div class="col border rounded" id="message-rendered">
                 </div>
             </div>
-            <div class="row mb-3">
+            <div class="row mb-2">
                 <div class="col">
                     <small class="text-muted">Сообщение в формате <a href="https://www.markdownguide.org/basic-syntax/">markdown</a></small>
                 </div>
@@ -43,7 +43,10 @@
             </div>
             <div class="row">
                 <div class="col">
-                    <button class="btn btn-primary text-white">
+                    <input class="form-control" type="file" name="attachment">
+                </div>
+                <div class="col-auto text-end">
+                    <button class="btn btn-primary text-white" id="submit-button">
                         Отправить
                     </button>
                 </div>
@@ -130,7 +133,7 @@
     <script>
         $(document).ready(function () {
 
-            let recipients = $("#recipients");
+            let recipients = $("#recipients-input");
             recipients.selectize({
                 valueField: "id",
                 labelField: "text",
@@ -176,7 +179,7 @@
                             },
                         {% endfor %}
                     {% endif %}
-                ]
+                ],
             });
             let recipientsSelectize = recipients[0].selectize;
 
@@ -197,6 +200,39 @@
                 const rendered_message = marked.parse(edit_message.value);
                 render_message.innerHTML = rendered_message;
                 message_send.value = rendered_message;
+            });
+
+            const form = document.getElementById('send-email-form');
+
+            form.addEventListener("submit", function (e) {
+                e.preventDefault();
+                const formData = new FormData(form);
+                formData.append('recipients', new Blob(
+                    [JSON.stringify(recipientsSelectize.items)],
+                    { type: 'application/json' }
+                ));
+                for (const [key, value] of formData) {
+                    console.log(`${key}: ${value}`);
+                }
+                fetch(form.action, {
+                    method: form.method,
+                    body: formData,
+                    credentials: 'include'
+                })
+                .then(response => {
+                    return response.text();
+                })
+                .then(text => {
+                    form.reset();
+                    recipientsSelectize.clear(false);
+                    render_message.innerHTML = "";
+                    showFlashMessage(text);
+                    setTimeout(() => {window.location.reload()}, 2000);
+                })
+                .catch(error => {
+                    console.error('Request error:', error);
+                    alert('An error occurred while sending the form: ' + error.message);
+                });
             });
 
         });
