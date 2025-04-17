@@ -213,7 +213,7 @@ pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) 
 
     match set_email_recipient_opened_status(&mut conn, recipient_id.into_inner(), true) {
         Ok(_) => {
-            HttpResponse::Ok().content_type("image/svg+xml").body("<?xml version=\"1.0\" encoding=\"UTF-8\"?><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>")
+            HttpResponse::Ok().content_type("image/svg+xml").body(r#"<svg height="30" width="200" xmlns="http://www.w3.org/2000/svg"><text x="5" y="15" fill="black">Отписаться!</text></svg>"#)
         }
         Err(err) => {
             error!("Database connection error: {}", err); // Log the error for debugging

@@ -42,20 +42,33 @@
             {% endif %}
         </div>
 
+        <div class="modal" tabindex="-1" id="ajax-flash-modal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-body" id="ajax-flash-content">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {% block content %}{% endblock %}
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
         <script>
+            const ajax_modal = new bootstrap.Modal('#ajax-flash-modal', {});
             function showFlashMessage(message, category = 'primary') {
-                const flashes = document.getElementById('flashMessages');
+                const flashes = document.getElementById('ajax-flash-content');
+                const ajax_modal = bootstrap.Modal.getOrCreateInstance('#ajax-flash-modal', {});
 
-                if (!flashes) return;
+                if (!flashes || !ajax_modal) return;
 
-                const new_flash = `<div class="alert alert-${category}" role="alert">${message}</div>`;
+                const new_flash = `<div class="alert alert-${category} alert-dismissible mb-0" role="alert">${message}<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>`;
 
                 flashes.innerHTML = new_flash;
+                ajax_modal.show();
             }
 
             document.addEventListener("DOMContentLoaded", () => {
+                
                 var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
                 var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
                     return new bootstrap.Popover(popoverTriggerEl)
