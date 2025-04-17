@@ -95,7 +95,7 @@ async fn send_email(
 
     for recipient in recipients {
         let body = format!(
-            r#"{}<a href="mailto:admin@pushkind.com?subject=Unsubscribe&body=Please%20exclude%me%from%this%subscription%list."><img src="{}{}"></a>"#,
+            r#"{}<a href="mailto:admin@pushkind.com?subject=Unsubscribe&body=Please%20exclude%20me%20from%20this%20subscription%20list."><img src="{}{}"></a>"#,
             &email.message, mail_tracking_url, recipient.id
         );
 
