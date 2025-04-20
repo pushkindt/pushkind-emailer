@@ -16,6 +16,7 @@ pub struct Hub {
     pub updated_at: Option<chrono::NaiveDateTime>,
     pub imap_server: Option<String>,
     pub imap_port: Option<i32>,
+    pub email_template: Option<String>,
 }
 
 #[derive(Insertable)]

@@ -25,22 +25,7 @@
                     <input type="text" name="subject" class="form-control my-1" placeholder="Тема">
                 </div>
             </div>
-            <div class="row g-1">
-                <div class="col">
-                    <textarea class="form-control" rows=10 id="message-input" required placeholder="Содержание"></textarea>
-                    <input type="hidden" id="message" name="message" required>
-                </div>
-                <div class="col border rounded" id="message-rendered">
-                </div>
-            </div>
-            <div class="row mb-2">
-                <div class="col">
-                    <small class="text-muted">Сообщение в формате <a href="https://www.markdownguide.org/basic-syntax/">markdown</a></small>
-                </div>
-                <div class="col">
-                    <small class="text-muted">Превью сообщения</small>
-                </div>
-            </div>
+            {% include 'markdown.html' %}
             <div class="row">
                 <div class="col">
                     <input class="form-control" type="file" name="attachment">
@@ -129,9 +114,8 @@
         integrity="sha512-pF+DNRwavWMukUv/LyzDyDMn8U2uvqYQdJN0Zvilr6DDo/56xPDZdDoyPDYZRSL4aOKO/FGKXTpzDyQJ8je8Qw=="
         crossorigin="anonymous" referrerpolicy="no-referrer">
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        $(document).ready(function () {
+        document.addEventListener("DOMContentLoaded", () => {
 
             let recipients = $("#recipients-input");
             recipients.selectize({
@@ -191,17 +175,6 @@
                 recipientsSelectize.clear(false);
             });
 
-            const edit_message = document.getElementById('message-input');
-            const message_send = document.getElementById('message');
-            const render_message = document.getElementById('message-rendered');
-            render_message.innerHTML = marked.parse(edit_message.value);
-
-            edit_message.addEventListener("input", function () {
-                const rendered_message = marked.parse(edit_message.value);
-                render_message.innerHTML = rendered_message;
-                message_send.value = rendered_message;
-            });
-
             const form = document.getElementById('send-email-form');
 
             form.addEventListener("submit", function (e) {
@@ -223,6 +196,7 @@
                     return response.text();
                 })
                 .then(text => {
+                    const render_message = document.getElementById('message-rendered');
                     form.reset();
                     recipientsSelectize.clear(false);
                     render_message.innerHTML = "";

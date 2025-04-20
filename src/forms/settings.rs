@@ -24,6 +24,7 @@ pub struct SaveHubForm {
     pub imap_server: Option<String>,
     pub imap_port: Option<i32>,
     pub created_at: Option<chrono::NaiveDateTime>,
+    pub message: Option<String>,
 }
 
 impl From<SaveHubForm> for Hub {
@@ -40,6 +41,7 @@ impl From<SaveHubForm> for Hub {
             imap_port: val.imap_port,
             created_at: val.created_at,
             updated_at: Some(chrono::Utc::now().naive_utc()),
+            email_template: val.message,
         }
     }
 }

@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::env;
 use std::error::Error;
 use std::sync::Arc;
@@ -6,10 +5,9 @@ use std::sync::Arc;
 use dotenvy::dotenv;
 use log::{error, info};
 use mail_send::SmtpClientBuilder;
-use mail_send::mail_builder::{
-    MessageBuilder,
-    headers::{HeaderType, url::URL},
-};
+use mail_send::mail_builder::MessageBuilder;
+use pushkind_emailer::models::email::{Email, EmailRecipient};
+use pushkind_emailer::models::hub::Hub;
 use tokio::sync::Mutex;
 use zmq;
 
@@ -21,42 +19,59 @@ use pushkind_emailer::repository::hub::get_hub;
 use pushkind_emailer::repository::user::get_user;
 
 async fn send_smtp_message(
-    smtp_host: &str,
-    smtp_port: u16,
-    smtp_username: &str,
-    smtp_password: &str,
-    from: &str,
-    to: &str,
-    subject: &str,
-    body: &str,
-    message_id: &str,
-    mail_unsubscribe_url: &str,
-    attachment: Option<&[u8]>,
-    attachment_name: Option<&str>,
-    attachment_mime: Option<&str>,
+    hub: &Hub,
+    email: &Email,
+    recipient: &EmailRecipient,
+    mail_tracking_url: &str,
+    mail_message_id: &str,
 ) -> Result<(), mail_send::Error> {
-    let mut message = MessageBuilder::new()
-        .from((from, smtp_username))
-        .to(vec![("", to)])
-        .subject(subject)
-        .html_body(body)
-        .text_body(body)
-        .message_id(message_id)
-        .header(
-            "List-Unsubscribe",
-            HeaderType::from(URL::new(mail_unsubscribe_url)),
-        );
-
-    if attachment.is_some() && attachment_name.is_some() && attachment_mime.is_some() {
-        message = message.attachment(
-            attachment_mime.unwrap(),
-            attachment_name.unwrap(),
-            attachment.unwrap(),
-        );
+    let template = hub.email_template.as_deref().unwrap_or_default();
+    let mut body: String;
+    if template.contains("{message}") {
+        body = template.replace("{message}", &email.message);
+    } else {
+        body = format!("{}{}", &email.message, template);
     }
-    SmtpClientBuilder::new(smtp_host, smtp_port)
+
+    body.push_str(&format!(
+        r#"<img height="1" width="1" border="0" src="{mail_tracking_url}{}">"#,
+        recipient.id
+    ));
+
+    let message_id = format!("{}{}", recipient.id, mail_message_id);
+
+    let recipient_address = vec![("", recipient.address.as_str())];
+    let sender_email = hub.sender.as_deref().unwrap_or_default();
+    let sender_login = hub.login.as_deref().unwrap_or_default();
+    let subject = email.subject.as_deref().unwrap_or_default();
+
+    let mut message = MessageBuilder::new()
+        .from((sender_email, sender_login))
+        .to(recipient_address)
+        .subject(subject)
+        .html_body(&body)
+        .text_body(&body)
+        .message_id(message_id);
+
+    if let (Some(mime), Some(name), Some(content)) = (
+        email.attachment_mime.as_deref(),
+        email.attachment_name.as_deref(),
+        email.attachment.as_deref(),
+    ) {
+        message = message.attachment(mime, name, content);
+    }
+
+    let smtp_server = hub.smtp_server.as_deref().unwrap_or_default();
+    let smtp_port = hub.smtp_port.unwrap_or(25) as u16; // assume smtp_port is Option<u16>?
+
+    let credentials = (
+        hub.login.as_deref().unwrap_or_default(),
+        hub.password.as_deref().unwrap_or_default(),
+    );
+
+    SmtpClientBuilder::new(smtp_server, smtp_port)
         .implicit_tls(true)
-        .credentials((smtp_username, smtp_password))
+        .credentials(credentials)
         .connect()
         .await?
         .send(message)
@@ -68,7 +83,6 @@ async fn send_email(
     db_pool: Arc<Mutex<DbPool>>,
     mail_tracking_url: &str,
     mail_message_id: &str,
-    mail_unsubscribe_url: &str,
 ) -> Result<(), Box<dyn Error>> {
     let pool = db_pool.lock().await;
     let mut conn = get_db_connection(&pool).ok_or("Cannot get connection from the pool")?;
@@ -76,45 +90,13 @@ async fn send_email(
     let email = get_email(&mut conn, email_id)?;
     let user = get_user(&mut conn, email.user_id)?;
     let recipients = get_email_recipients(&mut conn, email_id)?;
-
     let hub = get_hub(&mut conn, user.hub_id.ok_or("Hub ID is missing")?)?;
-
-    let smtp_host = hub.smtp_server.ok_or("SMTP server is missing")?;
-    let smtp_port: u16 = hub
-        .smtp_port
-        .ok_or("SMTP port is missing")?
-        .try_into()
-        .map_err(|_| "Invalid SMTP port")?;
-    let smtp_username = hub.login.ok_or("SMTP login is missing")?;
-    let smtp_password = hub.password.ok_or("SMTP password is missing")?;
-    let from = hub.sender.unwrap_or_default();
 
     info!("Sending email for email_id {} via hub {}", email_id, hub.id);
 
-    let email_subject = email.subject.unwrap_or_default();
-
     for recipient in recipients {
-        let body = format!(
-            r#"{}<a href="mailto:admin@pushkind.com?subject=Unsubscribe&body=Please%20exclude%20me%20from%20this%20subscription%20list."><img src="{}{}"></a>"#,
-            &email.message, mail_tracking_url, recipient.id
-        );
-
-        if let Err(e) = send_smtp_message(
-            &smtp_host,
-            smtp_port,
-            &smtp_username,
-            &smtp_password,
-            &from,
-            &recipient.address,
-            &email_subject,
-            &body,
-            &format!("{}{}", recipient.id, mail_message_id),
-            &mail_unsubscribe_url,
-            email.attachment.as_deref(),
-            email.attachment_name.as_deref(),
-            email.attachment_mime.as_deref(),
-        )
-        .await
+        if let Err(e) =
+            send_smtp_message(&hub, &email, &recipient, mail_tracking_url, mail_message_id).await
         {
             error!("Failed to send email to {}: {}", recipient.address, e);
             continue;
@@ -150,12 +132,12 @@ async fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenv().ok(); // Load .env file
 
+    let bind_address = env::var("ADDRESS").unwrap_or_default();
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
     let zmq_address =
         env::var("ZMQ_ADDRESS").unwrap_or_else(|_| "tcp://127.0.0.1:5555".to_string());
-    let mail_tracking_url = Arc::from(env::var("MAIL_TRACKING_URL").unwrap_or_default());
+    let mail_tracking_url = Arc::from(format!("{bind_address}/track/"));
     let mail_message_id = Arc::from(env::var("MAIL_MESSAGE_ID").unwrap_or_default());
-    let mail_unsubscribe_url = Arc::from(env::var("MAIL_UNSUBSCRIBE_URL").unwrap_or_default());
 
     let context = zmq::Context::new();
     let responder = context.socket(zmq::PULL).expect("Cannot create zmq socket");
@@ -183,17 +165,10 @@ async fn main() {
                 let pool_clone = Arc::clone(&pool);
                 let mail_tracking_url = Arc::clone(&mail_tracking_url);
                 let mail_message_id = Arc::clone(&mail_message_id);
-                let mail_unsubscribe_url = Arc::clone(&mail_unsubscribe_url);
 
                 tokio::spawn(async move {
-                    if let Err(e) = send_email(
-                        email_id,
-                        pool_clone,
-                        &mail_tracking_url,
-                        &mail_message_id,
-                        &mail_unsubscribe_url,
-                    )
-                    .await
+                    if let Err(e) =
+                        send_email(email_id, pool_clone, &mail_tracking_url, &mail_message_id).await
                     {
                         error!("Error sending email message: {}", e);
                     }

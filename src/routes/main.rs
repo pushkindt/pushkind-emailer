@@ -213,7 +213,7 @@ pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) 
 
     match set_email_recipient_opened_status(&mut conn, recipient_id.into_inner(), true) {
         Ok(_) => HttpResponse::SeeOther()
-            .insert_header((header::LOCATION, "/assets/unsubscribe.png"))
+            .insert_header((header::LOCATION, "/assets/placeholder.png"))
             .finish(),
         Err(err) => {
             error!("Database connection error: {}", err); // Log the error for debugging

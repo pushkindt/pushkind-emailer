@@ -126,7 +126,7 @@
         crossorigin="anonymous" referrerpolicy="no-referrer">
     </script>
     <script>
-        $(document).ready(function () {
+        document.addEventListener("DOMContentLoaded", () => {
 
             let recipient_select = $("#recipients-assign-form-recipient-id");
             recipient_select.selectize({
