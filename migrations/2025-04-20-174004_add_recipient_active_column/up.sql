@@ -1,0 +1,2 @@
+-- Your SQL goes here
+ALTER TABLE recipients ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE;
