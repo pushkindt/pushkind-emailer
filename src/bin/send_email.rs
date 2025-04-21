@@ -41,7 +41,7 @@ async fn send_smtp_message(
     }
 
     body.push_str(&format!(
-        r#"<img height="1" width="1" border="0" src="http://{domain}/track/{}">"#,
+        r#"<img height="1" width="1" border="0" src="https://{domain}/track/{}">"#,
         recipient.id
     ));
 
