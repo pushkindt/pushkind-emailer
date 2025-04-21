@@ -146,6 +146,7 @@
                         {% for recipient_fields in recipients %}
                             {% set recipient = recipient_fields.0 %}
                             {% set fields = recipient_fields.1 %}
+                            {% if recipient.unsubscribed_at %}{% continue %}{% endif %}
                             {
                                 ...{
                                     "id": "{{recipient.email}}",

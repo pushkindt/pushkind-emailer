@@ -119,6 +119,7 @@ pub fn create_email(
             let recipient = recipient.trim();
             let recipient: Recipient = recipients::table
                 .filter(recipients::email.eq(recipient))
+                .filter(recipients::unsubscribed_at.is_null())
                 .select(Recipient::as_select())
                 .first(conn)?;
 

@@ -64,12 +64,19 @@ async fn send_smtp_message(
             HeaderType::from(URL::new(&unsubscribe_url)),
         );
 
+    println!(
+        "attachment_mime: {:?}, attachment_name: {:?}, attachment: {:?}",
+        email.attachment_mime, email.attachment_name, email.attachment
+    );
+
     if let (Some(mime), Some(name), Some(content)) = (
         email.attachment_mime.as_deref(),
         email.attachment_name.as_deref(),
         email.attachment.as_deref(),
     ) {
-        message = message.attachment(mime, name, content);
+        if !name.is_empty() && !content.is_empty() {
+            message = message.attachment(mime, name, content);
+        }
     }
 
     let smtp_server = hub.smtp_server.as_deref().unwrap_or_default();
