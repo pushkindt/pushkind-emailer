@@ -88,7 +88,7 @@
                     <input type="number" min="0" max="65535" step="1" class="form-control" id="editHubImapPort" name="imap_port" value="{{current_hub.imap_port | default(value=0)}}">
                 </div>
             </div>
-            <h6>Шаблон сообщения (доступны переменные {message}):</h6>
+            <h6>Шаблон сообщения (доступны переменные {message} {unsubscribe_url}):</h6>
             {% set message = current_hub.email_template %}
             {%include 'markdown.html' %}
             <div class="row">

@@ -5,7 +5,10 @@ use std::sync::Arc;
 use dotenvy::dotenv;
 use log::{error, info};
 use mail_send::SmtpClientBuilder;
-use mail_send::mail_builder::MessageBuilder;
+use mail_send::mail_builder::{
+    MessageBuilder,
+    headers::{HeaderType, url::URL},
+};
 use pushkind_emailer::models::email::{Email, EmailRecipient};
 use pushkind_emailer::models::hub::Hub;
 use tokio::sync::Mutex;
@@ -22,11 +25,15 @@ async fn send_smtp_message(
     hub: &Hub,
     email: &Email,
     recipient: &EmailRecipient,
-    mail_tracking_url: &str,
-    mail_message_id: &str,
+    domain: &str,
 ) -> Result<(), mail_send::Error> {
     let template = hub.email_template.as_deref().unwrap_or_default();
+
+    let unsubscribe_url = hub.get_usubscribe_url();
     let mut body: String;
+
+    let template = template.replace("{unsubscribe_url}", &unsubscribe_url);
+
     if template.contains("{message}") {
         body = template.replace("{message}", &email.message);
     } else {
@@ -34,11 +41,11 @@ async fn send_smtp_message(
     }
 
     body.push_str(&format!(
-        r#"<img height="1" width="1" border="0" src="{mail_tracking_url}{}">"#,
+        r#"<img height="1" width="1" border="0" src="http://{domain}/track/{}">"#,
         recipient.id
     ));
 
-    let message_id = format!("{}{}", recipient.id, mail_message_id);
+    let message_id = format!("{}@{}", recipient.id, domain);
 
     let recipient_address = vec![("", recipient.address.as_str())];
     let sender_email = hub.sender.as_deref().unwrap_or_default();
@@ -51,7 +58,11 @@ async fn send_smtp_message(
         .subject(subject)
         .html_body(&body)
         .text_body(&body)
-        .message_id(message_id);
+        .message_id(message_id)
+        .header(
+            "List-Unsubscribe",
+            HeaderType::from(URL::new(&unsubscribe_url)),
+        );
 
     if let (Some(mime), Some(name), Some(content)) = (
         email.attachment_mime.as_deref(),
@@ -81,8 +92,7 @@ async fn send_smtp_message(
 async fn send_email(
     email_id: i32,
     db_pool: Arc<Mutex<DbPool>>,
-    mail_tracking_url: &str,
-    mail_message_id: &str,
+    domain: &str,
 ) -> Result<(), Box<dyn Error>> {
     let pool = db_pool.lock().await;
     let mut conn = get_db_connection(&pool).ok_or("Cannot get connection from the pool")?;
@@ -95,9 +105,7 @@ async fn send_email(
     info!("Sending email for email_id {} via hub {}", email_id, hub.id);
 
     for recipient in recipients {
-        if let Err(e) =
-            send_smtp_message(&hub, &email, &recipient, mail_tracking_url, mail_message_id).await
-        {
+        if let Err(e) = send_smtp_message(&hub, &email, &recipient, &domain).await {
             error!("Failed to send email to {}: {}", recipient.address, e);
             continue;
         }
@@ -132,12 +140,11 @@ async fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenv().ok(); // Load .env file
 
-    let bind_address = env::var("ADDRESS").unwrap_or_default();
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
     let zmq_address =
         env::var("ZMQ_ADDRESS").unwrap_or_else(|_| "tcp://127.0.0.1:5555".to_string());
-    let mail_tracking_url = Arc::from(format!("{bind_address}/track/"));
-    let mail_message_id = Arc::from(env::var("MAIL_MESSAGE_ID").unwrap_or_default());
+    let domain = Arc::from(env::var("DOMAIN").unwrap_or_default());
+    //
 
     let context = zmq::Context::new();
     let responder = context.socket(zmq::PULL).expect("Cannot create zmq socket");
@@ -163,13 +170,10 @@ async fn main() {
             Ok(_) => {
                 let email_id = i32::from_be_bytes(buffer);
                 let pool_clone = Arc::clone(&pool);
-                let mail_tracking_url = Arc::clone(&mail_tracking_url);
-                let mail_message_id = Arc::clone(&mail_message_id);
+                let domain = Arc::clone(&domain);
 
                 tokio::spawn(async move {
-                    if let Err(e) =
-                        send_email(email_id, pool_clone, &mail_tracking_url, &mail_message_id).await
-                    {
+                    if let Err(e) = send_email(email_id, pool_clone, &domain).await {
                         error!("Error sending email message: {}", e);
                     }
                 });

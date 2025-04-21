@@ -15,7 +15,6 @@ pub struct Recipient {
     pub created_at: Option<chrono::NaiveDateTime>,
     pub updated_at: Option<chrono::NaiveDateTime>,
     pub unsubscribed_at: Option<chrono::NaiveDateTime>,
-    pub active: bool,
 }
 
 #[derive(Insertable)]

@@ -9,7 +9,7 @@ use pushkind_emailer::repository::email::get_hub_email_recipients_not_replied;
 use pushkind_emailer::repository::email::set_email_recipient_replied_status;
 use pushkind_emailer::repository::hub::list_hubs;
 
-pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, mail_message_id: &str) {
+pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &str) {
     let recipients = match get_hub_email_recipients_not_replied(db_conn, hub.id) {
         Ok(recipients) => recipients,
         Err(e) => {
@@ -64,7 +64,7 @@ pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, mail_messa
 
     for recipient in recipients {
         // Define the In-Reply-To Message-ID you are looking for
-        let in_reply_to_id = format!("<{}{}>", recipient.id, mail_message_id);
+        let in_reply_to_id = format!("<{}@{}>", recipient.id, domain);
 
         // Search for emails with a matching In-Reply-To header
         let query = format!("HEADER In-Reply-To {}", in_reply_to_id);
@@ -104,7 +104,7 @@ fn main() {
     dotenv().ok(); // Load .env file
 
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
-    let mail_message_id = env::var("MAIL_MESSAGE_ID").unwrap_or_default();
+    let domain = env::var("DOMAIN").unwrap_or_default();
 
     let db_pool = match establish_connection_pool(database_url) {
         Ok(pool) => pool,
@@ -132,6 +132,6 @@ fn main() {
 
     for hub in hubs {
         info!("Checking hub: {}", hub.name);
-        check_hub_email_replied(&mut db_conn, &hub, &mail_message_id);
+        check_hub_email_replied(&mut db_conn, &hub, &domain);
     }
 }

@@ -490,10 +490,16 @@ pub fn save_recipient(
     info!("Custom recipient fields: {:?}", &recipient.field);
     info!("Custom recipient values: {:?}", &recipient.value);
 
+    let unsubscribed_at = match recipient.active {
+        true => None,
+        false => Some(chrono::Utc::now().naive_utc()),
+    };
+
     diesel::update(recipients::table.filter(recipients::id.eq(recipient.id)))
         .set((
             recipients::name.eq(&recipient.name),
             recipients::email.eq(&recipient.email),
+            recipients::unsubscribed_at.eq(unsubscribed_at),
         ))
         .execute(conn)?;
 

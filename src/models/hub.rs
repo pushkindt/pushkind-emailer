@@ -25,3 +25,12 @@ pub struct Hub {
 pub struct NewHub<'a> {
     pub name: &'a str,
 }
+
+impl Hub {
+    pub fn get_usubscribe_url(&self) -> String {
+        match &self.login {
+            Some(login) => format!("mailto: {}?subject=unsubscribe", login),
+            None => String::from(""),
+        }
+    }
+}

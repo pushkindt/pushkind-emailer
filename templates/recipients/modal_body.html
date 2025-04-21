@@ -6,7 +6,7 @@
             <div class="col-md-10">
                 <input name="name" type="text" class="form-control" id="modalUserName" value="{{recipient.name}}" placeholder="Имя" required>
                 {% if recipient.unsubscribed_at %}
-                    <small class="text-body-secondary">Получатель отписался {{recipient.unsubscribed_at}}</small>
+                    <small class="text-body-secondary">Получатель отписался {{recipient.unsubscribed_at | date(format="%Y-%m-%d %H:%M")}}</small>
                 {% endif %}
             </div>
         </div>
@@ -15,6 +15,12 @@
             <div class="col-md-10">
                 <input name="email" type="email" class="form-control" id="modalUserEmail" value="{{recipient.email}}" placeholder="Электронный адрес" required>
             </div>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" value="true" {% if not recipient.unsubscribed_at %}checked{% endif %} id="active" name="active">
+            <label class="form-check-label" for="active">
+                Действующий
+            </label>
         </div>
 
         <div class="row mb-3">
