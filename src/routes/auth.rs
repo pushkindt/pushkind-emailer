@@ -65,7 +65,7 @@ pub async fn register(
     };
 
     if form.secret == config.secret {
-        match create_user(&mut conn, &form) {
+        match create_user(&mut conn, &form.email, &form.password) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Пользователь может войти.");
             }
