@@ -62,7 +62,7 @@ pub async fn recipients_add(
     };
 
     if let Some(hub_id) = user.0.hub_id {
-        match create_recipient(&mut conn, hub_id, &form) {
+        match create_recipient(&mut conn, hub_id, &form.name, &form.email) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Получатель успешно добавлен.");
             }
@@ -269,7 +269,18 @@ pub async fn recipients_save(
     };
 
     if user.0.hub_id.is_some() {
-        match save_recipient(&mut conn, &form) {
+        let fields = form.field.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
+        let values = form.value.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
+        match save_recipient(
+            &mut conn,
+            form.id,
+            &form.name,
+            &form.email,
+            form.active,
+            &form.groups,
+            &fields,
+            &values,
+        ) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Получатель сохранён.");
             }

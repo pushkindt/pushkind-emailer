@@ -2,15 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use diesel::prelude::*;
 use diesel::result::Error;
-use log::info;
 use serde::Deserialize;
 
-use crate::{
-    forms::{
-        groups::{AddGroupForm, AssignGroupRecipientForm},
-        recipients::{AddRecipientForm, SaveRecipientForm},
-    },
-    models::recipient::{Group, GroupRecipient, NewGroup, NewRecipient, Recipient, RecipientField},
+use crate::models::recipient::{
+    Group, GroupRecipient, NewGroup, NewRecipient, Recipient, RecipientField,
 };
 
 pub fn get_hub_all_recipients(
@@ -122,14 +117,15 @@ pub fn get_hub_group_recipients(
 pub fn create_recipient(
     conn: &mut SqliteConnection,
     hub: i32,
-    recipient: &AddRecipientForm,
+    name: &str,
+    email: &str,
 ) -> QueryResult<usize> {
     use crate::schema::recipients;
 
     let new_recipient = NewRecipient {
         hub_id: hub,
-        name: &recipient.name,
-        email: &recipient.email,
+        name,
+        email,
     };
 
     diesel::insert_into(recipients::table)
@@ -143,17 +139,10 @@ pub fn delete_recipient(conn: &mut SqliteConnection, recipient: i32) -> QueryRes
     diesel::delete(recipients::table.filter(recipients::id.eq(recipient))).execute(conn)
 }
 
-pub fn create_group(
-    conn: &mut SqliteConnection,
-    hub: i32,
-    group: &AddGroupForm,
-) -> QueryResult<usize> {
+pub fn create_group(conn: &mut SqliteConnection, hub: i32, name: &str) -> QueryResult<usize> {
     use crate::schema::groups;
 
-    let new_group = NewGroup {
-        hub_id: hub,
-        name: &group.name,
-    };
+    let new_group = NewGroup { hub_id: hub, name };
 
     diesel::insert_into(groups::table)
         .values(new_group)
@@ -168,13 +157,14 @@ pub fn delete_group(conn: &mut SqliteConnection, group: i32) -> QueryResult<usiz
 
 pub fn assign_recipient_to_group(
     conn: &mut SqliteConnection,
-    form: &AssignGroupRecipientForm,
+    recipient_id: i32,
+    group_id: i32,
 ) -> QueryResult<usize> {
     use crate::schema::groups_recipients;
 
     let new_assignment = GroupRecipient {
-        recipient_id: form.recipient_id,
-        group_id: form.group_id,
+        recipient_id,
+        group_id,
     };
 
     diesel::insert_into(groups_recipients::table)
@@ -184,15 +174,16 @@ pub fn assign_recipient_to_group(
 
 pub fn unassign_recipient_from_group(
     conn: &mut SqliteConnection,
-    form: &AssignGroupRecipientForm,
+    recipient_id: i32,
+    group_id: i32,
 ) -> QueryResult<usize> {
     use crate::schema::groups_recipients;
 
     diesel::delete(
         groups_recipients::table.filter(
             groups_recipients::recipient_id
-                .eq(form.recipient_id)
-                .and(groups_recipients::group_id.eq(form.group_id)),
+                .eq(recipient_id)
+                .and(groups_recipients::group_id.eq(group_id)),
         ),
     )
     .execute(conn)
@@ -481,35 +472,38 @@ pub fn get_recipient_group_ids(
 
 pub fn save_recipient(
     conn: &mut SqliteConnection,
-    recipient: &SaveRecipientForm,
+    recipient_id: i32,
+    name: &str,
+    email: &str,
+    active: bool,
+    groups: &[i32],
+    fields: &[&str],
+    field_values: &[&str],
 ) -> Result<(), Error> {
     use crate::schema::groups;
     use crate::schema::groups_recipients;
     use crate::schema::recipients;
 
-    info!("Custom recipient fields: {:?}", &recipient.field);
-    info!("Custom recipient values: {:?}", &recipient.value);
-
-    let unsubscribed_at = match recipient.active {
+    let unsubscribed_at = match active {
         true => None,
         false => Some(chrono::Utc::now().naive_utc()),
     };
 
-    diesel::update(recipients::table.filter(recipients::id.eq(recipient.id)))
+    diesel::update(recipients::table.filter(recipients::id.eq(recipient_id)))
         .set((
-            recipients::name.eq(&recipient.name),
-            recipients::email.eq(&recipient.email),
+            recipients::name.eq(name),
+            recipients::email.eq(email),
             recipients::unsubscribed_at.eq(unsubscribed_at),
         ))
         .execute(conn)?;
 
     let groups = groups::table
-        .filter(groups::id.eq_any(&recipient.groups))
+        .filter(groups::id.eq_any(groups))
         .select(groups::id)
         .load::<i32>(conn)?;
 
     diesel::delete(
-        groups_recipients::table.filter(groups_recipients::recipient_id.eq(recipient.id)),
+        groups_recipients::table.filter(groups_recipients::recipient_id.eq(recipient_id)),
     )
     .execute(conn)?;
 
@@ -518,21 +512,20 @@ pub fn save_recipient(
             groups
                 .iter()
                 .map(|group_id| GroupRecipient {
-                    recipient_id: recipient.id,
+                    recipient_id: recipient_id,
                     group_id: *group_id,
                 })
                 .collect::<Vec<GroupRecipient>>(),
         )
         .execute(conn)?;
 
-    let fields: HashMap<String, String> = recipient
-        .field
+    let fields: HashMap<String, String> = fields
         .iter()
-        .zip(recipient.value.iter())
-        .map(|(field, value)| (field.to_string(), value.to_string()))
+        .zip(field_values.iter())
+        .map(|(&field, &value)| (field.to_string(), value.to_string()))
         .collect();
 
-    update_recipient_custom_fields(conn, recipient.id, fields)?;
+    update_recipient_custom_fields(conn, recipient_id, fields)?;
 
     Ok(())
 }

@@ -62,7 +62,7 @@ pub async fn groups_add(
     };
 
     if let Some(hub_id) = user.0.hub_id {
-        match create_group(&mut conn, hub_id, &form) {
+        match create_group(&mut conn, hub_id, &form.name) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Группа успешно добавлена.");
             }
@@ -130,7 +130,7 @@ pub async fn groups_assign(
     };
 
     if user.0.hub_id.is_some() {
-        match assign_recipient_to_group(&mut conn, &form) {
+        match assign_recipient_to_group(&mut conn, form.recipient_id, form.group_id) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Группа назначена получателю.");
             }
@@ -164,7 +164,7 @@ pub async fn groups_unassign(
     };
 
     if user.0.hub_id.is_some() {
-        match unassign_recipient_from_group(&mut conn, &form) {
+        match unassign_recipient_from_group(&mut conn, form.recipient_id, form.group_id) {
             Ok(_) => {
                 add_flash_message(&mut session, "success", "Назначение группы удалено.");
             }
