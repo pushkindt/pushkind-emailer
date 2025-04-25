@@ -34,12 +34,10 @@
                     <div class="col-lg">
                         <select class="form-control my-1" name="group_id" required id="recipients-assign-form-group-id">
                             <option disabled selected value="">Выбор группы</option>
-                            {% if groups %}
-                                {% for group_assignment in groups %}
+                                {% for group_assignment in groups| default(value=[]) %}
                                     {% set group = group_assignment.0 %}
                                     <option value="{{group.id}}">{{group.name}}</option>
                                 {% endfor %}
-                            {% endif %}
                         </select>
                     </div>
                     <div class="col-lg">
@@ -56,20 +54,20 @@
     </div>
 </div>
 
-<div class="container mb-1">
-    <div class="row">
-        <div class="col">
-            <input type="text" class="form-control" placeholder="Фильтр" id="filter">
+{% if groups %}
+    <div class="container mb-1">
+        <div class="row">
+            <div class="col">
+                <input type="text" class="form-control" placeholder="Фильтр" id="filter">
+            </div>
         </div>
     </div>
-</div>
 
-{% if groups %}
     <div class="container">
         <div class="row">
             <div class="col">
                 <div class="accordion" id="recipientGroupAccordion">
-                    {% for group_assignment in groups %}
+                    {% for group_assignment in groups | default(value=[]) %}
                         {% set group = group_assignment.0 %}
                         {% set recipients = group_assignment.1 %}
                         <div class="accordion-item">
@@ -133,7 +131,7 @@
                 valueField: "id",
                 labelField: "name",
                 searchField: ["name", "email",
-                    {% for field in custom_fields %}
+                    {% for field in custom_fields | default(value=[])  %}
                         "{{field}}",
                     {% endfor %}
                 ],
@@ -153,20 +151,20 @@
                     }
                 },
                 options: [
-                    {% if recipients %}
-                        {% for recipient_fields in recipients %}
-                            {% set recipient = recipient_fields.0 %}
-                            {% set fields = recipient_fields.1 %}
-                            {
-                                ...{
-                                    "id": "{{recipient.id}}",
-                                    "name": "{{recipient.name}}",
-                                    "email": "{{recipient.email}}",
-                                },
-                                ...{{fields | json_encode() | safe}}
+
+                    {% for recipient_fields in recipients | default(value=[]) %}
+                        {% set recipient = recipient_fields.0 %}
+                        {% set fields = recipient_fields.1 %}
+                        {
+                            ...{
+                                "id": "{{recipient.id}}",
+                                "name": "{{recipient.name}}",
+                                "email": "{{recipient.email}}",
                             },
-                        {% endfor %}
-                    {% endif %}
+                            ...{{fields | json_encode() | safe}}
+                        },
+                    {% endfor %}
+
                 ]
             });
             let group_select = $("#recipients-assign-form-group-id");

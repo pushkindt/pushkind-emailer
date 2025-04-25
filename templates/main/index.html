@@ -41,65 +41,65 @@
 
     <div class="container">
         <div class="accordion" id="email-accordion">
-            {% if emails %}
-                {% for email_recipients in emails %}
-                    {% set email = email_recipients.0 %}
-                    {% set recipients = email_recipients.1 %}
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false" aria-controls="email-collapse{{email.id}}">
-                                #{{email.id}} от {{email.created_at | date(format="%Y-%m-%d %H:%M")}}&nbsp;<strong>{{email.subject}}</strong>
-                            </button>
-                        </h2>
-                        <div id="email-collapse{{email.id}}" class="accordion-collapse collapse" data-bs-parent="#email-accordion">
-                            <div class="accordion-body">
-                                <div class="row border-bottom mb-1 pb-1">
-                                    <div class="col-auto">
-                                        <form method="POST" action="/delete_email" class="d-inline">
-                                            <input type="hidden" value="{{email.id}}" name="id">
-                                            <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
-                                                <i class="bi bi-x-lg"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                    <div class="col-auto">
-                                        <form method="POST" action="/retry_email" class="d-inline">
-                                            <input type="hidden" value="{{email.id}}" name="id">
-                                            <button class="btn btn-warning btn-sm" type="submit" onclick="return confirm('Добавить в очередь отправки?')">
-                                                <i class="bi bi-arrow-clockwise"></i>
-                                            </button>
-                                        </form>
-                                    </div>
+
+            {% for email_recipients in emails | default(value=[]) %}
+                {% set email = email_recipients.0 %}
+                {% set recipients = email_recipients.1 %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false" aria-controls="email-collapse{{email.id}}">
+                            #{{email.id}} от {{email.created_at | date(format="%Y-%m-%d %H:%M")}}&nbsp;<strong>{{email.subject}}</strong>
+                        </button>
+                    </h2>
+                    <div id="email-collapse{{email.id}}" class="accordion-collapse collapse" data-bs-parent="#email-accordion">
+                        <div class="accordion-body">
+                            <div class="row border-bottom mb-1 pb-1">
+                                <div class="col-auto">
+                                    <form method="POST" action="/delete_email" class="d-inline">
+                                        <input type="hidden" value="{{email.id}}" name="id">
+                                        <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </form>
                                 </div>
-                                <div class="row">
-                                    <div class="col">
-                                        {{ email.message | safe }}
-                                    </div>
-                                    <div class="col">
-                                        <ul>
-                                            {% for recipient in recipients %}
-                                                <li class="{% if recipient.is_sent %}text-success{% endif %}">
-                                                    {{ recipient.address }}
-                                                    {% if recipient.opened %}
-                                                        <i class="bi bi-envelope-check-fill" title="Сообщение просмотрено"></i>
-                                                    {% else %}
-                                                        <i class="bi bi-envelope-check" title="Сообщение не просмотрено"></i>
-                                                    {% endif %}
-                                                    {% if recipient.replied %}
-                                                        <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
-                                                    {% else %}
-                                                        <i class="bi bi-reply" title="Ответ на сообщение не получен"></i>
-                                                    {% endif %}
-                                                </li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
+                                <div class="col-auto">
+                                    <form method="POST" action="/retry_email" class="d-inline">
+                                        <input type="hidden" value="{{email.id}}" name="id">
+                                        <button class="btn btn-warning btn-sm" type="submit" onclick="return confirm('Добавить в очередь отправки?')">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col">
+                                    {{ email.message | safe }}
+                                </div>
+                                <div class="col">
+                                    <ul>
+                                        {% for recipient in recipients %}
+                                            <li class="{% if recipient.is_sent %}text-success{% endif %}">
+                                                {{ recipient.address }}
+                                                {% if recipient.opened %}
+                                                    <i class="bi bi-envelope-check-fill" title="Сообщение просмотрено"></i>
+                                                {% else %}
+                                                    <i class="bi bi-envelope-check" title="Сообщение не просмотрено"></i>
+                                                {% endif %}
+                                                {% if recipient.replied %}
+                                                    <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
+                                                {% else %}
+                                                    <i class="bi bi-reply" title="Ответ на сообщение не получен"></i>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
                                 </div>
                             </div>
                         </div>
                     </div>
-                {% endfor %}
-            {% endif %}
+                </div>
+            {% endfor %}
+
         </div>
     </div>
 
@@ -122,7 +122,7 @@
                 valueField: "id",
                 labelField: "text",
                 searchField: ["text",
-                    {% for field in custom_fields %}
+                    {% for field in custom_fields | default(value=[]) %}
                         "{{field}}",
                     {% endfor %}
                 ],
@@ -142,28 +142,24 @@
                     }
                 },
                 options: [
-                    {% if recipients %}
-                        {% for recipient_fields in recipients %}
-                            {% set recipient = recipient_fields.0 %}
-                            {% set fields = recipient_fields.1 %}
-                            {% if recipient.unsubscribed_at %}{% continue %}{% endif %}
-                            {
-                                ...{
-                                    "id": "{{recipient.email}}",
-                                    "text": "{{recipient.name}} ({{recipient.email}})",
-                                },
-                                ...{{fields | json_encode() | safe}}
+                    {% for recipient_fields in recipients | default(value=[]) %}
+                        {% set recipient = recipient_fields.0 %}
+                        {% set fields = recipient_fields.1 %}
+                        {% if recipient.unsubscribed_at %}{% continue %}{% endif %}
+                        {
+                            ...{
+                                "id": "{{recipient.email}}",
+                                "text": "{{recipient.name}} ({{recipient.email}})",
                             },
-                        {% endfor %}
-                    {% endif %}
-                    {% if groups %}
-                        {% for group in groups %}
-                            {
-                                "id": "{{group.id}}",
-                                "text": "Группа: {{group.name}}",
-                            },
-                        {% endfor %}
-                    {% endif %}
+                            ...{{fields | json_encode() | safe}}
+                        },
+                    {% endfor %}
+                    {% for group in groups | default(value=[]) %}
+                        {
+                            "id": "{{group.id}}",
+                            "text": "Группа: {{group.name}}",
+                        },
+                    {% endfor %}
                 ],
             });
             let recipientsSelectize = recipients[0].selectize;

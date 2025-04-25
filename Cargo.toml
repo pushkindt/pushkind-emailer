@@ -15,7 +15,7 @@ lazy_static = "1.5.0"
 serde = { version = "1.0.219", features = ["derive"] }
 tera = "1.20.0"
 futures-util = "0.3.31"
-diesel = { version = "2.2.9", features = ["sqlite", "r2d2", "chrono"] }
+diesel = { version = "2.2.10", features = ["sqlite", "r2d2", "chrono", "returning_clauses_for_sqlite_3_35"] }
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
 actix-files = "0.6.6"

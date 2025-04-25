@@ -6,13 +6,11 @@ use crate::{
 };
 
 pub fn create_hub(conn: &mut SqliteConnection, name: &str) -> QueryResult<Hub> {
-    use crate::schema::hubs::dsl::{hubs, id};
+    use crate::schema::hubs::dsl::hubs;
 
     let new_hub = NewHub { name };
 
-    diesel::insert_into(hubs).values(&new_hub).execute(conn)?;
-
-    hubs.order(id.desc()).first(conn)
+    diesel::insert_into(hubs).values(&new_hub).get_result(conn)
 }
 
 pub fn list_hubs(conn: &mut SqliteConnection) -> QueryResult<Vec<Hub>> {
@@ -36,8 +34,8 @@ pub fn get_hub(conn: &mut SqliteConnection, hub_id: i32) -> QueryResult<Hub> {
 pub fn delete_hub(conn: &mut SqliteConnection, user_id: i32, hub_id: i32) -> QueryResult<usize> {
     use crate::schema::hubs;
 
-    diesel::delete(hubs::table.filter(hubs::id.eq(hub_id))).execute(conn)?;
-
     // set user hub to null
-    set_user_hub(conn, user_id, None)
+    set_user_hub(conn, user_id, None)?;
+
+    diesel::delete(hubs::table.filter(hubs::id.eq(hub_id))).execute(conn)
 }
