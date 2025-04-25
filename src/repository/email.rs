@@ -1,13 +1,10 @@
-use std::{error::Error, io::Read};
+use std::error::Error;
 
 use diesel::prelude::*;
 
-use crate::{
-    forms::main::SendEmailForm,
-    models::{
-        email::{Email, EmailRecipient, NewEmail, NewEmailRecipient},
-        recipient::Recipient,
-    },
+use crate::models::{
+    email::{Email, EmailRecipient, NewEmail, NewEmailRecipient},
+    recipient::Recipient,
 };
 
 pub fn get_user_all_emails_with_recipients(
@@ -66,7 +63,12 @@ fn create_email_recipient(
 
 pub fn create_email(
     conn: &mut SqliteConnection,
-    mut email_form: SendEmailForm,
+    subject: Option<&str>,
+    message: &str,
+    recipients: &Vec<String>,
+    attachment: Option<&[u8]>,
+    attachment_name: Option<&str>,
+    attachment_mime: Option<&str>,
     user_id: i32,
 ) -> Result<Email, Box<dyn Error>> {
     use crate::schema::emails;
@@ -75,30 +77,15 @@ pub fn create_email(
 
     let created_at = chrono::Utc::now().naive_utc();
 
-    let mut buf: Vec<u8> = Vec::new();
-    let (attachment, file_name, file_mime) = match email_form.attachment.file.read_to_end(&mut buf)
-    {
-        Ok(_) => (
-            Some(buf),
-            email_form.attachment.file_name,
-            email_form
-                .attachment
-                .content_type
-                .as_ref()
-                .map(|x| x.essence_str()),
-        ),
-        Err(_) => (None, None, None),
-    };
-
     let new_email = NewEmail {
         user_id,
-        message: &email_form.message,
+        message: message,
         created_at: &created_at,
         is_sent: false,
-        subject: email_form.subject.as_deref(),
-        attachment: attachment.as_ref(),
-        attachment_name: file_name.as_deref(),
-        attachment_mime: file_mime,
+        subject: subject,
+        attachment: attachment,
+        attachment_name: attachment_name,
+        attachment_mime: attachment_mime,
     };
 
     diesel::insert_into(emails::table)
@@ -112,7 +99,7 @@ pub fn create_email(
         .order(emails::created_at.desc())
         .first(conn)?;
 
-    for recipient in &email_form.recipients.0 {
+    for recipient in recipients {
         // if recipient is an email and exists in the database create a new EmailRecipient
         // if recipient is not an email but a group id then fetch the group and create a new EmailRecipient for each member
         if recipient.contains('@') {

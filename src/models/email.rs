@@ -28,7 +28,7 @@ pub struct NewEmail<'a> {
     pub created_at: &'a chrono::NaiveDateTime,
     pub is_sent: bool,
     pub subject: Option<&'a str>,
-    pub attachment: Option<&'a Vec<u8>>,
+    pub attachment: Option<&'a [u8]>,
     pub attachment_name: Option<&'a str>,
     pub attachment_mime: Option<&'a str>,
 }

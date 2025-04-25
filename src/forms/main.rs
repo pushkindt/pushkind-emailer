@@ -6,7 +6,7 @@ pub struct SendEmailForm {
     pub message: Text<String>,
     pub subject: Text<Option<String>>,
     #[multipart(limit = "10MB")]
-    pub attachment: TempFile,
+    pub attachment: Option<TempFile>,
     pub recipients: MpJson<Vec<String>>,
 }
 

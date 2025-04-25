@@ -20,7 +20,7 @@ use crate::repository::email::{
 use crate::repository::recipient::{
     get_hub_all_groups, get_hub_all_recipients, get_hub_all_recipients_fields,
 };
-use crate::utils::send_zmq_email_id;
+use crate::utils::{read_attachment_file, send_zmq_email_id};
 
 #[get("/")]
 pub async fn index(
@@ -73,13 +73,34 @@ pub async fn send_email(
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    let form = match form {
+    let mut form = match form {
         Ok(form) => form,
         Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {}", err)),
     };
 
     if user.0.hub_id.is_some() {
-        match create_email(&mut conn, form.0, user.0.id) {
+        let (attchment_name, attachement_mime, attachment) =
+            if let Some(attachment) = form.attachment.as_mut() {
+                match read_attachment_file(attachment) {
+                    Ok((name, mime, data)) => (name, mime, data),
+                    Err(err) => {
+                        error!("Ошибка при чтении файла: {}", err);
+                        (None, None, None)
+                    }
+                }
+            } else {
+                (None, None, None)
+            };
+        match create_email(
+            &mut conn,
+            form.subject.0.as_deref(),
+            &form.message,
+            &form.recipients,
+            attachment.as_deref(),
+            attchment_name.as_deref(),
+            attachement_mime.as_deref(),
+            user.0.id,
+        ) {
             Ok(email) => match send_zmq_email_id(email.id, &zmq_config) {
                 Ok(_) => {
                     return HttpResponse::Ok().body("Сообщение создано.");
