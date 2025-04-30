@@ -100,7 +100,7 @@ pub async fn upload_image(
     let filepath = format!("./upload/{}/{}", hub_id, file_name);
 
     match form.image.file.persist(filepath) {
-        Ok(_) => add_flash_message(&mut session, "danger", "Файл успешно загружен."),
+        Ok(_) => add_flash_message(&mut session, "success", "Файл успешно загружен."),
         Err(_) => add_flash_message(&mut session, "danger", "Ошибка при загрузке файла."),
     }
 
