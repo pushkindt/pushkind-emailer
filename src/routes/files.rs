@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::TEMPLATES;
 use crate::forms::files::UploadFileForm;
-use crate::models::alert::add_flash_message;
+use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 
 pub fn file_manager(dir: &Directory, req: &HttpRequest) -> Result<ServiceResponse<BoxBody>> {
@@ -35,6 +35,13 @@ pub fn file_manager(dir: &Directory, req: &HttpRequest) -> Result<ServiceRespons
                 "Extractor not ready",
             ));
         }
+    };
+
+    let session_result = Session::from_request(req, &mut payload).now_or_never();
+
+    let alerts = match session_result {
+        Some(Ok(mut session)) => get_flash_messages(&mut session),
+        _ => vec![],
     };
 
     let hub_id = match user.0.hub_id {
@@ -61,6 +68,7 @@ pub fn file_manager(dir: &Directory, req: &HttpRequest) -> Result<ServiceRespons
     entries.sort();
 
     let mut context = Context::new();
+    context.insert("alerts", &alerts);
     context.insert("current_user", &user);
     context.insert("current_page", "files");
     context.insert("entries", &entries);
