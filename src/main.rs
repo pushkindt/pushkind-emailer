@@ -12,6 +12,7 @@ use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
 use pushkind_emailer::models::config::ServerConfig;
 use pushkind_emailer::routes::auth::{login, logout, register, signin, signup};
+use pushkind_emailer::routes::files::{file_manager, upload_image};
 use pushkind_emailer::routes::groups::{
     groups, groups_add, groups_assign, groups_delete, groups_unassign,
 };
@@ -95,7 +96,13 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_add)
                     .service(groups_delete)
                     .service(groups_assign)
-                    .service(groups_unassign),
+                    .service(groups_unassign)
+                    .service(upload_image)
+                    .service(
+                        Files::new("/upload", "./upload")
+                            .show_files_listing()
+                            .files_listing_renderer(file_manager),
+                    ),
             )
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(zmq_config.clone()))

@@ -1,10 +1,10 @@
 use diesel::prelude::*;
 use serde::Serialize;
 
-use crate::models::user::User;
+use crate::models::user::UserDb;
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
-#[diesel(belongs_to(User, foreign_key = user_id))]
+#[diesel(belongs_to(UserDb, foreign_key = user_id))]
 #[diesel(table_name = crate::schema::emails)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Email {

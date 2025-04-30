@@ -8,10 +8,10 @@ use diesel::prelude::*;
 use serde::Serialize;
 
 use crate::db::DbPool;
-use crate::models::user::User;
+use crate::models::user::UserDb;
 
 #[derive(Serialize)]
-pub struct AuthenticatedUser(pub User);
+pub struct AuthenticatedUser(pub UserDb);
 
 impl FromRequest for AuthenticatedUser {
     type Error = Error;
@@ -35,7 +35,7 @@ impl FromRequest for AuthenticatedUser {
 
             match users::table
                 .filter(users::email.eq(&uid))
-                .first::<User>(&mut conn)
+                .first::<UserDb>(&mut conn)
             {
                 Ok(user) => return ready(Ok(AuthenticatedUser(user))),
                 Err(_) => return ready(Err(ErrorUnauthorized("Invalid user"))),
