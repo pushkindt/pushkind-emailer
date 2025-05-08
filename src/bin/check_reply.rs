@@ -94,10 +94,7 @@ pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &s
             }
 
             if let Err(e) = update_email_num_replied(db_conn, recipient.email_id) {
-                error!(
-                    "Failed to update email num_sent for email {}: {}",
-                    email_id, e
-                );
+                error!("Failed to update email num_sent for: {}", e);
             }
         }
     }
