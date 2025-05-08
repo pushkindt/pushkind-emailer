@@ -245,3 +245,62 @@ pub fn set_email_recipient_replied_status(
         .set(emails::is_sent.eq(true))
         .execute(conn)
 }
+
+pub fn update_email_num_sent(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<usize> {
+    use crate::schema::email_recipients;
+    use crate::schema::emails;
+
+    let num_value: i64 = email_recipients::table
+        .filter(email_recipients::email_id.eq(email_id))
+        .filter(email_recipients::is_sent.eq(true))
+        .count()
+        .get_result(conn)?;
+
+    //Set email num_sent to the number of recipients that have is_sent = true
+    diesel::update(emails::table.filter(emails::id.eq(email_id)))
+        .set(emails::num_sent.eq(num_value as i32))
+        .execute(conn)
+}
+
+pub fn update_email_num_opened(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<usize> {
+    use crate::schema::email_recipients;
+    use crate::schema::emails;
+
+    let num_value: i64 = email_recipients::table
+        .filter(email_recipients::email_id.eq(email_id))
+        .filter(email_recipients::opened.eq(true))
+        .count()
+        .get_result(conn)?;
+
+    //Set email num_sent to the number of recipients that have is_sent = true
+    diesel::update(emails::table.filter(emails::id.eq(email_id)))
+        .set(emails::num_sent.eq(num_value as i32))
+        .execute(conn)
+}
+
+pub fn update_email_num_replied(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<usize> {
+    use crate::schema::email_recipients;
+    use crate::schema::emails;
+
+    let num_value: i64 = email_recipients::table
+        .filter(email_recipients::email_id.eq(email_id))
+        .filter(email_recipients::replied.eq(true))
+        .count()
+        .get_result(conn)?;
+
+    //Set email num_sent to the number of recipients that have is_sent = true
+    diesel::update(emails::table.filter(emails::id.eq(email_id)))
+        .set(emails::num_sent.eq(num_value as i32))
+        .execute(conn)
+}
+
+pub fn get_email_recipient(
+    conn: &mut SqliteConnection,
+    recipient_id: i32,
+) -> QueryResult<EmailRecipient> {
+    use crate::schema::email_recipients;
+
+    email_recipients::table
+        .filter(email_recipients::id.eq(recipient_id))
+        .first(conn)
+}

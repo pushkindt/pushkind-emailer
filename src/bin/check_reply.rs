@@ -5,8 +5,10 @@ use log::{error, info};
 
 use pushkind_emailer::db::{DbConnection, establish_connection_pool, get_db_connection};
 use pushkind_emailer::models::hub::Hub;
-use pushkind_emailer::repository::email::get_hub_email_recipients_not_replied;
 use pushkind_emailer::repository::email::set_email_recipient_replied_status;
+use pushkind_emailer::repository::email::{
+    get_hub_email_recipients_not_replied, update_email_num_replied,
+};
 use pushkind_emailer::repository::hub::list_hubs;
 
 pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &str) {
@@ -89,6 +91,13 @@ pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &s
             match set_email_recipient_replied_status(db_conn, recipient.email_id, recipient.id) {
                 Ok(_) => info!("Email recipient replied status set"),
                 Err(e) => error!("Cannot set email recipient replied status: {}", e),
+            }
+
+            if let Err(e) = update_email_num_replied(db_conn, recipient.email_id) {
+                error!(
+                    "Failed to update email num_sent for email {}: {}",
+                    email_id, e
+                );
             }
         }
     }

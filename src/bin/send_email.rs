@@ -17,6 +17,7 @@ use zmq;
 use pushkind_emailer::db::{DbPool, establish_connection_pool, get_db_connection};
 use pushkind_emailer::repository::email::{
     get_email, get_email_recipients, set_email_recipient_sent_status, set_email_sent_status,
+    update_email_num_sent,
 };
 use pushkind_emailer::repository::hub::get_hub;
 use pushkind_emailer::repository::user::get_user;
@@ -127,12 +128,16 @@ async fn send_email(
             "Failed to update email sent status for email {}: {}",
             email_id, e
         );
-    } else {
-        info!(
-            "Email sent status updated successfully for email {}",
-            email_id
+    }
+
+    if let Err(e) = update_email_num_sent(&mut conn, email_id) {
+        error!(
+            "Failed to update email num_sent for email {}: {}",
+            email_id, e
         );
     }
+
+    info!("Finished processing email_id: {}", email_id);
 
     Ok(())
 }

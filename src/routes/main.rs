@@ -15,8 +15,9 @@ use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::models::config::ServerConfig;
 use crate::repository::email::{
-    create_email, get_email, get_email_recipients, get_user_all_emails_with_recipients,
-    remove_email, reset_email_sent_and_opened_status, set_email_recipient_opened_status,
+    create_email, get_email, get_email_recipient, get_email_recipients,
+    get_user_all_emails_with_recipients, remove_email, reset_email_sent_and_opened_status,
+    set_email_recipient_opened_status, update_email_num_opened,
 };
 use crate::repository::recipient::{
     get_hub_all_groups, get_hub_all_recipients, get_hub_all_recipients_fields,
@@ -249,13 +250,25 @@ pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) 
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    match set_email_recipient_opened_status(&mut conn, recipient_id.into_inner(), true) {
-        Ok(_) => HttpResponse::SeeOther()
-            .insert_header((header::LOCATION, "/assets/placeholder.png"))
-            .finish(),
+    let recipient = match get_email_recipient(&mut conn, recipient_id.into_inner()) {
+        Ok(recipient) => recipient,
         Err(err) => {
             error!("Database connection error: {}", err); // Log the error for debugging
-            HttpResponse::InternalServerError().finish()
+            return HttpResponse::InternalServerError().finish();
         }
+    };
+
+    if set_email_recipient_opened_status(&mut conn, recipient.id, true).is_err() {
+        error!("Failed to update recipient status"); // Log the error for debugging
+        return HttpResponse::InternalServerError().finish();
     }
+
+    if update_email_num_opened(&mut conn, recipient.email_id).is_err() {
+        error!("Failed to update email num_opened"); // Log the error for debugging
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::SeeOther()
+        .insert_header((header::LOCATION, "/assets/placeholder.png"))
+        .finish()
 }
