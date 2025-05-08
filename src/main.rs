@@ -6,8 +6,8 @@ use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
 use actix_web::{App, HttpServer, middleware, web};
 use dotenvy::dotenv;
-
 use log::error;
+
 use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
 use pushkind_emailer::models::config::ServerConfig;

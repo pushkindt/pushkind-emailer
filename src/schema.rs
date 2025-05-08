@@ -23,6 +23,9 @@ diesel::table! {
         attachment -> Nullable<Binary>,
         attachment_name -> Nullable<Text>,
         attachment_mime -> Nullable<Text>,
+        num_sent -> Integer,
+        num_opened -> Integer,
+        num_replied -> Integer,
     }
 }
 
