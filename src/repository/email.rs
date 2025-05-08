@@ -274,7 +274,7 @@ pub fn update_email_num_opened(conn: &mut SqliteConnection, email_id: i32) -> Qu
 
     //Set email num_sent to the number of recipients that have is_sent = true
     diesel::update(emails::table.filter(emails::id.eq(email_id)))
-        .set(emails::num_sent.eq(num_value as i32))
+        .set(emails::num_opened.eq(num_value as i32))
         .execute(conn)
 }
 
@@ -290,7 +290,7 @@ pub fn update_email_num_replied(conn: &mut SqliteConnection, email_id: i32) -> Q
 
     //Set email num_sent to the number of recipients that have is_sent = true
     diesel::update(emails::table.filter(emails::id.eq(email_id)))
-        .set(emails::num_sent.eq(num_value as i32))
+        .set(emails::num_replied.eq(num_value as i32))
         .execute(conn)
 }
 
