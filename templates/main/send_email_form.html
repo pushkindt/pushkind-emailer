@@ -1,0 +1,28 @@
+<form id="send-email-form" action="/send_email" method="POST" enctype="multipart/form-data">
+    <div class="row mb-3">
+        <a class="recipientsDropDown" href="#">Получатели</a>
+        <select id="recipients-input" multiple required>
+            {% for retry_recipient in retry_recipients | default(value=[]) %}
+                <option value="{{retry_recipient.address}}" selected></option>
+            {% endfor %}
+        </select>
+        <a id="recipientsNone" href="#" class="text-danger">убрать всех</a>
+    </div>
+    <div class="row">
+        <div class="col">
+            <input type="text" name="subject" class="form-control my-1" placeholder="Тема" value="{{retry['subject'] | default(value='')}}">
+        </div>
+    </div>
+    {% set message = retry['message'] | default(value='') %}
+    {% include 'markdown.html' %}
+    <div class="row">
+        <div class="col">
+            <input class="form-control" type="file" name="attachment">
+        </div>
+        <div class="col-auto text-end">
+            <button class="btn btn-primary text-white" id="submit-button">
+                Отправить
+            </button>
+        </div>
+    </div>
+</form>

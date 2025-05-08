@@ -17,6 +17,9 @@ pub struct Email {
     pub attachment: Option<Vec<u8>>,
     pub attachment_name: Option<String>,
     pub attachment_mime: Option<String>,
+    pub num_sent: i32,
+    pub num_opened: i32,
+    pub num_replied: i32,
 }
 
 #[derive(Insertable)]

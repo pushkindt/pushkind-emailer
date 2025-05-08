@@ -1,0 +1,52 @@
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false" aria-controls="email-collapse{{email.id}}">
+            {{email.created_at | date(format="%Y-%m-%d %H:%M")}}:&nbsp;
+            Отправлено: {{email.num_sent}} Открыли: {{email.num_opened}} Ответили: {{email.num_replied}}
+            &nbsp;<strong>"{{email.subject}}"</strong>
+        </button>
+    </h2>
+    <div id="email-collapse{{email.id}}" class="accordion-collapse collapse" data-bs-parent="#email-accordion">
+        <div class="accordion-body">
+            <div class="row border-bottom mb-1 pb-1">
+                <div class="col-auto">
+                    <form method="POST" action="/delete_email" class="d-inline">
+                        <input type="hidden" value="{{email.id}}" name="id">
+                        <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </form>
+                </div>
+                <div class="col-auto">
+                    <a href="?retry={{email.id}}" class="btn btn-warning btn-sm" onclick="return confirm('Повторить?')">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    {{ email.message | safe }}
+                </div>
+                <div class="col">
+                    <ul>
+                        {% for recipient in recipients %}
+                            <li class="{% if recipient.is_sent %}text-success{% endif %}">
+                                {{ recipient.address }}
+                                {% if recipient.opened %}
+                                    <i class="bi bi-envelope-check-fill" title="Сообщение просмотрено"></i>
+                                {% else %}
+                                    <i class="bi bi-envelope-check" title="Сообщение не просмотрено"></i>
+                                {% endif %}
+                                {% if recipient.replied %}
+                                    <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
+                                {% else %}
+                                    <i class="bi bi-reply" title="Ответ на сообщение не получен"></i>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

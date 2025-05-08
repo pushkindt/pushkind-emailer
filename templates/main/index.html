@@ -13,30 +13,7 @@
     {% include 'navigation.html' %}
 
     <div class="container my-2">
-        <form id="send-email-form" action="/send_email" method="POST" enctype="multipart/form-data">
-            <div class="row mb-3">
-                <a class="recipientsDropDown" href="#">Получатели</a>
-                <select id="recipients-input" multiple required>
-                </select>
-                <a id="recipientsNone" href="#" class="text-danger">убрать всех</a>
-            </div>
-            <div class="row">
-                <div class="col">
-                    <input type="text" name="subject" class="form-control my-1" placeholder="Тема">
-                </div>
-            </div>
-            {% include 'markdown.html' %}
-            <div class="row">
-                <div class="col">
-                    <input class="form-control" type="file" name="attachment">
-                </div>
-                <div class="col-auto text-end">
-                    <button class="btn btn-primary text-white" id="submit-button">
-                        Отправить
-                    </button>
-                </div>
-            </div>
-        </form>
+        {% include 'main/send_email_form.html' %}
     </div>
 
     <div class="container">
@@ -45,59 +22,7 @@
             {% for email_recipients in emails | default(value=[]) %}
                 {% set email = email_recipients.0 %}
                 {% set recipients = email_recipients.1 %}
-                <div class="accordion-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false" aria-controls="email-collapse{{email.id}}">
-                            #{{email.id}} от {{email.created_at | date(format="%Y-%m-%d %H:%M")}}&nbsp;<strong>{{email.subject}}</strong>
-                        </button>
-                    </h2>
-                    <div id="email-collapse{{email.id}}" class="accordion-collapse collapse" data-bs-parent="#email-accordion">
-                        <div class="accordion-body">
-                            <div class="row border-bottom mb-1 pb-1">
-                                <div class="col-auto">
-                                    <form method="POST" action="/delete_email" class="d-inline">
-                                        <input type="hidden" value="{{email.id}}" name="id">
-                                        <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Удалить?')">
-                                            <i class="bi bi-x-lg"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                                <div class="col-auto">
-                                    <form method="POST" action="/retry_email" class="d-inline">
-                                        <input type="hidden" value="{{email.id}}" name="id">
-                                        <button class="btn btn-warning btn-sm" type="submit" onclick="return confirm('Добавить в очередь отправки?')">
-                                            <i class="bi bi-arrow-clockwise"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col">
-                                    {{ email.message | safe }}
-                                </div>
-                                <div class="col">
-                                    <ul>
-                                        {% for recipient in recipients %}
-                                            <li class="{% if recipient.is_sent %}text-success{% endif %}">
-                                                {{ recipient.address }}
-                                                {% if recipient.opened %}
-                                                    <i class="bi bi-envelope-check-fill" title="Сообщение просмотрено"></i>
-                                                {% else %}
-                                                    <i class="bi bi-envelope-check" title="Сообщение не просмотрено"></i>
-                                                {% endif %}
-                                                {% if recipient.replied %}
-                                                    <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
-                                                {% else %}
-                                                    <i class="bi bi-reply" title="Ответ на сообщение не получен"></i>
-                                                {% endif %}
-                                            </li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {% include 'main/email.html' %}
             {% endfor %}
 
         </div>
