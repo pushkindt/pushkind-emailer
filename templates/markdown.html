@@ -16,16 +16,22 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
+
+    function UpdateRenderedMessage() {
         const edit_message = document.getElementById('message-input');
         const message_send = document.getElementById('message');
         const render_message = document.getElementById('message-rendered');
-        render_message.innerHTML = marked.parse(edit_message.value);
+        const rendered_message = marked.parse(edit_message.value);
+        render_message.innerHTML = rendered_message;
+        message_send.value = rendered_message;
+    }
 
+    document.addEventListener("DOMContentLoaded", () => {
+        UpdateRenderedMessage();
+
+        const edit_message = document.getElementById('message-input');
         edit_message.addEventListener("input", function () {
-            const rendered_message = marked.parse(edit_message.value);
-            render_message.innerHTML = rendered_message;
-            message_send.value = rendered_message;
+            UpdateRenderedMessage();
         });
     })
 </script>
