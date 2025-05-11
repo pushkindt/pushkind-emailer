@@ -1,9 +1,15 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
         <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false" aria-controls="email-collapse{{email.id}}">
-            {{email.created_at | date(format="%Y-%m-%d %H:%M")}}:&nbsp;
-            Отправлено: {{email.num_sent}} Открыли: {{email.num_opened}} Ответили: {{email.num_replied}}
-            &nbsp;<strong>"{{email.subject}}"</strong>
+            <span>{{email.created_at | date(format="%Y-%m-%d %H:%M")}}</span>
+            &nbsp;
+            <span>
+                Отправлено:&nbsp;{{email.num_sent}}
+                Открыли:&nbsp;{{email.num_opened}}
+                Ответили:&nbsp;{{email.num_replied}}
+            </span>
+            &nbsp;
+            <strong>"{{email.subject}}"</strong>
         </button>
     </h2>
     <div id="email-collapse{{email.id}}" class="accordion-collapse collapse" data-bs-parent="#email-accordion">
