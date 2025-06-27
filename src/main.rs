@@ -5,25 +5,24 @@ use actix_identity::IdentityMiddleware;
 use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
 use actix_web::{App, HttpServer, middleware, web};
+use actix_web_flash_messages::{FlashMessagesFramework, storage::CookieMessageStore};
 use dotenvy::dotenv;
 use log::error;
 
 use pushkind_emailer::db::establish_connection_pool;
 use pushkind_emailer::middleware::RedirectUnauthorized;
 use pushkind_emailer::models::config::ServerConfig;
-use pushkind_emailer::routes::auth::{login, logout, register, signin, signup};
-use pushkind_emailer::routes::files::{file_manager, upload_image};
 use pushkind_emailer::routes::groups::{
     groups, groups_add, groups_assign, groups_delete, groups_unassign,
 };
-use pushkind_emailer::routes::main::{delete_email, index, retry_email, send_email, track_email};
+use pushkind_emailer::routes::main::{
+    delete_email, index, logout, not_assigned, retry_email, send_email, track_email,
+};
 use pushkind_emailer::routes::recipients::{
     recipients, recipients_add, recipients_clean, recipients_delete, recipients_modal,
     recipients_save, recipients_upload,
 };
-use pushkind_emailer::routes::settings::{
-    settings, settings_activate, settings_add, settings_delete, settings_save,
-};
+use pushkind_emailer::routes::settings::{settings, settings_save};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -49,42 +48,51 @@ async fn main() -> std::io::Result<()> {
         Err(_) => Key::generate(),
     };
 
-    let zmq_config = ServerConfig {
+    let auth_service_url = env::var("AUTH_SERVICE_URL");
+    let auth_service_url = match auth_service_url {
+        Ok(auth_service_url) => auth_service_url,
+        Err(_) => {
+            error!("AUTH_SERVICE_URL environment variable not set");
+            std::process::exit(1);
+        }
+    };
+
+    let server_config = ServerConfig {
         zmq_address,
         secret: secret.unwrap_or_default(),
+        auth_service_url,
     };
+
+    let domain = env::var("DOMAIN").unwrap_or("localhost".to_string());
+
+    let message_store = CookieMessageStore::builder(secret_key.clone()).build();
+    let message_framework = FlashMessagesFramework::builder(message_store).build();
 
     HttpServer::new(move || {
         App::new()
+            .wrap(message_framework.clone())
             .wrap(IdentityMiddleware::default())
-            .wrap(SessionMiddleware::new(
-                CookieSessionStore::default(),
-                secret_key.clone(),
-            ))
+            .wrap(
+                SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
+                    .cookie_secure(false) // set to true in prod
+                    .cookie_domain(Some(format!(".{domain}")))
+                    .build(),
+            )
             .wrap(middleware::Compress::default())
             .wrap(middleware::Logger::default())
-            .service(
-                web::scope("/auth")
-                    .service(logout)
-                    .service(login)
-                    .service(signin)
-                    .service(signup)
-                    .service(register),
-            )
             .service(Files::new("/assets", "./assets"))
             .service(
                 web::scope("")
                     .wrap(RedirectUnauthorized)
+                    .service(not_assigned)
+                    .service(logout)
                     .service(index)
                     .service(send_email)
                     .service(delete_email)
                     .service(retry_email)
                     .service(track_email)
                     .service(settings)
-                    .service(settings_add)
-                    .service(settings_activate)
                     .service(settings_save)
-                    .service(settings_delete)
                     .service(recipients)
                     .service(recipients_add)
                     .service(recipients_delete)
@@ -96,16 +104,10 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_add)
                     .service(groups_delete)
                     .service(groups_assign)
-                    .service(groups_unassign)
-                    .service(upload_image)
-                    .service(
-                        Files::new("/upload", "./upload")
-                            .show_files_listing()
-                            .files_listing_renderer(file_manager),
-                    ),
+                    .service(groups_unassign),
             )
             .app_data(web::Data::new(pool.clone()))
-            .app_data(web::Data::new(zmq_config.clone()))
+            .app_data(web::Data::new(server_config.clone()))
     })
     .bind((address, port))?
     .run()

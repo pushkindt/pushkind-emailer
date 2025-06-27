@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Hub {
     pub id: i32,
-    pub name: String,
     pub login: Option<String>,
     pub password: Option<String>,
     pub sender: Option<String>,
@@ -19,14 +18,22 @@ pub struct Hub {
     pub email_template: Option<String>,
 }
 
-#[derive(Insertable)]
-#[diesel(table_name = crate::schema::hubs)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct NewHub<'a> {
-    pub name: &'a str,
-}
-
 impl Hub {
+    pub fn new(id: i32) -> Self {
+        Self {
+            id,
+            login: None,
+            password: None,
+            sender: None,
+            smtp_server: None,
+            smtp_port: None,
+            created_at: None,
+            updated_at: None,
+            imap_server: None,
+            imap_port: None,
+            email_template: None,
+        }
+    }
     pub fn get_usubscribe_url(&self) -> String {
         match &self.login {
             Some(login) => format!("mailto:{}?subject=unsubscribe", login),

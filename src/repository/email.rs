@@ -7,15 +7,15 @@ use crate::models::{
     recipient::Recipient,
 };
 
-pub fn get_user_all_emails_with_recipients(
+pub fn get_hub_all_emails_with_recipients(
     conn: &mut SqliteConnection,
-    user_id: i32,
+    hub_id: i32,
 ) -> QueryResult<Vec<(Email, Vec<EmailRecipient>)>> {
     use crate::schema::emails;
 
     // Read all emails for a user sorted by timestamp
     let all_emails: Vec<Email> = emails::table
-        .filter(emails::user_id.eq(user_id))
+        .filter(emails::hub_id.eq(hub_id))
         .order(emails::created_at.desc())
         .select(Email::as_select()) // Ensure Diesel knows we're selecting the full Email struct
         .load(conn)?;
@@ -69,7 +69,7 @@ pub fn create_email(
     attachment: Option<&[u8]>,
     attachment_name: Option<&str>,
     attachment_mime: Option<&str>,
-    user_id: i32,
+    hub_id: i32,
 ) -> Result<Email, Box<dyn Error>> {
     use crate::schema::emails;
     use crate::schema::groups_recipients;
@@ -78,14 +78,14 @@ pub fn create_email(
     let created_at = chrono::Utc::now().naive_utc();
 
     let new_email = NewEmail {
-        user_id,
-        message: message,
+        hub_id,
+        message,
         created_at: &created_at,
         is_sent: false,
-        subject: subject,
-        attachment: attachment,
-        attachment_name: attachment_name,
-        attachment_mime: attachment_mime,
+        subject,
+        attachment,
+        attachment_name,
+        attachment_mime,
     };
 
     diesel::insert_into(emails::table)
@@ -93,7 +93,7 @@ pub fn create_email(
         .execute(conn)?;
 
     let email: Email = emails::table
-        .filter(emails::user_id.eq(user_id))
+        .filter(emails::hub_id.eq(hub_id))
         .filter(emails::created_at.eq(created_at))
         .filter(emails::message.eq(&new_email.message))
         .order(emails::created_at.desc())
@@ -131,10 +131,15 @@ pub fn create_email(
     Ok(email)
 }
 
-pub fn remove_email(conn: &mut SqliteConnection, email_id: i32) -> QueryResult<usize> {
+pub fn remove_email(conn: &mut SqliteConnection, email_id: i32, hub_id: i32) -> QueryResult<usize> {
     use crate::schema::{email_recipients, emails};
 
-    diesel::delete(emails::table.filter(emails::id.eq(email_id))).execute(conn)?;
+    diesel::delete(
+        emails::table
+            .filter(emails::id.eq(email_id))
+            .filter(emails::hub_id.eq(hub_id)),
+    )
+    .execute(conn)?;
     diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(email_id)))
         .execute(conn)
 }
@@ -214,12 +219,10 @@ pub fn get_hub_email_recipients_not_replied(
 ) -> QueryResult<Vec<EmailRecipient>> {
     use crate::schema::email_recipients;
     use crate::schema::emails;
-    use crate::schema::users;
 
     email_recipients::table
         .inner_join(emails::table.on(email_recipients::email_id.eq(emails::id)))
-        .inner_join(users::table.on(emails::user_id.eq(users::id)))
-        .filter(users::hub_id.eq(hub_id))
+        .filter(emails::hub_id.eq(hub_id))
         .filter(email_recipients::replied.eq(false))
         .select(EmailRecipient::as_select())
         .load(conn)

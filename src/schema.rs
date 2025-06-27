@@ -15,7 +15,6 @@ diesel::table! {
 diesel::table! {
     emails (id) {
         id -> Integer,
-        user_id -> Integer,
         message -> Text,
         created_at -> Timestamp,
         is_sent -> Bool,
@@ -26,6 +25,7 @@ diesel::table! {
         num_sent -> Integer,
         num_opened -> Integer,
         num_replied -> Integer,
+        hub_id -> Integer,
     }
 }
 
@@ -49,7 +49,6 @@ diesel::table! {
 diesel::table! {
     hubs (id) {
         id -> Integer,
-        name -> Text,
         login -> Nullable<Text>,
         password -> Nullable<Text>,
         sender -> Nullable<Text>,
@@ -83,25 +82,13 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    users (id) {
-        id -> Integer,
-        email -> Text,
-        password -> Text,
-        created_at -> Nullable<Timestamp>,
-        updated_at -> Nullable<Timestamp>,
-        hub_id -> Nullable<Integer>,
-    }
-}
-
 diesel::joinable!(email_recipients -> emails (email_id));
-diesel::joinable!(emails -> users (user_id));
+diesel::joinable!(emails -> hubs (hub_id));
 diesel::joinable!(groups -> hubs (hub_id));
 diesel::joinable!(groups_recipients -> groups (group_id));
 diesel::joinable!(groups_recipients -> recipients (recipient_id));
 diesel::joinable!(recipient_fields -> recipients (recipient_id));
 diesel::joinable!(recipients -> hubs (hub_id));
-diesel::joinable!(users -> hubs (hub_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     email_recipients,
@@ -111,5 +98,4 @@ diesel::allow_tables_to_appear_in_same_query!(
     hubs,
     recipient_fields,
     recipients,
-    users,
 );

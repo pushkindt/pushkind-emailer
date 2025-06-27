@@ -1,52 +1,51 @@
-use actix_session::Session;
-use actix_web::http::header;
 use actix_web::{HttpResponse, Responder, get, post, web};
+use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use tera::Context;
 
-use crate::TEMPLATES;
 use crate::db::{DbPool, get_db_connection};
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
-use crate::models::alert::{add_flash_message, get_flash_messages};
 use crate::models::auth::AuthenticatedUser;
 use crate::repository::recipient::{
     assign_recipient_to_group, create_group, delete_group, get_hub_all_recipients,
     get_hub_all_recipients_fields, get_hub_group_recipients, unassign_recipient_from_group,
 };
+use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
 
 #[get("/groups")]
 pub async fn groups(
     user: AuthenticatedUser,
-    mut session: Session,
+    flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
 ) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
     let mut conn = match get_db_connection(&pool) {
         Some(conn) => conn,
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    let flash_messages = get_flash_messages(&mut session);
+    let alerts = flash_messages
+        .iter()
+        .map(|f| (f.content(), alert_level_to_str(&f.level())))
+        .collect::<Vec<_>>();
     let mut context = Context::new();
-    context.insert("alerts", &flash_messages);
+    context.insert("alerts", &alerts);
     context.insert("current_user", &user);
     context.insert("current_page", "groups");
 
-    if let Some(hub_id) = user.0.hub_id {
-        if let Ok(recipients) = get_hub_all_recipients(&mut conn, hub_id) {
-            context.insert("recipients", &recipients);
-        }
-        if let Ok(groups) = get_hub_group_recipients(&mut conn, hub_id) {
-            context.insert("groups", &groups);
-        }
-        if let Ok(custom_fields) = get_hub_all_recipients_fields(&mut conn, hub_id) {
-            context.insert("custom_fields", &custom_fields);
-        }
+    if let Ok(recipients) = get_hub_all_recipients(&mut conn, user.hub_id) {
+        context.insert("recipients", &recipients);
+    }
+    if let Ok(groups) = get_hub_group_recipients(&mut conn, user.hub_id) {
+        context.insert("groups", &groups);
+    }
+    if let Ok(custom_fields) = get_hub_all_recipients_fields(&mut conn, user.hub_id) {
+        context.insert("custom_fields", &custom_fields);
     }
 
-    HttpResponse::Ok().body(
-        TEMPLATES
-            .render("groups/groups.html", &context)
-            .unwrap_or_default(),
-    )
+    render_template("groups/groups.html", &context)
 }
 
 #[post("/groups/add")]
@@ -54,33 +53,26 @@ pub async fn groups_add(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
     web::Form(form): web::Form<AddGroupForm>,
-    mut session: Session,
 ) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
     let mut conn = match get_db_connection(&pool) {
         Some(conn) => conn,
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    if let Some(hub_id) = user.0.hub_id {
-        match create_group(&mut conn, hub_id, &form.name) {
-            Ok(_) => {
-                add_flash_message(&mut session, "success", "Группа успешно добавлена.");
-            }
-            Err(err) => {
-                add_flash_message(
-                    &mut session,
-                    "danger",
-                    &format!("Ошибка при создании группы: {}", err),
-                );
-            }
+    match create_group(&mut conn, user.hub_id, &form.name) {
+        Ok(_) => {
+            FlashMessage::success("Группа успешно добавлена.").send();
         }
-    } else {
-        add_flash_message(&mut session, "danger", "Вы не можете добавлять группы.");
+        Err(err) => {
+            FlashMessage::error(format!("Ошибка при создании группы: {}", err)).send();
+        }
     }
 
-    HttpResponse::SeeOther()
-        .insert_header((header::LOCATION, "/groups"))
-        .finish()
+    redirect("/groups")
 }
 
 #[post("/groups/delete")]
@@ -88,33 +80,26 @@ pub async fn groups_delete(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
     web::Form(form): web::Form<DeleteGroupForm>,
-    mut session: Session,
 ) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
     let mut conn = match get_db_connection(&pool) {
         Some(conn) => conn,
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    if user.0.hub_id.is_some() {
-        match delete_group(&mut conn, form.id) {
-            Ok(_) => {
-                add_flash_message(&mut session, "success", "Группа удалена.");
-            }
-            Err(err) => {
-                add_flash_message(
-                    &mut session,
-                    "danger",
-                    &format!("Ошибка при удалении группы: {}", err),
-                );
-            }
+    match delete_group(&mut conn, form.id) {
+        Ok(_) => {
+            FlashMessage::success("Группа удалена.").send();
         }
-    } else {
-        add_flash_message(&mut session, "danger", "Вы не можете удалять группы.");
+        Err(err) => {
+            FlashMessage::error(format!("Ошибка при удалении группы: {}", err)).send();
+        }
     }
 
-    HttpResponse::SeeOther()
-        .insert_header((header::LOCATION, "/groups"))
-        .finish()
+    redirect("/groups")
 }
 
 #[post("/groups/assign")]
@@ -122,33 +107,26 @@ pub async fn groups_assign(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
     web::Form(form): web::Form<AssignGroupRecipientForm>,
-    mut session: Session,
 ) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
     let mut conn = match get_db_connection(&pool) {
         Some(conn) => conn,
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    if user.0.hub_id.is_some() {
-        match assign_recipient_to_group(&mut conn, form.recipient_id, form.group_id) {
-            Ok(_) => {
-                add_flash_message(&mut session, "success", "Группа назначена получателю.");
-            }
-            Err(err) => {
-                add_flash_message(
-                    &mut session,
-                    "danger",
-                    &format!("Ошибка при назначении группы: {}", err),
-                );
-            }
+    match assign_recipient_to_group(&mut conn, form.recipient_id, form.group_id) {
+        Ok(_) => {
+            FlashMessage::success("Группа назначена получателю.").send();
         }
-    } else {
-        add_flash_message(&mut session, "danger", "Вы не можете назначать группы.");
+        Err(err) => {
+            FlashMessage::error(format!("Ошибка при назначении группы: {}", err)).send();
+        }
     }
 
-    HttpResponse::SeeOther()
-        .insert_header((header::LOCATION, "/groups"))
-        .finish()
+    redirect("/groups")
 }
 
 #[post("/groups/unassign")]
@@ -156,35 +134,24 @@ pub async fn groups_unassign(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
     web::Form(form): web::Form<AssignGroupRecipientForm>,
-    mut session: Session,
 ) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
     let mut conn = match get_db_connection(&pool) {
         Some(conn) => conn,
         None => return HttpResponse::InternalServerError().finish(),
     };
 
-    if user.0.hub_id.is_some() {
-        match unassign_recipient_from_group(&mut conn, form.recipient_id, form.group_id) {
-            Ok(_) => {
-                add_flash_message(&mut session, "success", "Назначение группы удалено.");
-            }
-            Err(err) => {
-                add_flash_message(
-                    &mut session,
-                    "danger",
-                    &format!("Ошибка при удалении назначения группы: {}", err),
-                );
-            }
+    match unassign_recipient_from_group(&mut conn, form.recipient_id, form.group_id) {
+        Ok(_) => {
+            FlashMessage::success("Назначение группы удалено.").send();
         }
-    } else {
-        add_flash_message(
-            &mut session,
-            "danger",
-            "Вы не можете удалять назначения группы.",
-        );
+        Err(err) => {
+            FlashMessage::error(format!("Ошибка при удалении назначения группы: {}", err)).send();
+        }
     }
 
-    HttpResponse::SeeOther()
-        .insert_header((header::LOCATION, "/groups"))
-        .finish()
+    redirect("/groups")
 }

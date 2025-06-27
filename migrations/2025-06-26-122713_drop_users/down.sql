@@ -1,0 +1,13 @@
+-- This file should undo anything in `up.sql`
+CREATE TABLE users (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    hub_id INTEGER REFERENCES hubs(id)
+);
+ALTER TABLE hubs ADD COLUMN name TEXT;
+ALTER TABLE emails DROP COLUMN hub_id;
+DELETE FROM emails;
+ALTER TABLE emails ADD COLUMN user_id INTEGER NOT NULL REFERENCES users(id);

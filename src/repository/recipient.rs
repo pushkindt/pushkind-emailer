@@ -512,7 +512,7 @@ pub fn save_recipient(
             groups
                 .iter()
                 .map(|group_id| GroupRecipient {
-                    recipient_id: recipient_id,
+                    recipient_id,
                     group_id: *group_id,
                 })
                 .collect::<Vec<GroupRecipient>>(),

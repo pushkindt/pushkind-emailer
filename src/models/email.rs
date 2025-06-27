@@ -1,15 +1,14 @@
 use diesel::prelude::*;
 use serde::Serialize;
 
-use crate::models::user::UserDb;
+use crate::models::hub::Hub;
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
-#[diesel(belongs_to(UserDb, foreign_key = user_id))]
+#[diesel(belongs_to(Hub, foreign_key = hub_id))]
 #[diesel(table_name = crate::schema::emails)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Email {
     pub id: i32,
-    pub user_id: i32,
     pub message: String,
     pub created_at: chrono::NaiveDateTime,
     pub is_sent: bool,
@@ -20,13 +19,13 @@ pub struct Email {
     pub num_sent: i32,
     pub num_opened: i32,
     pub num_replied: i32,
+    pub hub_id: i32,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::emails)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewEmail<'a> {
-    pub user_id: i32,
     pub message: &'a str,
     pub created_at: &'a chrono::NaiveDateTime,
     pub is_sent: bool,
@@ -34,6 +33,7 @@ pub struct NewEmail<'a> {
     pub attachment: Option<&'a [u8]>,
     pub attachment_name: Option<&'a str>,
     pub attachment_mime: Option<&'a str>,
+    pub hub_id: i32,
 }
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]

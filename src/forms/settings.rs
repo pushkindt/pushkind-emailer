@@ -15,7 +15,6 @@ pub struct ActivateHubForm {
 #[derive(Deserialize)]
 pub struct SaveHubForm {
     pub id: i32,
-    pub name: String,
     pub login: Option<String>,
     pub password: Option<String>,
     pub sender: Option<String>,
@@ -31,7 +30,6 @@ impl From<SaveHubForm> for Hub {
     fn from(val: SaveHubForm) -> Self {
         Hub {
             id: val.id,
-            name: val.name,
             login: val.login,
             password: val.password,
             sender: val.sender,

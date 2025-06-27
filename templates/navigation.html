@@ -29,20 +29,16 @@
                 <ul class="dropdown-menu dropdown-menu-end">
                     <li><h6 class="dropdown-header">{{current_user.email}}</h6></li>
                     <li><hr class="dropdown-divider"></li>
+                    {% if current_user.roles is containing("admin") %}
+                        <li>
+                            <a class="dropdown-item icon-link" href="/settings">
+                                <i class="bi bi-wrench-adjustable-circle mb-2"></i>
+                                Настройки
+                            </a>
+                        </li>
+                    {% endif %}
                     <li>
-                        <a class="dropdown-item icon-link" href="/settings">
-                            <i class="bi bi-wrench-adjustable-circle mb-2"></i>
-                            Настройки
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item icon-link" href="/upload">
-                            <i class="bi bi-files mb-2"></i>
-                            Файлы
-                        </a>
-                    </li>
-                    <li>
-                        <form method="POST" action="/auth/logout">
+                        <form method="POST" action="/logout">
                             <button type="submit" class="dropdown-item icon-link">
                                 <i class="bi bi-box-arrow-right mb-2"></i>
                                 Выйти

@@ -3,9 +3,12 @@ use actix_web::{
     body::EitherBody,
     dev::{self, Service, ServiceRequest, ServiceResponse, Transform},
     http::StatusCode,
+    web,
 };
 use futures_util::future::LocalBoxFuture;
 use std::future::{Ready, ready};
+
+use crate::models::config::ServerConfig;
 
 pub struct RedirectUnauthorized;
 
@@ -43,6 +46,19 @@ where
     dev::forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        let server_config = req.app_data::<web::Data<ServerConfig>>();
+
+        let auth_service_url = match server_config {
+            Some(config) => config.auth_service_url.clone(),
+            None => {
+                return Box::pin(async {
+                    Err(actix_web::error::ErrorInternalServerError(
+                        "Server config not found",
+                    ))
+                });
+            }
+        };
+
         let fut = self.service.call(req);
 
         Box::pin(async move {
@@ -51,7 +67,7 @@ where
             if res.status() == StatusCode::UNAUTHORIZED {
                 let (req_parts, _) = res.into_parts();
                 let redirect_response = HttpResponse::SeeOther()
-                    .insert_header((actix_web::http::header::LOCATION, "/auth/signin"))
+                    .insert_header((actix_web::http::header::LOCATION, auth_service_url))
                     .finish()
                     .map_into_right_body();
 
