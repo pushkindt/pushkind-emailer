@@ -137,7 +137,7 @@ fn main() {
     };
 
     for hub in hubs {
-        info!("Checking hub: {}", hub.name);
+        info!("Checking hub: {}", hub.id);
         check_hub_email_replied(&mut db_conn, &hub, &domain);
     }
 }

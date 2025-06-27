@@ -20,7 +20,6 @@ use pushkind_emailer::repository::email::{
     update_email_num_sent,
 };
 use pushkind_emailer::repository::hub::get_hub;
-use pushkind_emailer::repository::user::get_user;
 
 async fn send_smtp_message(
     hub: &Hub,
@@ -42,7 +41,7 @@ async fn send_smtp_message(
     }
 
     body.push_str(&format!(
-        r#"<img height="1" width="1" border="0" src="https://{domain}/track/{}">"#,
+        r#"<img height="1" width="1" border="0" src="https://mail.{domain}/track/{}">"#,
         recipient.id
     ));
 
@@ -101,9 +100,8 @@ async fn send_email(
     let mut conn = get_db_connection(&pool).ok_or("Cannot get connection from the pool")?;
 
     let email = get_email(&mut conn, email_id)?;
-    let user = get_user(&mut conn, email.user_id)?;
     let recipients = get_email_recipients(&mut conn, email_id)?;
-    let hub = get_hub(&mut conn, user.hub_id.ok_or("Hub ID is missing")?)?;
+    let hub = get_hub(&mut conn, email.hub_id)?;
 
     info!("Sending email for email_id {} via hub {}", email_id, hub.id);
 

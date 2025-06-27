@@ -13,3 +13,10 @@ pub fn get_hub(conn: &mut SqliteConnection, hub_id: i32) -> QueryResult<Hub> {
 
     hubs.filter(id.eq(hub_id)).first(conn)
 }
+
+
+pub fn list_hubs(conn: &mut SqliteConnection) -> QueryResult<Vec<Hub>> {
+    use crate::schema::hubs::dsl::hubs;
+
+    hubs.load(conn)
+}
