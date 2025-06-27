@@ -8,6 +8,6 @@ CREATE TABLE users (
     hub_id INTEGER REFERENCES hubs(id)
 );
 ALTER TABLE hubs ADD COLUMN name TEXT;
-ALTER TABLE emails DROP COLUMN hub_id;
 DELETE FROM emails;
+ALTER TABLE emails DROP COLUMN hub_id;
 ALTER TABLE emails ADD COLUMN user_id INTEGER NOT NULL REFERENCES users(id);

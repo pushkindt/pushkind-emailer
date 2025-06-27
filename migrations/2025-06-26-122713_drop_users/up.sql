@@ -1,6 +1,6 @@
 -- Your SQL goes here
+DELETE FROM emails;
 DROP TABLE IF EXISTS users;
 ALTER TABLE hubs DROP COLUMN name;
-DELETE FROM emails;
 ALTER TABLE emails DROP COLUMN user_id;
 ALTER TABLE emails ADD COLUMN hub_id INTEGER NOT NULL REFERENCES hubs(id);
