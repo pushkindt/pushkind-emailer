@@ -1,15 +1,29 @@
 use actix_web::HttpResponse;
 use actix_web::http::header;
 use actix_web_flash_messages::{FlashMessage, Level};
+use lazy_static::lazy_static;
 use log::error;
-use tera::Context;
+use tera::{Context, Tera};
 
-use crate::{TEMPLATES, models::auth::AuthenticatedUser};
+use crate::models::auth::AuthenticatedUser;
 
 pub mod groups;
 pub mod main;
 pub mod recipients;
 pub mod settings;
+
+lazy_static! {
+    pub static ref TEMPLATES: Tera = {
+        match Tera::new("templates/**/*") {
+            Ok(t) => t,
+            Err(e) => {
+                println!("Parsing error(s): {}", e);
+                ::std::process::exit(1);
+            }
+        }
+    };
+}
+
 
 fn alert_level_to_str(level: &Level) -> &'static str {
     match level {
