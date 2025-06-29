@@ -10,6 +10,7 @@ use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, UploadRecipientsForm,
 };
 use crate::models::auth::AuthenticatedUser;
+use crate::models::config::ServerConfig;
 use crate::repository::recipient::{
     clean_all_recipients_and_groups, create_recipient, delete_recipient, get_hub_all_groups,
     get_hub_all_recipients, get_recipient, get_recipient_fields, get_recipient_group_ids,
@@ -22,6 +23,7 @@ pub async fn recipients(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
+    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -40,6 +42,7 @@ pub async fn recipients(
     context.insert("alerts", &alerts);
     context.insert("current_user", &user);
     context.insert("current_page", "recipients");
+    context.insert("home_url", &server_config.auth_service_url);
 
     if let Ok(recipients) = get_hub_all_recipients(&mut conn, user.hub_id) {
         context.insert("recipients", &recipients);
@@ -164,6 +167,7 @@ pub async fn recipients_modal(
     recipient_id: web::Path<i32>,
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
+    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -191,6 +195,7 @@ pub async fn recipients_modal(
             context.insert("groups", &groups);
         }
     }
+    context.insert("home_url", &server_config.auth_service_url);
 
     render_template("recipients/modal_body.html", &context)
 }

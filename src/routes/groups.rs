@@ -5,6 +5,7 @@ use tera::Context;
 use crate::db::{DbPool, get_db_connection};
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
 use crate::models::auth::AuthenticatedUser;
+use crate::models::config::ServerConfig;
 use crate::repository::recipient::{
     assign_recipient_to_group, create_group, delete_group, get_hub_all_recipients,
     get_hub_all_recipients_fields, get_hub_group_recipients, unassign_recipient_from_group,
@@ -16,6 +17,7 @@ pub async fn groups(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
+    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -34,6 +36,7 @@ pub async fn groups(
     context.insert("alerts", &alerts);
     context.insert("current_user", &user);
     context.insert("current_page", "groups");
+    context.insert("home_url", &server_config.auth_service_url);
 
     if let Ok(recipients) = get_hub_all_recipients(&mut conn, user.hub_id) {
         context.insert("recipients", &recipients);

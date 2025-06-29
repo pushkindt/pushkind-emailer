@@ -34,6 +34,7 @@ pub async fn index(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
     flash_messages: IncomingFlashMessages,
+    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -62,6 +63,7 @@ pub async fn index(
     context.insert("current_page", "index");
     context.insert("retry", &retry);
     context.insert("retry_recipients", &retry_recipients);
+    context.insert("home_url", &server_config.auth_service_url);
 
     if let Ok(recipients) = get_hub_all_recipients(&mut conn, user.hub_id) {
         context.insert("recipients", &recipients);
@@ -249,6 +251,7 @@ pub async fn logout(user: Identity) -> impl Responder {
 pub async fn not_assigned(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
+    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     let alerts = flash_messages
         .iter()
@@ -258,6 +261,7 @@ pub async fn not_assigned(
     context.insert("alerts", &alerts);
     context.insert("current_user", &user);
     context.insert("current_page", "index");
+    context.insert("home_url", &server_config.auth_service_url);
 
     render_template("main/not_assigned.html", &context)
 }

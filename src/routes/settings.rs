@@ -5,6 +5,7 @@ use tera::Context;
 use crate::db::{DbPool, get_db_connection};
 use crate::forms::settings::SaveHubForm;
 use crate::models::auth::AuthenticatedUser;
+use crate::models::config::ServerConfig;
 use crate::models::hub::Hub;
 use crate::repository::hub::{get_hub, update_hub};
 use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
@@ -14,6 +15,7 @@ pub async fn settings(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
+    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "admin", None) {
         return response;
@@ -39,6 +41,7 @@ pub async fn settings(
     };
 
     context.insert("current_hub", &hub);
+    context.insert("home_url", &server_config.auth_service_url);
 
     render_template("settings/settings.html", &context)
 }
