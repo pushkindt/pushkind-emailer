@@ -75,7 +75,6 @@ async fn main() -> std::io::Result<()> {
             .wrap(IdentityMiddleware::default())
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
-                    .cookie_content_security(CookieContentSecurity::Signed)
                     .cookie_secure(false) // set to true in prod
                     .cookie_domain(Some(format!(".{domain}")))
                     .build(),
