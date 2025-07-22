@@ -3,35 +3,36 @@ use std::io::Read;
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use pushkind_common::db::DbPool;
+use pushkind_common::models::auth::AuthenticatedUser;
+use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
 
-use crate::db::{DbPool, get_db_connection};
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, UploadRecipientsForm,
 };
-use crate::models::auth::AuthenticatedUser;
-use crate::models::config::ServerConfig;
 use crate::repository::recipient::{
     clean_all_recipients_and_groups, create_recipient, delete_recipient, get_hub_all_groups,
     get_hub_all_recipients, get_recipient, get_recipient_fields, get_recipient_group_ids,
     save_recipient, update_recipients_from_csv,
 };
-use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
+use crate::routes::render_template;
 
 #[get("/recipients")]
 pub async fn recipients(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
-    server_config: web::Data<ServerConfig>,
+    server_config: web::Data<CommonServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let alerts = flash_messages
@@ -61,9 +62,9 @@ pub async fn recipients_add(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match create_recipient(&mut conn, user.hub_id, &form.name, &form.email) {
@@ -88,9 +89,9 @@ pub async fn recipients_delete(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match delete_recipient(&mut conn, form.id) {
@@ -111,9 +112,9 @@ pub async fn recipients_clean(user: AuthenticatedUser, pool: web::Data<DbPool>) 
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match clean_all_recipients_and_groups(&mut conn, user.hub_id) {
@@ -138,9 +139,9 @@ pub async fn recipients_upload(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let mut csv_content = String::new();
@@ -167,15 +168,14 @@ pub async fn recipients_modal(
     recipient_id: web::Path<i32>,
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let mut context = Context::new();
@@ -195,7 +195,6 @@ pub async fn recipients_modal(
             context.insert("groups", &groups);
         }
     }
-    context.insert("home_url", &server_config.auth_service_url);
 
     render_template("recipients/modal_body.html", &context)
 }
@@ -210,9 +209,9 @@ pub async fn recipients_save(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {

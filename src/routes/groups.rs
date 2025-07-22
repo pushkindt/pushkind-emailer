@@ -1,31 +1,32 @@
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use pushkind_common::db::DbPool;
+use pushkind_common::models::auth::AuthenticatedUser;
+use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
 
-use crate::db::{DbPool, get_db_connection};
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
-use crate::models::auth::AuthenticatedUser;
-use crate::models::config::ServerConfig;
 use crate::repository::recipient::{
     assign_recipient_to_group, create_group, delete_group, get_hub_all_recipients,
     get_hub_all_recipients_fields, get_hub_group_recipients, unassign_recipient_from_group,
 };
-use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
+use crate::routes::render_template;
 
 #[get("/groups")]
 pub async fn groups(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
-    server_config: web::Data<ServerConfig>,
+    server_config: web::Data<CommonServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let alerts = flash_messages
@@ -61,9 +62,9 @@ pub async fn groups_add(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match create_group(&mut conn, user.hub_id, &form.name) {
@@ -88,9 +89,9 @@ pub async fn groups_delete(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match delete_group(&mut conn, form.id) {
@@ -115,9 +116,9 @@ pub async fn groups_assign(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match assign_recipient_to_group(&mut conn, form.recipient_id, form.group_id) {
@@ -142,9 +143,9 @@ pub async fn groups_unassign(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match unassign_recipient_from_group(&mut conn, form.recipient_id, form.group_id) {

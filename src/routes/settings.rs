@@ -1,29 +1,30 @@
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use pushkind_common::db::DbPool;
+use pushkind_common::models::auth::AuthenticatedUser;
+use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
 
-use crate::db::{DbPool, get_db_connection};
 use crate::forms::settings::SaveHubForm;
-use crate::models::auth::AuthenticatedUser;
-use crate::models::config::ServerConfig;
 use crate::models::hub::Hub;
 use crate::repository::hub::{get_hub, update_hub};
-use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
+use crate::routes::render_template;
 
 #[get("/settings")]
 pub async fn settings(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
-    server_config: web::Data<ServerConfig>,
+    server_config: web::Data<CommonServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "admin", None) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let alerts = flash_messages
@@ -56,9 +57,9 @@ pub async fn settings_save(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match update_hub(&mut conn, &form.into()) {

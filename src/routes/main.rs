@@ -5,12 +5,14 @@ use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use log::error;
+use pushkind_common::db::DbPool;
+use pushkind_common::models::auth::AuthenticatedUser;
+use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use serde::Deserialize;
 use tera::Context;
 
-use crate::db::{DbPool, get_db_connection};
 use crate::forms::main::{DeleteEmailForm, SendEmailForm};
-use crate::models::auth::AuthenticatedUser;
 use crate::models::config::ServerConfig;
 use crate::repository::email::{
     create_email, get_email, get_email_recipient, get_email_recipients,
@@ -20,7 +22,7 @@ use crate::repository::email::{
 use crate::repository::recipient::{
     get_hub_all_groups, get_hub_all_recipients, get_hub_all_recipients_fields,
 };
-use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
+use crate::routes::render_template;
 use crate::utils::{read_attachment_file, send_zmq_email_id};
 
 #[derive(Deserialize)]
@@ -34,15 +36,15 @@ pub async fn index(
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
     flash_messages: IncomingFlashMessages,
-    server_config: web::Data<ServerConfig>,
+    server_config: web::Data<CommonServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let (retry, retry_recipients) = match params.retry {
@@ -92,9 +94,9 @@ pub async fn send_email(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let mut form = match form {
@@ -145,9 +147,9 @@ pub async fn delete_email(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match remove_email(&mut conn, form.id, user.hub_id) {
@@ -173,9 +175,9 @@ pub async fn retry_email(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     match get_email(&mut conn, form.id) {
@@ -215,9 +217,9 @@ pub async fn retry_email(
 
 #[get("/track/{recipient_id}")]
 pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) -> impl Responder {
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let mut conn = match pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
     let recipient = match get_email_recipient(&mut conn, recipient_id.into_inner()) {
@@ -251,7 +253,7 @@ pub async fn logout(user: Identity) -> impl Responder {
 pub async fn not_assigned(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
-    server_config: web::Data<ServerConfig>,
+    server_config: web::Data<CommonServerConfig>,
 ) -> impl Responder {
     let alerts = flash_messages
         .iter()
