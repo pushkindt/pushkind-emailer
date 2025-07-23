@@ -38,6 +38,7 @@ pub trait HubWriter {
 
 pub trait RecipientReader {
     fn list(&self, hub_id: i32) -> RepositoryResult<Vec<RecipientWithGroups>>;
+    fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>>;
 }
 pub trait RecipientWriter {
     fn create(&self, recipient: &[NewRecipient]) -> RepositoryResult<Recipient>;
@@ -51,4 +52,6 @@ pub trait GroupReader {
 pub trait GroupWriter {
     fn create(&self, group: &NewGroup) -> RepositoryResult<Group>;
     fn delete(&self, id: i32) -> RepositoryResult<()>;
+    fn assign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()>;
+    fn unassign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()>;
 }

@@ -5,12 +5,13 @@ use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
+use validator::Validate;
 
+use crate::domain::group::NewGroup;
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
-use crate::repository::recipient::{
-    assign_recipient_to_group, create_group, delete_group, get_hub_all_recipients,
-    get_hub_all_recipients_fields, get_hub_group_recipients, unassign_recipient_from_group,
-};
+use crate::repository::group::DieselGroupRepository;
+use crate::repository::recipient::DieselRecipientRepository;
+use crate::repository::{GroupReader, GroupWriter, RecipientReader};
 use crate::routes::render_template;
 
 #[get("/groups")]
@@ -24,9 +25,29 @@ pub async fn groups(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+    let group_repo = DieselGroupRepository::new(&pool);
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let recipients = match recipient_repo.list(user.hub_id) {
+        Ok(recipients) => recipients,
+        Err(err) => {
+            log::error!("Error while listing recipients: {}", err);
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    let groups = match group_repo.list(user.hub_id) {
+        Ok(groups) => groups,
+        Err(err) => {
+            log::error!("Error while listing groups: {}", err);
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    let custom_fields = match recipient_repo.list_custom_fields(user.hub_id) {
+        Ok(custom_fields) => custom_fields,
+        Err(err) => {
+            log::error!("Error while listing custom fields: {}", err);
+            return HttpResponse::InternalServerError().finish();
+        }
     };
 
     let alerts = flash_messages
@@ -38,16 +59,9 @@ pub async fn groups(
     context.insert("current_user", &user);
     context.insert("current_page", "groups");
     context.insert("home_url", &server_config.auth_service_url);
-
-    if let Ok(recipients) = get_hub_all_recipients(&mut conn, user.hub_id) {
-        context.insert("recipients", &recipients);
-    }
-    if let Ok(groups) = get_hub_group_recipients(&mut conn, user.hub_id) {
-        context.insert("groups", &groups);
-    }
-    if let Ok(custom_fields) = get_hub_all_recipients_fields(&mut conn, user.hub_id) {
-        context.insert("custom_fields", &custom_fields);
-    }
+    context.insert("groups", &groups);
+    context.insert("custom_fields", &custom_fields);
+    context.insert("recipients", &recipients);
 
     render_template("groups/groups.html", &context)
 }
@@ -62,12 +76,19 @@ pub async fn groups_add(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+    if form.validate().is_err() {
+        FlashMessage::error("Некорректные данные.").send();
+        return redirect("/groups");
+    }
+
+    let group_repo = DieselGroupRepository::new(&pool);
+
+    let new_group = NewGroup {
+        hub_id: user.hub_id,
+        name: &form.name,
     };
 
-    match create_group(&mut conn, user.hub_id, &form.name) {
+    match group_repo.create(&new_group) {
         Ok(_) => {
             FlashMessage::success("Группа успешно добавлена.").send();
         }
@@ -89,12 +110,9 @@ pub async fn groups_delete(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let group_repo = DieselGroupRepository::new(&pool);
 
-    match delete_group(&mut conn, form.id) {
+    match group_repo.delete(form.id) {
         Ok(_) => {
             FlashMessage::success("Группа удалена.").send();
         }
@@ -116,12 +134,9 @@ pub async fn groups_assign(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let group_repo = DieselGroupRepository::new(&pool);
 
-    match assign_recipient_to_group(&mut conn, form.recipient_id, form.group_id) {
+    match group_repo.assign_recipient(form.group_id, form.recipient_id) {
         Ok(_) => {
             FlashMessage::success("Группа назначена получателю.").send();
         }
@@ -143,12 +158,9 @@ pub async fn groups_unassign(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let group_repo = DieselGroupRepository::new(&pool);
 
-    match unassign_recipient_from_group(&mut conn, form.recipient_id, form.group_id) {
+    match group_repo.unassign_recipient(form.group_id, form.recipient_id) {
         Ok(_) => {
             FlashMessage::success("Назначение группы удалено.").send();
         }

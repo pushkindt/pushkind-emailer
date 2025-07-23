@@ -5,11 +5,14 @@ use diesel::prelude::*;
 use diesel::result::Error;
 use serde::Deserialize;
 
+use crate::domain::recipient::{
+    NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups,
+    UpdateRecipient as DomainUpdateRecipient,
+};
 use crate::models::group::{Group, GroupRecipient, NewGroup};
 use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
 use crate::repository::errors::{RepositoryError, RepositoryResult};
 use crate::repository::{RecipientReader, RecipientWriter};
-use crate::domain::recipient::{NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups, UpdateRecipient as DomainUpdateRecipient};
 
 /// Diesel implementation of [`RecipientRepository`].
 pub struct DieselRecipientRepository<'a> {
@@ -62,7 +65,10 @@ impl RecipientReader for DieselRecipientRepository<'_> {
         let mut recipient_groups: HashMap<i32, Vec<Group>> = HashMap::new();
         for gr in db_group_recipients {
             if let Some(g) = group_map.get(&gr.group_id) {
-                recipient_groups.entry(gr.recipient_id).or_default().push(g.clone());
+                recipient_groups
+                    .entry(gr.recipient_id)
+                    .or_default()
+                    .push(g.clone());
             }
         }
 
@@ -89,6 +95,22 @@ impl RecipientReader for DieselRecipientRepository<'_> {
             })
             .collect())
     }
+
+    fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {
+        use crate::schema::{recipient_fields, recipients};
+
+        let mut conn = self.pool.get()?;
+
+        let fields: Vec<String> = recipient_fields::table
+            .inner_join(recipients::table)
+            .filter(recipients::hub_id.eq(hub_id))
+            .select(recipient_fields::field)
+            .distinct()
+            .order(recipient_fields::field.asc())
+            .load(&mut conn)?;
+
+        Ok(fields)
+    }
 }
 
 impl RecipientWriter for DieselRecipientRepository<'_> {
@@ -98,7 +120,11 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         let new = recipient
             .first()
             .ok_or_else(|| RepositoryError::ValidationError("empty slice".into()))?;
-        let db_new = NewRecipient { name: new.name, email: new.email, hub_id: new.hub_id };
+        let db_new = NewRecipient {
+            name: new.name,
+            email: new.email,
+            hub_id: new.hub_id,
+        };
         let inserted = diesel::insert_into(recipients::table)
             .values(&db_new)
             .get_result::<Recipient>(&mut conn)?;
@@ -114,7 +140,11 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         })
     }
 
-    fn update(&self, id: i32, recipient: &DomainUpdateRecipient) -> RepositoryResult<DomainRecipient> {
+    fn update(
+        &self,
+        id: i32,
+        recipient: &DomainUpdateRecipient,
+    ) -> RepositoryResult<DomainRecipient> {
         use crate::schema::{recipient_fields, recipients};
         let mut conn = self.pool.get()?;
 
@@ -126,9 +156,14 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
             ))
             .execute(&mut conn)?;
 
-        diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(id))).execute(&mut conn)?;
+        diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(id)))
+            .execute(&mut conn)?;
         for (field, value) in recipient.fields {
-            let new_field = RecipientField { recipient_id: id, field: field.clone(), value: value.clone() };
+            let new_field = RecipientField {
+                recipient_id: id,
+                field: field.clone(),
+                value: value.clone(),
+            };
             diesel::insert_into(recipient_fields::table)
                 .values(&new_field)
                 .execute(&mut conn)?;

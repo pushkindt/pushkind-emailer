@@ -34,8 +34,8 @@
                     <div class="col-lg">
                         <select class="form-control my-1" name="group_id" required id="recipients-assign-form-group-id">
                             <option disabled selected value="">Выбор группы</option>
-                                {% for group_assignment in groups| default(value=[]) %}
-                                    {% set group = group_assignment.0 %}
+                                {% for group_assignment in groups %}
+                                    {% set group = group_assignment.group %}
                                     <option value="{{group.id}}">{{group.name}}</option>
                                 {% endfor %}
                         </select>
@@ -67,9 +67,9 @@
         <div class="row">
             <div class="col">
                 <div class="accordion" id="recipientGroupAccordion">
-                    {% for group_assignment in groups | default(value=[]) %}
-                        {% set group = group_assignment.0 %}
-                        {% set recipients = group_assignment.1 %}
+                    {% for group_assignment in groups %}
+                        {% set group = group_assignment.group %}
+                        {% set recipients = group_assignment.recipients %}
                         <div class="accordion-item">
                             <h2 class="accordion-header">
                                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#recipientGroupAssignment{{group.id}}" aria-expanded="false" aria-controls="recipientGroupAssignment{{group.id}}">
@@ -131,7 +131,7 @@
                 valueField: "id",
                 labelField: "name",
                 searchField: ["name", "email",
-                    {% for field in custom_fields | default(value=[])  %}
+                    {% for field in custom_fields %}
                         "{{field}}",
                     {% endfor %}
                 ],
@@ -152,9 +152,10 @@
                 },
                 options: [
 
-                    {% for recipient_fields in recipients | default(value=[]) %}
-                        {% set recipient = recipient_fields.0 %}
-                        {% set fields = recipient_fields.1 %}
+
+                    {% for recipient_assignments in recipients %}
+                        {% set recipient = recipient_assignments.recipient %}
+                        {% set fields = recipient.fields %}
                         {
                             ...{
                                 "id": "{{recipient.id}}",

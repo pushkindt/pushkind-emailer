@@ -68,7 +68,10 @@ impl GroupWriter for DieselGroupRepository<'_> {
     fn create(&self, group: &DomainNewGroup) -> RepositoryResult<DomainGroup> {
         use crate::schema::groups;
         let mut conn = self.pool.get()?;
-        let db_new = DbNewGroup { name: group.name, hub_id: group.hub_id };
+        let db_new = DbNewGroup {
+            name: group.name,
+            hub_id: group.hub_id,
+        };
         let inserted = diesel::insert_into(groups::table)
             .values(&db_new)
             .get_result::<DbGroup>(&mut conn)?;
@@ -79,6 +82,36 @@ impl GroupWriter for DieselGroupRepository<'_> {
         use crate::schema::groups;
         let mut conn = self.pool.get()?;
         diesel::delete(groups::table.filter(groups::id.eq(id))).execute(&mut conn)?;
+        Ok(())
+    }
+
+    fn assign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
+        use crate::schema::groups_recipients;
+        let mut conn = self.pool.get()?;
+        let new = GroupRecipient {
+            group_id,
+            recipient_id,
+        };
+        diesel::insert_into(groups_recipients::table)
+            .values(&new)
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    fn unassign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
+        use crate::schema::groups_recipients;
+
+        let mut conn = self.pool.get()?;
+
+        diesel::delete(
+            groups_recipients::table.filter(
+                groups_recipients::recipient_id
+                    .eq(recipient_id)
+                    .and(groups_recipients::group_id.eq(group_id)),
+            ),
+        )
+        .execute(&mut conn)?;
+
         Ok(())
     }
 }

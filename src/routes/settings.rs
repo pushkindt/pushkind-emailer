@@ -6,7 +6,7 @@ use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
 
-use crate::domain::hub::{Hub, NewHub};
+use crate::domain::hub::NewHub;
 use crate::forms::settings::SaveHubForm;
 use crate::repository::hub::DieselHubRepository;
 use crate::repository::{HubReader, HubWriter};
