@@ -7,10 +7,8 @@ use serde::Deserialize;
 
 use crate::models::group::{Group, GroupRecipient, NewGroup};
 use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
-use crate::repository::errors::{RepositoryError, RepositoryResult};
+use crate::repository::errors::RepositoryResult;
 use crate::repository::{RecipientReader, RecipientWriter};
-use crate::domain::group::Group as DomainGroup;
-use crate::domain::recipient::{NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups, UpdateRecipient as DomainUpdateRecipient};
 
 /// Diesel implementation of [`RecipientRepository`].
 pub struct DieselRecipientRepository<'a> {
@@ -23,98 +21,8 @@ impl<'a> DieselRecipientRepository<'a> {
     }
 }
 
-impl RecipientReader for DieselRecipientRepository<'_> {
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<RecipientWithGroups>> {
-        let mut conn = self.pool.get()?;
-        let data = get_hub_all_recipients(&mut conn, hub_id)?;
-        Ok(data
-            .into_iter()
-            .map(|(rec, fields, groups)| {
-                let recipient = DomainRecipient {
-                    id: rec.id,
-                    name: rec.name,
-                    email: rec.email,
-                    hub_id: rec.hub_id,
-                    fields,
-                    created_at: rec.created_at,
-                    updated_at: rec.updated_at,
-                    unsubscribed_at: rec.unsubscribed_at,
-                };
-                RecipientWithGroups {
-                    recipient,
-                    groups: groups.into_iter().map(DomainGroup::from).collect(),
-                }
-            })
-            .collect())
-    }
-}
-
-impl RecipientWriter for DieselRecipientRepository<'_> {
-    fn create(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<DomainRecipient> {
-        use crate::schema::recipients;
-        let mut conn = self.pool.get()?;
-        let new = recipient
-            .first()
-            .ok_or_else(|| RepositoryError::ValidationError("empty slice".into()))?;
-        let db_new = NewRecipient { name: new.name, email: new.email, hub_id: new.hub_id };
-        let inserted = diesel::insert_into(recipients::table)
-            .values(&db_new)
-            .get_result::<Recipient>(&mut conn)?;
-        Ok(DomainRecipient {
-            id: inserted.id,
-            name: inserted.name,
-            email: inserted.email,
-            hub_id: inserted.hub_id,
-            fields: HashMap::new(),
-            created_at: inserted.created_at,
-            updated_at: inserted.updated_at,
-            unsubscribed_at: inserted.unsubscribed_at,
-        })
-    }
-
-    fn update(&self, id: i32, recipient: &DomainUpdateRecipient) -> RepositoryResult<DomainRecipient> {
-        use crate::schema::{recipient_fields, recipients};
-        let mut conn = self.pool.get()?;
-
-        diesel::update(recipients::table.filter(recipients::id.eq(id)))
-            .set((
-                recipients::name.eq(recipient.name),
-                recipients::email.eq(recipient.email),
-                recipients::unsubscribed_at.eq(recipient.unsubscribed_at),
-            ))
-            .execute(&mut conn)?;
-
-        diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(id))).execute(&mut conn)?;
-        for (field, value) in recipient.fields {
-            let new_field = RecipientField { recipient_id: id, field: field.clone(), value: value.clone() };
-            diesel::insert_into(recipient_fields::table)
-                .values(&new_field)
-                .execute(&mut conn)?;
-        }
-
-        let rec = get_recipient(&mut conn, id)?;
-        let mut fields_map = HashMap::new();
-        for f in get_recipient_fields(&mut conn, id)? {
-            fields_map.insert(f.field, f.value);
-        }
-        Ok(DomainRecipient {
-            id: rec.id,
-            name: rec.name,
-            email: rec.email,
-            hub_id: rec.hub_id,
-            fields: fields_map,
-            created_at: rec.created_at,
-            updated_at: rec.updated_at,
-            unsubscribed_at: rec.unsubscribed_at,
-        })
-    }
-
-    fn delete(&self, id: i32) -> RepositoryResult<()> {
-        let mut conn = self.pool.get()?;
-        delete_recipient(&mut conn, id)?;
-        Ok(())
-    }
-}
+impl RecipientReader for DieselRecipientRepository<'_> {}
+impl RecipientWriter for DieselRecipientRepository<'_> {}
 
 pub fn get_hub_all_recipients(
     conn: &mut SqliteConnection,

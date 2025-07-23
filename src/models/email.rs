@@ -61,38 +61,3 @@ pub struct NewEmailRecipient<'a> {
     pub is_sent: bool,
     pub replied: bool,
 }
-
-use crate::domain::email as domain;
-
-impl From<Email> for domain::Email {
-    fn from(value: Email) -> Self {
-        Self {
-            id: value.id,
-            message: value.message,
-            created_at: value.created_at,
-            is_sent: value.is_sent,
-            subject: value.subject,
-            attachment: value.attachment,
-            attachment_name: value.attachment_name,
-            attachment_mime: value.attachment_mime,
-            num_sent: value.num_sent,
-            num_opened: value.num_opened,
-            num_replied: value.num_replied,
-            hub_id: value.hub_id,
-        }
-    }
-}
-
-impl From<EmailRecipient> for domain::EmailRecipient {
-    fn from(value: EmailRecipient) -> Self {
-        Self {
-            id: value.id,
-            email_id: value.email_id,
-            address: value.address,
-            opened: value.opened,
-            updated_at: value.updated_at,
-            is_sent: value.is_sent,
-            replied: value.replied,
-        }
-    }
-}
