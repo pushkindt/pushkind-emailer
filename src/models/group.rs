@@ -34,3 +34,17 @@ pub struct GroupRecipient {
     pub group_id: i32,
     pub recipient_id: i32,
 }
+
+use crate::domain::group as domain;
+
+impl From<Group> for domain::Group {
+    fn from(value: Group) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            hub_id: value.hub_id,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
