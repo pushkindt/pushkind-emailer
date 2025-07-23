@@ -1,3 +1,4 @@
+use pushkind_common::db::DbPool;
 use std::collections::{HashMap, HashSet};
 
 use diesel::prelude::*;
@@ -7,6 +8,22 @@ use serde::Deserialize;
 use crate::models::recipient::{
     Group, GroupRecipient, NewGroup, NewRecipient, Recipient, RecipientField,
 };
+use crate::repository::errors::RepositoryResult;
+use crate::repository::{RecipientReader, RecipientWriter};
+
+/// Diesel implementation of [`RecipientRepository`].
+pub struct DieselRecipientRepository<'a> {
+    pool: &'a DbPool,
+}
+
+impl<'a> DieselRecipientRepository<'a> {
+    pub fn new(pool: &'a DbPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl RecipientReader for DieselRecipientRepository<'_> {}
+impl RecipientWriter for DieselRecipientRepository<'_> {}
 
 pub fn get_hub_all_recipients(
     conn: &mut SqliteConnection,

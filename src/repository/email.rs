@@ -1,11 +1,30 @@
+use pushkind_common::db::DbPool;
 use std::error::Error;
 
 use diesel::prelude::*;
 
-use crate::models::{
-    email::{Email, EmailRecipient, NewEmail, NewEmailRecipient},
-    recipient::Recipient,
+use crate::repository::errors::RepositoryResult;
+use crate::{
+    models::{
+        email::{Email, EmailRecipient, NewEmail, NewEmailRecipient},
+        recipient::Recipient,
+    },
+    repository::{EmailReader, EmailWriter},
 };
+
+/// Diesel implementation of [`EmailRepository`].
+pub struct DieselEmailRepository<'a> {
+    pool: &'a DbPool,
+}
+
+impl<'a> DieselEmailRepository<'a> {
+    pub fn new(pool: &'a DbPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl EmailReader for DieselEmailRepository<'_> {}
+impl EmailWriter for DieselEmailRepository<'_> {}
 
 pub fn get_hub_all_emails_with_recipients(
     conn: &mut SqliteConnection,

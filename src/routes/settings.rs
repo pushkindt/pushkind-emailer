@@ -6,9 +6,10 @@ use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
 
+use crate::domain::hub::{Hub, NewHub};
 use crate::forms::settings::SaveHubForm;
-use crate::models::hub::Hub;
-use crate::repository::hub::{get_hub, update_hub};
+use crate::repository::hub::DieselHubRepository;
+use crate::repository::{HubReader, HubWriter};
 use crate::routes::render_template;
 
 #[get("/settings")]
@@ -22,10 +23,7 @@ pub async fn settings(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let hub_repo = DieselHubRepository::new(&pool);
 
     let alerts = flash_messages
         .iter()
@@ -36,9 +34,19 @@ pub async fn settings(
     context.insert("current_user", &user);
     context.insert("current_page", "settings");
 
-    let hub = match get_hub(&mut conn, user.hub_id) {
-        Ok(hub) => hub,
-        Err(_) => Hub::new(user.hub_id),
+    let hub = match hub_repo.get_by_id(user.hub_id) {
+        Ok(Some(hub)) => hub,
+        Ok(None) => match hub_repo.create(&NewHub::new(user.hub_id)) {
+            Ok(hub) => hub,
+            Err(e) => {
+                log::error!("Error creating hub: {}", e);
+                return HttpResponse::InternalServerError().finish();
+            }
+        },
+        Err(e) => {
+            log::error!("Error getting hub: {}", e);
+            return HttpResponse::InternalServerError().finish();
+        }
     };
 
     context.insert("current_hub", &hub);
@@ -57,12 +65,24 @@ pub async fn settings_save(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+    let hub_repo = DieselHubRepository::new(&pool);
+
+    let hub = match hub_repo.get_by_id(user.hub_id) {
+        Ok(Some(hub)) => hub,
+        Ok(None) => match hub_repo.create(&NewHub::new(user.hub_id)) {
+            Ok(hub) => hub,
+            Err(e) => {
+                log::error!("Error creating hub: {}", e);
+                return HttpResponse::InternalServerError().finish();
+            }
+        },
+        Err(e) => {
+            log::error!("Error getting hub: {}", e);
+            return HttpResponse::InternalServerError().finish();
+        }
     };
 
-    match update_hub(&mut conn, &form.into()) {
+    match hub_repo.update(hub.id, &(&form).into()) {
         Ok(_) => {
             FlashMessage::success("Хаб сохранён.").send();
         }
