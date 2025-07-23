@@ -36,3 +36,20 @@ pub struct RecipientField {
     pub field: String,
     pub value: String,
 }
+
+use crate::domain::recipient as domain;
+
+impl From<Recipient> for domain::Recipient {
+    fn from(value: Recipient) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            email: value.email,
+            hub_id: value.hub_id,
+            fields: std::collections::HashMap::new(),
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+            unsubscribed_at: value.unsubscribed_at,
+        }
+    }
+}

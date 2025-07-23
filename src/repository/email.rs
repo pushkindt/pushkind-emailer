@@ -23,8 +23,214 @@ impl<'a> DieselEmailRepository<'a> {
     }
 }
 
-impl EmailReader for DieselEmailRepository<'_> {}
-impl EmailWriter for DieselEmailRepository<'_> {}
+use crate::domain::email::{EmailWithRecipients as DomainEmailWithRecipients, NewEmail as DomainNewEmail, UpdateEmail as DomainUpdateEmail, UpdateEmailRecipient as DomainUpdateEmailRecipient};
+use crate::repository::errors::RepositoryError;
+
+impl EmailReader for DieselEmailRepository<'_> {
+    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
+        use crate::schema::{email_recipients, emails};
+        let mut conn = self.pool.get()?;
+
+        let email = emails::table
+            .filter(emails::id.eq(id))
+            .select(Email::as_select())
+            .first::<Email>(&mut conn)
+            .optional()?;
+
+        if let Some(email) = email {
+            let recipients = email_recipients::table
+                .filter(email_recipients::email_id.eq(email.id))
+                .select(EmailRecipient::as_select())
+                .load::<EmailRecipient>(&mut conn)?;
+
+            Ok(Some(DomainEmailWithRecipients {
+                email: email.into(),
+                recipients: recipients.into_iter().map(Into::into).collect(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<DomainEmailWithRecipients>> {
+        use crate::schema::emails;
+        let mut conn = self.pool.get()?;
+
+        let db_emails: Vec<Email> = emails::table
+            .filter(emails::hub_id.eq(hub_id))
+            .order(emails::created_at.desc())
+            .select(Email::as_select())
+            .load(&mut conn)?;
+
+        if db_emails.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let db_recipients: Vec<EmailRecipient> = EmailRecipient::belonging_to(&db_emails)
+            .select(EmailRecipient::as_select())
+            .load(&mut conn)?;
+
+        let grouped = db_recipients.grouped_by(&db_emails);
+
+        Ok(db_emails
+            .into_iter()
+            .zip(grouped)
+            .map(|(email, recipients)| DomainEmailWithRecipients {
+                email: email.into(),
+                recipients: recipients.into_iter().map(Into::into).collect(),
+            })
+            .collect())
+    }
+}
+
+impl EmailWriter for DieselEmailRepository<'_> {
+    fn create(&self, email: &DomainNewEmail) -> RepositoryResult<DomainEmailWithRecipients> {
+        use crate::schema::{email_recipients, emails, groups_recipients, recipients as rec};
+        let mut conn = self.pool.get()?;
+
+        conn.transaction::<_, RepositoryError, _>(|conn| {
+            let created_at = chrono::Utc::now().naive_utc();
+            let new_email = NewEmail {
+                message: email.message,
+                created_at: &created_at,
+                is_sent: false,
+                subject: email.subject,
+                attachment: email.attachment,
+                attachment_name: email.attachment_name,
+                attachment_mime: email.attachment_mime,
+                hub_id: email.hub_id,
+            };
+
+            let inserted: Email = diesel::insert_into(emails::table)
+                .values(&new_email)
+                .get_result(conn)?;
+
+            for item in &email.recipients {
+                if item.contains('@') {
+                    let r: Recipient = rec::table
+                        .filter(rec::email.eq(item.trim()))
+                        .filter(rec::unsubscribed_at.is_null())
+                        .select(Recipient::as_select())
+                        .first(conn)?;
+
+                    let new_rec = NewEmailRecipient {
+                        email_id: inserted.id,
+                        address: &r.email,
+                        opened: false,
+                        updated_at: &created_at,
+                        is_sent: false,
+                        replied: false,
+                    };
+                    diesel::insert_into(email_recipients::table)
+                        .values(&new_rec)
+                        .execute(conn)?;
+                } else {
+                    let group_id: i32 = item
+                        .parse()
+                        .map_err(|_| RepositoryError::ValidationError("invalid group id".into()))?;
+
+                    let members: Vec<Recipient> = groups_recipients::table
+                        .filter(groups_recipients::group_id.eq(group_id))
+                        .inner_join(rec::table.on(groups_recipients::recipient_id.eq(rec::id)))
+                        .select(Recipient::as_select())
+                        .load(conn)?;
+
+                    for member in members {
+                        let new_rec = NewEmailRecipient {
+                            email_id: inserted.id,
+                            address: &member.email,
+                            opened: false,
+                            updated_at: &created_at,
+                            is_sent: false,
+                            replied: false,
+                        };
+                        diesel::insert_into(email_recipients::table)
+                            .values(&new_rec)
+                            .execute(conn)?;
+                    }
+                }
+            }
+
+            let recipients = email_recipients::table
+                .filter(email_recipients::email_id.eq(inserted.id))
+                .select(EmailRecipient::as_select())
+                .load::<EmailRecipient>(conn)?;
+
+            Ok(DomainEmailWithRecipients {
+                email: inserted.into(),
+                recipients: recipients.into_iter().map(Into::into).collect(),
+            })
+        })
+    }
+
+    fn update(&self, email_id: i32, updates: &DomainUpdateEmail) -> RepositoryResult<DomainEmailWithRecipients> {
+        use crate::schema::emails::dsl as emails;
+        let mut conn = self.pool.get()?;
+        diesel::update(emails::emails.filter(emails::id.eq(email_id)))
+            .set((
+                emails::num_sent.eq(updates.num_sent),
+                emails::num_opened.eq(updates.num_opened),
+                emails::num_replied.eq(updates.num_replied),
+            ))
+            .execute(&mut conn)?;
+
+        let email = emails::emails
+            .filter(emails::id.eq(email_id))
+            .select(Email::as_select())
+            .first::<Email>(&mut conn)?;
+
+        let recipients = EmailRecipient::belonging_to(&email)
+            .select(EmailRecipient::as_select())
+            .load::<EmailRecipient>(&mut conn)?;
+
+        Ok(DomainEmailWithRecipients {
+            email: email.into(),
+            recipients: recipients.into_iter().map(Into::into).collect(),
+        })
+    }
+
+    fn update_recipient(&self, recipient_id: i32, updates: &DomainUpdateEmailRecipient) -> RepositoryResult<DomainEmailWithRecipients> {
+        use crate::schema::email_recipients::dsl as er;
+        let mut conn = self.pool.get()?;
+        let email_id: i32 = er::email_recipients
+            .filter(er::id.eq(recipient_id))
+            .select(er::email_id)
+            .first(&mut conn)?;
+
+        diesel::update(er::email_recipients.filter(er::id.eq(recipient_id)))
+            .set((
+                er::opened.eq(updates.opened),
+                er::is_sent.eq(updates.is_sent),
+                er::replied.eq(updates.replied),
+                er::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .execute(&mut conn)?;
+
+        use crate::schema::emails::dsl as emails;
+
+        let email = emails::emails
+            .filter(emails::id.eq(email_id))
+            .select(Email::as_select())
+            .first::<Email>(&mut conn)?;
+
+        let recipients = EmailRecipient::belonging_to(&email)
+            .select(EmailRecipient::as_select())
+            .load::<EmailRecipient>(&mut conn)?;
+
+        Ok(DomainEmailWithRecipients {
+            email: email.into(),
+            recipients: recipients.into_iter().map(Into::into).collect(),
+        })
+    }
+
+    fn delete(&self, id: i32) -> RepositoryResult<()> {
+        use crate::schema::{email_recipients, emails};
+        let mut conn = self.pool.get()?;
+        diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id))).execute(&mut conn)?;
+        diesel::delete(emails::table.filter(emails::id.eq(id))).execute(&mut conn)?;
+        Ok(())
+    }
+}
 
 pub fn get_hub_all_emails_with_recipients(
     conn: &mut SqliteConnection,
