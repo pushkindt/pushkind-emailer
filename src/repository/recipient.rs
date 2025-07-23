@@ -5,9 +5,8 @@ use diesel::prelude::*;
 use diesel::result::Error;
 use serde::Deserialize;
 
-use crate::models::recipient::{
-    Group, GroupRecipient, NewGroup, NewRecipient, Recipient, RecipientField,
-};
+use crate::models::group::{Group, GroupRecipient, NewGroup};
+use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
 use crate::repository::errors::RepositoryResult;
 use crate::repository::{RecipientReader, RecipientWriter};
 
