@@ -40,7 +40,7 @@ pub trait RecipientReader {
     fn list(&self, hub_id: i32) -> RepositoryResult<Vec<RecipientWithGroups>>;
 }
 pub trait RecipientWriter {
-    fn create(&self, recipient: &NewRecipient) -> RepositoryResult<Recipient>;
+    fn create(&self, recipient: &[NewRecipient]) -> RepositoryResult<Recipient>;
     fn update(&self, id: i32, recipient: &UpdateRecipient) -> RepositoryResult<Recipient>;
     fn delete(&self, id: i32) -> RepositoryResult<()>;
 }
