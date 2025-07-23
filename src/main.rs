@@ -15,7 +15,7 @@ use pushkind_common::routes::logout;
 
 use pushkind_emailer::models::config::ServerConfig;
 use pushkind_emailer::routes::groups::{
-    groups, groups_add, groups_assign, groups_delete, groups_unassign,
+    group_modal, groups, groups_add, groups_assign, groups_delete, groups_unassign,
 };
 use pushkind_emailer::routes::main::{
     delete_email, index, not_assigned, retry_email, send_email, track_email,
@@ -106,6 +106,7 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_add)
                     .service(groups_delete)
                     .service(groups_assign)
+                    .service(group_modal)
                     .service(groups_unassign),
             )
             .app_data(web::Data::new(pool.clone()))

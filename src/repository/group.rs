@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use diesel::prelude::*;
 use pushkind_common::db::DbPool;
 
 use crate::domain::group::{Group as DomainGroup, GroupWithRecipients, NewGroup as DomainNewGroup};
+use crate::domain::recipient::Recipient as DomainRecipient;
 use crate::models::group::{Group as DbGroup, GroupRecipient, NewGroup as DbNewGroup};
-use crate::models::recipient::Recipient as DbRecipient;
+use crate::models::recipient::{Recipient as DbRecipient, RecipientField};
 use crate::repository::errors::RepositoryResult;
 use crate::repository::{GroupReader, GroupWriter};
 
@@ -19,8 +22,83 @@ impl<'a> DieselGroupRepository<'a> {
 }
 
 impl GroupReader for DieselGroupRepository<'_> {
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<GroupWithRecipients>> {
+    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<GroupWithRecipients>> {
         use crate::schema::{groups, groups_recipients, recipients};
+        let mut conn = self.pool.get()?;
+
+        // Load group by id
+        let db_group: Option<DbGroup> = groups::table
+            .filter(groups::id.eq(id))
+            .select(DbGroup::as_select())
+            .first(&mut conn)
+            .optional()?;
+
+        let db_group = match db_group {
+            Some(g) => g,
+            None => return Ok(None),
+        };
+
+        // Load recipient rows via join
+        let db_recipients: Vec<DbRecipient> = groups_recipients::table
+            .filter(groups_recipients::group_id.eq(id))
+            .inner_join(recipients::table)
+            .select(DbRecipient::as_select())
+            .load(&mut conn)?;
+
+        if db_recipients.is_empty() {
+            return Ok(Some(GroupWithRecipients {
+                group: DomainGroup::from(db_group),
+                recipients: vec![],
+            }));
+        }
+
+        // Load recipient fields grouped by recipient
+        let db_fields = RecipientField::belonging_to(&db_recipients)
+            .select(RecipientField::as_select())
+            .load::<RecipientField>(&mut conn)?
+            .grouped_by(&db_recipients);
+
+        // Load group memberships for each recipient
+        let db_group_links = GroupRecipient::belonging_to(&db_recipients)
+            .select(GroupRecipient::as_select())
+            .load::<GroupRecipient>(&mut conn)?;
+
+        let mut recipient_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
+        for link in db_group_links {
+            recipient_to_group_ids
+                .entry(link.recipient_id)
+                .or_default()
+                .push(link.group_id);
+        }
+
+        // Compose domain recipients
+        let recipients = db_recipients
+            .into_iter()
+            .zip(db_fields.into_iter())
+            .map(|(r, fields)| DomainRecipient {
+                id: r.id,
+                name: r.name,
+                email: r.email,
+                hub_id: r.hub_id,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+                unsubscribed_at: r.unsubscribed_at,
+                fields: fields
+                    .into_iter()
+                    .map(|f| (f.field, f.value))
+                    .collect::<HashMap<_, _>>(),
+                groups: recipient_to_group_ids.remove(&r.id).unwrap_or_default(),
+            })
+            .collect();
+
+        Ok(Some(GroupWithRecipients {
+            group: DomainGroup::from(db_group),
+            recipients,
+        }))
+    }
+
+    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<DomainGroup>> {
+        use crate::schema::groups;
         let mut conn = self.pool.get()?;
 
         // Fetch groups for hub
@@ -29,38 +107,7 @@ impl GroupReader for DieselGroupRepository<'_> {
             .select(DbGroup::as_select())
             .load(&mut conn)?;
 
-        if db_groups.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Fetch recipients for groups
-        let group_recipients: Vec<(GroupRecipient, DbRecipient)> = groups_recipients::table
-            .filter(groups_recipients::group_id.eq_any(db_groups.iter().map(|g| g.id)))
-            .inner_join(recipients::table)
-            .select((GroupRecipient::as_select(), DbRecipient::as_select()))
-            .load(&mut conn)?;
-
-        use std::collections::HashMap;
-        let mut map: HashMap<i32, Vec<DbRecipient>> = HashMap::new();
-        for (gr, rec) in group_recipients {
-            map.entry(gr.group_id).or_default().push(rec);
-        }
-
-        Ok(db_groups
-            .into_iter()
-            .map(|g| {
-                let recipients = map
-                    .remove(&g.id)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|r| r.into())
-                    .collect();
-                GroupWithRecipients {
-                    group: DomainGroup::from(g),
-                    recipients,
-                }
-            })
-            .collect())
+        Ok(db_groups.into_iter().map(|g| g.into()).collect())
     }
 }
 

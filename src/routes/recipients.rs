@@ -12,11 +12,13 @@ use tera::Context;
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, UploadRecipientsForm,
 };
+use crate::repository::group::DieselGroupRepository;
 use crate::repository::recipient::{
-    clean_all_recipients_and_groups, create_recipient, delete_recipient, get_hub_all_groups,
-    get_hub_all_recipients, get_recipient, get_recipient_fields, get_recipient_group_ids,
-    save_recipient, update_recipients_from_csv,
+    DieselRecipientRepository, clean_all_recipients_and_groups, create_recipient, delete_recipient,
+    get_hub_all_groups, get_hub_all_recipients, get_recipient, get_recipient_fields,
+    get_recipient_group_ids, save_recipient, update_recipients_from_csv,
 };
+use crate::repository::{GroupReader, RecipientReader};
 use crate::routes::render_template;
 
 #[get("/recipients")]
@@ -173,28 +175,34 @@ pub async fn recipients_modal(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+    let group_repo = DieselGroupRepository::new(&pool);
 
     let mut context = Context::new();
 
     let recipient_id = recipient_id.into_inner();
 
-    if let Ok(recipient) = get_recipient(&mut conn, recipient_id) {
-        context.insert("recipient", &recipient);
+    let recipient = match recipient_repo.get_by_id(recipient_id) {
+        Ok(Some(recipient)) => recipient,
+        Ok(None) => {
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving recipient: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
 
-        if let Ok(fields) = get_recipient_fields(&mut conn, recipient_id) {
-            context.insert("recipient_fields", &fields);
+    let groups = match group_repo.list(user.hub_id) {
+        Ok(groups) => groups,
+        Err(e) => {
+            log::error!("Error retrieving groups: {e}");
+            return HttpResponse::InternalServerError().finish();
         }
-        if let Ok(groups) = get_recipient_group_ids(&mut conn, recipient_id) {
-            context.insert("recipient_groups", &groups);
-        }
-        if let Ok(groups) = get_hub_all_groups(&mut conn, recipient.hub_id) {
-            context.insert("groups", &groups);
-        }
-    }
+    };
+
+    context.insert("recipient", &recipient);
+    context.insert("groups", &groups);
 
     render_template("recipients/modal_body.html", &context)
 }

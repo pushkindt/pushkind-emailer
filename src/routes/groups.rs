@@ -171,3 +171,35 @@ pub async fn groups_unassign(
 
     redirect("/groups")
 }
+
+#[post("/groups/modal/{group_id}")]
+pub async fn group_modal(
+    group_id: web::Path<i32>,
+    user: AuthenticatedUser,
+    pool: web::Data<DbPool>,
+) -> impl Responder {
+    if ensure_role(&user, "emailer", Some("/na")).is_err() {
+        return HttpResponse::Unauthorized().finish();
+    };
+
+    let group_repo = DieselGroupRepository::new(&pool);
+
+    let mut context = Context::new();
+
+    let group_id = group_id.into_inner();
+
+    let group = match group_repo.get_by_id(group_id) {
+        Ok(Some(group)) => group,
+        Ok(None) => {
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving recipient: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    context.insert("group", &group);
+
+    render_template("groups/modal_body.html", &context)
+}

@@ -37,7 +37,8 @@ pub trait HubWriter {
 }
 
 pub trait RecipientReader {
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<RecipientWithGroups>>;
+    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<RecipientWithGroups>>;
+    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<Recipient>>;
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>>;
 }
 pub trait RecipientWriter {
@@ -47,7 +48,8 @@ pub trait RecipientWriter {
 }
 
 pub trait GroupReader {
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<GroupWithRecipients>>;
+    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<Group>>;
+    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<GroupWithRecipients>>;
 }
 pub trait GroupWriter {
     fn create(&self, group: &NewGroup) -> RepositoryResult<Group>;

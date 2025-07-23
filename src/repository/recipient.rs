@@ -26,11 +26,52 @@ impl<'a> DieselRecipientRepository<'a> {
 }
 
 impl RecipientReader for DieselRecipientRepository<'_> {
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<RecipientWithGroups>> {
+    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<RecipientWithGroups>> {
         use crate::schema::{groups, recipients};
+
         let mut conn = self.pool.get()?;
 
-        // Load recipients for hub
+        let recipient = recipients::table
+            .filter(recipients::id.eq(id))
+            .first::<Recipient>(&mut conn)
+            .optional()?;
+        let recipient = match recipient {
+            Some(recipient) => recipient,
+            None => return Ok(None),
+        };
+
+        let groups = GroupRecipient::belonging_to(&recipient)
+            .inner_join(groups::table)
+            .select(Group::as_select())
+            .load::<Group>(&mut conn)?;
+
+        let fields = RecipientField::belonging_to(&recipient)
+            .select(RecipientField::as_select())
+            .load::<RecipientField>(&mut conn)?;
+
+        let field_map = fields.into_iter().map(|f| (f.field, f.value)).collect();
+
+        Ok(Some(RecipientWithGroups {
+            recipient: DomainRecipient {
+                id: recipient.id,
+                name: recipient.name,
+                email: recipient.email,
+                hub_id: recipient.hub_id,
+                fields: field_map,
+                created_at: recipient.created_at,
+                updated_at: recipient.updated_at,
+                unsubscribed_at: recipient.unsubscribed_at,
+                groups: groups.iter().map(|gr| gr.id).collect(),
+            },
+            groups: groups.into_iter().map(|gr| gr.into()).collect(),
+        }))
+    }
+
+    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<DomainRecipient>> {
+        use crate::schema::recipients;
+        let mut conn = self.pool.get()?;
+
+        // Load recipients for the hub
         let db_recipients: Vec<Recipient> = recipients::table
             .filter(recipients::hub_id.eq(hub_id))
             .select(Recipient::as_select())
@@ -41,7 +82,7 @@ impl RecipientReader for DieselRecipientRepository<'_> {
             return Ok(Vec::new());
         }
 
-        // Load recipient fields
+        // Load recipient fields, grouped by recipient
         let db_fields = RecipientField::belonging_to(&db_recipients)
             .select(RecipientField::as_select())
             .load::<RecipientField>(&mut conn)?
@@ -52,48 +93,36 @@ impl RecipientReader for DieselRecipientRepository<'_> {
             .select(GroupRecipient::as_select())
             .load::<GroupRecipient>(&mut conn)?;
 
-        // Fetch all groups referenced
-        let group_ids: HashSet<i32> = db_group_recipients.iter().map(|gr| gr.group_id).collect();
-
-        let db_groups: Vec<Group> = groups::table
-            .filter(groups::id.eq_any(&group_ids))
-            .select(Group::as_select())
-            .load(&mut conn)?;
-
-        let group_map: HashMap<i32, Group> = db_groups.into_iter().map(|g| (g.id, g)).collect();
-
-        let mut recipient_groups: HashMap<i32, Vec<Group>> = HashMap::new();
-        for gr in db_group_recipients {
-            if let Some(g) = group_map.get(&gr.group_id) {
-                recipient_groups
-                    .entry(gr.recipient_id)
-                    .or_default()
-                    .push(g.clone());
-            }
+        // Build a map from recipient_id to group IDs
+        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
+        for relation in db_group_recipients {
+            recipient_id_to_group_ids
+                .entry(relation.recipient_id)
+                .or_default()
+                .push(relation.group_id);
         }
 
-        Ok(db_recipients
+        // Compose DomainRecipient
+        let recipients = db_recipients
             .into_iter()
             .zip(db_fields.into_iter())
-            .map(|(rec, fields)| {
-                let field_map = fields.into_iter().map(|f| (f.field, f.value)).collect();
-                let groups = recipient_groups.remove(&rec.id).unwrap_or_default();
-                let recipient = DomainRecipient {
-                    id: rec.id,
-                    name: rec.name,
-                    email: rec.email,
-                    hub_id: rec.hub_id,
-                    fields: field_map,
-                    created_at: rec.created_at,
-                    updated_at: rec.updated_at,
-                    unsubscribed_at: rec.unsubscribed_at,
-                };
-                RecipientWithGroups {
-                    recipient,
-                    groups: groups.into_iter().map(Into::into).collect(),
-                }
+            .map(|(r, fields)| DomainRecipient {
+                id: r.id,
+                name: r.name,
+                email: r.email,
+                hub_id: r.hub_id,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+                unsubscribed_at: r.unsubscribed_at,
+                fields: fields
+                    .into_iter()
+                    .map(|f| (f.field, f.value))
+                    .collect::<HashMap<_, _>>(),
+                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
             })
-            .collect())
+            .collect();
+
+        Ok(recipients)
     }
 
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {
@@ -137,6 +166,7 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
             created_at: inserted.created_at,
             updated_at: inserted.updated_at,
             unsubscribed_at: inserted.unsubscribed_at,
+            groups: Vec::new(),
         })
     }
 
@@ -145,9 +175,10 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         id: i32,
         recipient: &DomainUpdateRecipient,
     ) -> RepositoryResult<DomainRecipient> {
-        use crate::schema::{recipient_fields, recipients};
+        use crate::schema::{groups_recipients, recipient_fields, recipients};
         let mut conn = self.pool.get()?;
 
+        // Update basic recipient info
         diesel::update(recipients::table.filter(recipients::id.eq(id)))
             .set((
                 recipients::name.eq(recipient.name),
@@ -156,6 +187,7 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
             ))
             .execute(&mut conn)?;
 
+        // Update fields (delete all → insert new)
         diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(id)))
             .execute(&mut conn)?;
         for (field, value) in recipient.fields {
@@ -169,20 +201,41 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
                 .execute(&mut conn)?;
         }
 
+        // Update group associations (delete all → insert new)
+        diesel::delete(groups_recipients::table.filter(groups_recipients::recipient_id.eq(id)))
+            .execute(&mut conn)?;
+        for group_id in recipient.groups {
+            let link = GroupRecipient {
+                group_id: *group_id,
+                recipient_id: id,
+            };
+            diesel::insert_into(groups_recipients::table)
+                .values(&link)
+                .execute(&mut conn)?;
+        }
+
+        // Reload the updated recipient
         let rec = recipients::table
             .filter(recipients::id.eq(id))
             .select(Recipient::as_select())
             .first::<Recipient>(&mut conn)?;
 
+        // Reload fields
         let fields_vec = recipient_fields::table
             .filter(recipient_fields::recipient_id.eq(id))
             .select(RecipientField::as_select())
             .load::<RecipientField>(&mut conn)?;
 
-        let mut fields_map = HashMap::new();
-        for f in fields_vec {
-            fields_map.insert(f.field, f.value);
-        }
+        let fields_map = fields_vec
+            .into_iter()
+            .map(|f| (f.field, f.value))
+            .collect::<HashMap<_, _>>();
+
+        // Reload group IDs
+        let group_ids = groups_recipients::table
+            .filter(groups_recipients::recipient_id.eq(id))
+            .select(groups_recipients::group_id)
+            .load::<i32>(&mut conn)?;
 
         Ok(DomainRecipient {
             id: rec.id,
@@ -193,6 +246,7 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
             created_at: rec.created_at,
             updated_at: rec.updated_at,
             unsubscribed_at: rec.unsubscribed_at,
+            groups: group_ids,
         })
     }
 

@@ -15,6 +15,7 @@ pub struct Recipient {
     pub created_at: Option<NaiveDateTime>,
     pub updated_at: Option<NaiveDateTime>,
     pub unsubscribed_at: Option<NaiveDateTime>,
+    pub groups: Vec<i32>,
 }
 
 #[derive(Serialize)]
@@ -34,4 +35,5 @@ pub struct UpdateRecipient<'a> {
     pub email: &'a str,
     pub fields: &'a HashMap<String, String>,
     pub unsubscribed_at: Option<NaiveDateTime>,
+    pub groups: &'a Vec<i32>,
 }
