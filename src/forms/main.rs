@@ -19,7 +19,7 @@ pub struct DeleteEmailForm {
 
 impl From<SendEmailForm> for NewEmail {
     fn from(mut form: SendEmailForm) -> Self {
-        let (attchment_name, attachement_mime, attachment) =
+        let (attachment_name, attachment_mime, attachment) =
             if let Some(attachment) = form.attachment.as_mut() {
                 match read_attachment_file(attachment) {
                     Ok((name, mime, data)) => (name, mime, data),
@@ -37,8 +37,8 @@ impl From<SendEmailForm> for NewEmail {
             message: form.message.0,
             subject: form.subject.0,
             attachment,
-            attachment_mime: attachement_mime,
-            attachment_name: attchment_name,
+            attachment_mime,
+            attachment_name,
             recipients: form.recipients.0,
         }
     }
