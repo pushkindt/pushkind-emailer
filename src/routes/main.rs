@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use actix_identity::Identity;
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
@@ -14,14 +13,15 @@ use tera::Context;
 
 use crate::forms::main::{DeleteEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
+use crate::repository::email::DieselEmailRepository;
 use crate::repository::email::{
     create_email, get_email, get_email_recipient, get_email_recipients,
     get_hub_all_emails_with_recipients, remove_email, reset_email_sent_and_opened_status,
     set_email_recipient_opened_status, update_email_num_opened,
 };
-use crate::repository::recipient::{
-    get_hub_all_groups, get_hub_all_recipients, get_hub_all_recipients_fields,
-};
+use crate::repository::group::DieselGroupRepository;
+use crate::repository::recipient::DieselRecipientRepository;
+use crate::repository::{EmailReader, GroupReader, RecipientReader};
 use crate::routes::render_template;
 use crate::utils::{read_attachment_file, send_zmq_email_id};
 
@@ -42,10 +42,9 @@ pub async fn index(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let recpient_repo = DieselRecipientRepository::new(&pool);
+    let group_repo = DieselGroupRepository::new(&pool);
+    let email_repo = DieselEmailRepository::new(&pool);
 
     let (retry, retry_recipients) = match params.retry {
         Some(email_id) => (
@@ -241,12 +240,6 @@ pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) 
     }
 
     redirect("/assets/placeholder.png")
-}
-
-#[post("/logout")]
-pub async fn logout(user: Identity) -> impl Responder {
-    user.logout();
-    redirect("/")
 }
 
 #[get("/na")]

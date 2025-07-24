@@ -6,15 +6,14 @@ use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
+use validator::Validate;
 
 use crate::domain::recipient::NewRecipient;
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, UploadRecipientsForm,
 };
 use crate::repository::group::DieselGroupRepository;
-use crate::repository::recipient::{
-    DieselRecipientRepository, create_recipient, delete_recipient, get_hub_all_recipients,
-};
+use crate::repository::recipient::DieselRecipientRepository;
 use crate::repository::{GroupReader, GroupWriter, RecipientReader, RecipientWriter};
 use crate::routes::render_template;
 
@@ -29,10 +28,7 @@ pub async fn recipients_show(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
 
     let alerts = flash_messages
         .iter()
@@ -44,9 +40,15 @@ pub async fn recipients_show(
     context.insert("current_page", "recipients");
     context.insert("home_url", &server_config.auth_service_url);
 
-    if let Ok(recipients) = get_hub_all_recipients(&mut conn, user.hub_id) {
-        context.insert("recipients", &recipients);
-    }
+    let recipients = match recipient_repo.list(user.hub_id) {
+        Ok(recipients) => recipients,
+        Err(err) => {
+            log::error!("Failed to get recipients: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    context.insert("recipients", &recipients);
 
     render_template("recipients/recipients.html", &context)
 }
@@ -61,17 +63,23 @@ pub async fn recipients_add(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    if form.validate().is_err() {
+        FlashMessage::error("Ошибка при добавлении получателя.").send();
+        return redirect("/recipients");
+    }
 
-    match create_recipient(&mut conn, user.hub_id, &form.name, &form.email) {
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let mut new_recipient: NewRecipient = form.into();
+
+    new_recipient.hub_id = user.hub_id;
+    match recipient_repo.create(&[new_recipient]) {
         Ok(_) => {
             FlashMessage::success("Получатель успешно добавлен.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при создании получателя: {}", err)).send();
+            log::error!("Failed to create recipient: {err}");
+            FlashMessage::error("Ошибка при создании получателя.").send();
         }
     }
 
@@ -88,17 +96,15 @@ pub async fn recipients_delete(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
 
-    match delete_recipient(&mut conn, form.id) {
+    match recipient_repo.delete(form.id) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при удалении получателя: {}", err)).send();
+            log::error!("Failed to delete recipient: {err}");
+            FlashMessage::error("Ошибка при удалении получателя.").send();
         }
     }
 
