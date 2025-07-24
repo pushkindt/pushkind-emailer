@@ -45,6 +45,7 @@ pub trait RecipientWriter {
     fn create(&self, recipient: &[NewRecipient]) -> RepositoryResult<Recipient>;
     fn update(&self, id: i32, recipient: &UpdateRecipient) -> RepositoryResult<Recipient>;
     fn delete(&self, id: i32) -> RepositoryResult<()>;
+    fn delete_all(&self, hub_id: i32) -> RepositoryResult<()>;
 }
 
 pub trait GroupReader {
@@ -54,6 +55,7 @@ pub trait GroupReader {
 pub trait GroupWriter {
     fn create(&self, group: &NewGroup) -> RepositoryResult<Group>;
     fn delete(&self, id: i32) -> RepositoryResult<()>;
+    fn delete_all(&self, hub_id: i32) -> RepositoryResult<()>;
     fn assign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()>;
     fn unassign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()>;
 }

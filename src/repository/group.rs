@@ -132,6 +132,28 @@ impl GroupWriter for DieselGroupRepository<'_> {
         Ok(())
     }
 
+    fn delete_all(&self, hub_id: i32) -> RepositoryResult<()> {
+        use crate::schema::{groups, groups_recipients};
+        let mut conn = self.pool.get()?;
+
+        // Step 1: Get IDs of groups belonging to this hub
+        let group_ids = groups::table
+            .filter(groups::hub_id.eq(hub_id))
+            .select(groups::id)
+            .load::<i32>(&mut conn)?;
+
+        // Step 2: Delete group_recipients entries for those group_ids
+        diesel::delete(
+            groups_recipients::table.filter(groups_recipients::group_id.eq_any(&group_ids)),
+        )
+        .execute(&mut conn)?;
+
+        // Step 3: Delete groups themselves
+        diesel::delete(groups::table.filter(groups::hub_id.eq(hub_id))).execute(&mut conn)?;
+
+        Ok(())
+    }
+
     fn assign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
         use crate::schema::groups_recipients;
         let mut conn = self.pool.get()?;

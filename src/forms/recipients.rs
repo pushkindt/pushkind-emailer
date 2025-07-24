@@ -1,7 +1,12 @@
-use actix_multipart::form::{MultipartForm, tempfile::TempFile};
-use serde::Deserialize;
+use std::collections::HashMap;
+use std::io::Read;
 
-use crate::domain::recipient::UpdateRecipient;
+use actix_multipart::form::{MultipartForm, tempfile::TempFile};
+use csv;
+use serde::Deserialize;
+use thiserror::Error;
+
+use crate::domain::recipient::{NewRecipient, UpdateRecipient};
 
 #[derive(Deserialize)]
 pub struct AddRecipientForm {
@@ -57,5 +62,78 @@ impl From<SaveRecipientForm> for UpdateRecipient {
             unsubscribed_at,
             groups: form.groups,
         }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum UploadRecipientsFormError {
+    #[error("Error reading csv file")]
+    FileReadError,
+    #[error("Error parsing csv file")]
+    CsvParseError,
+}
+
+impl From<std::io::Error> for UploadRecipientsFormError {
+    fn from(_: std::io::Error) -> Self {
+        UploadRecipientsFormError::FileReadError
+    }
+}
+
+impl From<csv::Error> for UploadRecipientsFormError {
+    fn from(_: csv::Error) -> Self {
+        UploadRecipientsFormError::CsvParseError
+    }
+}
+
+impl UploadRecipientsForm {
+    pub fn parse(&mut self, hub_id: i32) -> Result<Vec<NewRecipient>, UploadRecipientsFormError> {
+        let mut csv_content = String::new();
+        self.csv.file.read_to_string(&mut csv_content)?;
+
+        let mut rdr = csv::Reader::from_reader(csv_content.as_bytes());
+
+        let mut recipients: Vec<NewRecipient> = Vec::new();
+
+        let headers = rdr.headers()?.clone();
+
+        for result in rdr.records() {
+            let record = result?;
+            let mut optional_fields = HashMap::new();
+
+            let mut name = String::new();
+            let mut email = String::new();
+            let mut groups = Vec::new();
+
+            for (i, field) in record.iter().enumerate() {
+                match headers.get(i) {
+                    Some("name") => name = field.to_string(),
+                    Some("email") => email = field.to_string(),
+                    Some("groups") => {
+                        groups = field
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                    }
+                    Some(header) => {
+                        if field.len() == 0 {
+                            continue;
+                        }
+                        optional_fields.insert(header.to_string(), field.to_string());
+                    }
+                    None => continue,
+                }
+            }
+
+            recipients.push(NewRecipient {
+                name,
+                email,
+                hub_id,
+                groups: Some(groups),
+                fields: Some(optional_fields),
+            });
+        }
+
+        Ok(recipients)
     }
 }

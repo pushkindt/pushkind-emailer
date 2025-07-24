@@ -21,8 +21,8 @@ use pushkind_emailer::routes::main::{
     delete_email, index, not_assigned, retry_email, send_email, track_email,
 };
 use pushkind_emailer::routes::recipients::{
-    recipients, recipients_add, recipients_clean, recipients_delete, recipients_modal,
-    recipients_save, recipients_upload,
+    recipients_add, recipients_clean, recipients_delete, recipients_modal, recipients_save,
+    recipients_show, recipients_upload,
 };
 use pushkind_emailer::routes::settings::{settings, settings_save};
 
@@ -95,7 +95,7 @@ async fn main() -> std::io::Result<()> {
                     .service(track_email)
                     .service(settings)
                     .service(settings_save)
-                    .service(recipients)
+                    .service(recipients_show)
                     .service(recipients_add)
                     .service(recipients_delete)
                     .service(recipients_clean)

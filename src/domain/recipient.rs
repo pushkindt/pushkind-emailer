@@ -24,10 +24,12 @@ pub struct RecipientWithGroups {
     pub groups: Vec<Group>,
 }
 
-pub struct NewRecipient<'a> {
-    pub name: &'a str,
-    pub email: &'a str,
+pub struct NewRecipient {
+    pub name: String,
+    pub email: String,
     pub hub_id: i32,
+    pub fields: Option<HashMap<String, String>>,
+    pub groups: Option<Vec<String>>,
 }
 
 pub struct UpdateRecipient {

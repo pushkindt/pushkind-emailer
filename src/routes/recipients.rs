@@ -1,5 +1,3 @@
-use std::io::Read;
-
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
@@ -9,19 +7,19 @@ use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
 
+use crate::domain::recipient::NewRecipient;
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, UploadRecipientsForm,
 };
 use crate::repository::group::DieselGroupRepository;
 use crate::repository::recipient::{
-    DieselRecipientRepository, clean_all_recipients_and_groups, create_recipient, delete_recipient,
-    get_hub_all_recipients, update_recipients_from_csv,
+    DieselRecipientRepository, create_recipient, delete_recipient, get_hub_all_recipients,
 };
-use crate::repository::{GroupReader, RecipientReader, RecipientWriter};
+use crate::repository::{GroupReader, GroupWriter, RecipientReader, RecipientWriter};
 use crate::routes::render_template;
 
 #[get("/recipients")]
-pub async fn recipients(
+pub async fn recipients_show(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
@@ -113,17 +111,27 @@ pub async fn recipients_clean(user: AuthenticatedUser, pool: web::Data<DbPool>) 
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+    let group_repo = DieselGroupRepository::new(&pool);
 
-    match clean_all_recipients_and_groups(&mut conn, user.hub_id) {
+    match group_repo.delete_all(user.hub_id) {
         Ok(_) => {
-            FlashMessage::success("Все получатели и группы удалены.").send();
+            FlashMessage::success("Все группы удалены.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при удалении групп и получателей: {}", err)).send();
+            log::error!("Failed to delete groups: {err}");
+            FlashMessage::error("Ошибка при удалении групп.").send();
+            return redirect("/recipients");
+        }
+    }
+
+    match recipient_repo.delete_all(user.hub_id) {
+        Ok(_) => {
+            FlashMessage::success("Все получатели удалены.").send();
+        }
+        Err(err) => {
+            log::error!("Failed to delete recipients: {err}");
+            FlashMessage::error("Ошибка при удалении получателей.").send();
         }
     }
 
@@ -140,24 +148,23 @@ pub async fn recipients_upload(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let recipients: Vec<NewRecipient> = match form.parse(user.hub_id) {
+        Ok(recipients) => recipients,
+        Err(err) => {
+            FlashMessage::error(format!("Ошибка при парсинге получателей: {err}")).send();
+            return redirect("/recipients");
+        }
     };
 
-    let mut csv_content = String::new();
-
-    match form.csv.file.read_to_string(&mut csv_content) {
-        Ok(_) => match update_recipients_from_csv(&mut conn, user.hub_id, &csv_content) {
-            Ok(_) => {
-                FlashMessage::success("Файл успешно загружен.").send();
-            }
-            Err(err) => {
-                FlashMessage::error(format!("Ошибка при загрузке файла: {}", err)).send();
-            }
-        },
+    match recipient_repo.create(&recipients) {
+        Ok(_) => {
+            FlashMessage::success("Получатели добавлены.").send();
+        }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при чтении файла: {}", err)).send();
+            log::error!("Failed to add clients: {err}");
+            FlashMessage::error("Ошибка при добавлении получателей.").send();
         }
     }
 

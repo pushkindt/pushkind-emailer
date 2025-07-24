@@ -150,8 +150,8 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
             .first()
             .ok_or_else(|| RepositoryError::ValidationError("empty slice".into()))?;
         let db_new = NewRecipient {
-            name: new.name,
-            email: new.email,
+            name: &new.name,
+            email: &new.email,
             hub_id: new.hub_id,
         };
         let inserted = diesel::insert_into(recipients::table)
@@ -251,9 +251,38 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
     }
 
     fn delete(&self, id: i32) -> RepositoryResult<()> {
-        use crate::schema::recipients::dsl as recipients;
+        use crate::schema::recipients;
         let mut conn = self.pool.get()?;
-        diesel::delete(recipients::recipients.filter(recipients::id.eq(id))).execute(&mut conn)?;
+        diesel::delete(recipients::table.filter(recipients::id.eq(id))).execute(&mut conn)?;
+        Ok(())
+    }
+
+    fn delete_all(&self, hub_id: i32) -> RepositoryResult<()> {
+        use crate::schema::{groups_recipients, recipient_fields, recipients};
+        let mut conn = self.pool.get()?;
+
+        // Step 1: Find recipient IDs for the given hub
+        let recipient_ids = recipients::table
+            .filter(recipients::hub_id.eq(hub_id))
+            .select(recipients::id)
+            .load::<i32>(&mut conn)?;
+
+        // Step 2: Delete group_recipients entries for these recipients
+        diesel::delete(
+            groups_recipients::table.filter(groups_recipients::recipient_id.eq_any(&recipient_ids)),
+        )
+        .execute(&mut conn)?;
+
+        // Step 3: Delete recipient_fields entries for these recipients
+        diesel::delete(
+            recipient_fields::table.filter(recipient_fields::recipient_id.eq_any(&recipient_ids)),
+        )
+        .execute(&mut conn)?;
+
+        // Step 4: Delete the recipients themselves
+        diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub_id)))
+            .execute(&mut conn)?;
+
         Ok(())
     }
 }
