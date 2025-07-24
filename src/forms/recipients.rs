@@ -119,7 +119,7 @@ impl UploadRecipientsForm {
                             .collect();
                     }
                     Some(header) => {
-                        if field.len() == 0 {
+                        if field.is_empty() {
                             continue;
                         }
                         optional_fields.insert(header.to_string(), field.to_string());

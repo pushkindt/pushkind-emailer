@@ -15,6 +15,7 @@ pub mod recipient;
 pub trait EmailReader {
     fn get_by_id(&self, id: i32) -> RepositoryResult<Option<EmailWithRecipients>>;
     fn list(&self, hub_id: i32) -> RepositoryResult<Vec<EmailWithRecipients>>;
+    fn list_not_replied_recipients(&self, hub_id: i32) -> RepositoryResult<Vec<EmailRecipient>>;
     fn get_recipient(&self, id: i32) -> RepositoryResult<Option<EmailRecipient>>;
 }
 pub trait EmailWriter {

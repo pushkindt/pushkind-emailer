@@ -14,7 +14,7 @@ pub fn send_zmq_email_id(id: i32, zmq_config: &ServerConfig) -> Result<(), Box<d
 
     requester.send(buffer, 0)?;
 
-    info!("Sent email id: {}", id);
+    info!("Sent email id: {id}");
 
     Ok(())
 }

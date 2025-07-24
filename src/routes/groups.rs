@@ -31,21 +31,21 @@ pub async fn groups(
     let recipients = match recipient_repo.list(user.hub_id) {
         Ok(recipients) => recipients,
         Err(err) => {
-            log::error!("Error while listing recipients: {}", err);
+            log::error!("Error while listing recipients: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
     let groups = match group_repo.list(user.hub_id) {
         Ok(groups) => groups,
         Err(err) => {
-            log::error!("Error while listing groups: {}", err);
+            log::error!("Error while listing groups: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
     let custom_fields = match recipient_repo.list_custom_fields(user.hub_id) {
         Ok(custom_fields) => custom_fields,
         Err(err) => {
-            log::error!("Error while listing custom fields: {}", err);
+            log::error!("Error while listing custom fields: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };

@@ -74,7 +74,7 @@ impl GroupReader for DieselGroupRepository<'_> {
         // Compose domain recipients
         let recipients = db_recipients
             .into_iter()
-            .zip(db_fields.into_iter())
+            .zip(db_fields)
             .map(|(r, fields)| DomainRecipient {
                 id: r.id,
                 name: r.name,

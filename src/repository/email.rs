@@ -32,6 +32,23 @@ impl<'a> DieselEmailRepository<'a> {
 }
 
 impl EmailReader for DieselEmailRepository<'_> {
+    fn list_not_replied_recipients(
+        &self,
+        hub_id: i32,
+    ) -> RepositoryResult<Vec<DomainEmailRecipient>> {
+        use crate::schema::{email_recipients, emails};
+        let mut conn = self.pool.get()?;
+
+        let recipients = email_recipients::table
+            .filter(email_recipients::replied.eq(false))
+            .inner_join(emails::table)
+            .filter(emails::hub_id.eq(hub_id))
+            .select(DbEmailRecipient::as_select())
+            .load::<DbEmailRecipient>(&mut conn)?;
+
+        Ok(recipients.into_iter().map(Into::into).collect())
+    }
+
     fn get_recipient(&self, id: i32) -> RepositoryResult<Option<DomainEmailRecipient>> {
         use crate::schema::email_recipients;
         let mut conn = self.pool.get()?;

@@ -46,7 +46,7 @@ pub struct UpdateHub<'a> {
 impl Hub {
     pub fn get_usubscribe_url(&self) -> String {
         match &self.login {
-            Some(login) => format!("mailto:{}?subject=unsubscribe", login),
+            Some(login) => format!("mailto:{login}?subject=unsubscribe"),
             None => String::from(""),
         }
     }

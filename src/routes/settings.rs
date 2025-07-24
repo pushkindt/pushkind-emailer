@@ -39,12 +39,12 @@ pub async fn settings(
         Ok(None) => match hub_repo.create(&NewHub::new(user.hub_id)) {
             Ok(hub) => hub,
             Err(e) => {
-                log::error!("Error creating hub: {}", e);
+                log::error!("Error creating hub: {e}");
                 return HttpResponse::InternalServerError().finish();
             }
         },
         Err(e) => {
-            log::error!("Error getting hub: {}", e);
+            log::error!("Error getting hub: {e}");
             return HttpResponse::InternalServerError().finish();
         }
     };
@@ -72,12 +72,12 @@ pub async fn settings_save(
         Ok(None) => match hub_repo.create(&NewHub::new(user.hub_id)) {
             Ok(hub) => hub,
             Err(e) => {
-                log::error!("Error creating hub: {}", e);
+                log::error!("Error creating hub: {e}");
                 return HttpResponse::InternalServerError().finish();
             }
         },
         Err(e) => {
-            log::error!("Error getting hub: {}", e);
+            log::error!("Error getting hub: {e}");
             return HttpResponse::InternalServerError().finish();
         }
     };

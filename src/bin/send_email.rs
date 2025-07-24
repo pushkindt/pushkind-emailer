@@ -3,23 +3,19 @@ use std::error::Error;
 use std::sync::Arc;
 
 use dotenvy::dotenv;
-use log::{error, info};
 use mail_send::SmtpClientBuilder;
 use mail_send::mail_builder::{
     MessageBuilder,
     headers::{HeaderType, url::URL},
 };
-use pushkind_emailer::models::email::{Email, EmailRecipient};
-use pushkind_emailer::models::hub::Hub;
+use pushkind_common::db::{DbPool, establish_connection_pool};
 use tokio::sync::Mutex;
-use zmq;
 
-use pushkind_emailer::db::{DbPool, establish_connection_pool, get_db_connection};
-use pushkind_emailer::repository::email::{
-    get_email, get_email_recipients, set_email_recipient_sent_status, set_email_sent_status,
-    update_email_num_sent,
-};
-use pushkind_emailer::repository::hub::get_hub;
+use pushkind_emailer::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
+use pushkind_emailer::domain::hub::Hub;
+use pushkind_emailer::repository::email::DieselEmailRepository;
+use pushkind_emailer::repository::hub::DieselHubRepository;
+use pushkind_emailer::repository::{EmailReader, EmailWriter, HubReader};
 
 async fn send_smtp_message(
     hub: &Hub,
@@ -91,51 +87,52 @@ async fn send_smtp_message(
         .await
 }
 
-async fn send_email(
-    email_id: i32,
-    db_pool: Arc<Mutex<DbPool>>,
-    domain: &str,
-) -> Result<(), Box<dyn Error>> {
-    let pool = db_pool.lock().await;
-    let mut conn = get_db_connection(&pool).ok_or("Cannot get connection from the pool")?;
+async fn send_email(email_id: i32, db_pool: &DbPool, domain: &str) -> Result<(), Box<dyn Error>> {
+    let email_repo = DieselEmailRepository::new(db_pool);
+    let hub_repo = DieselHubRepository::new(db_pool);
 
-    let email = get_email(&mut conn, email_id)?;
-    let recipients = get_email_recipients(&mut conn, email_id)?;
-    let hub = get_hub(&mut conn, email.hub_id)?;
+    let email = match email_repo.get_by_id(email_id)? {
+        Some(email) => email,
+        None => {
+            log::error!("Email not found for email_id: {email_id}");
+            return Ok(());
+        }
+    };
+    let hub = match hub_repo.get_by_id(email.email.hub_id)? {
+        Some(hub) => hub,
+        None => {
+            log::error!("Hub not found for email_id: {email_id}");
+            return Ok(());
+        }
+    };
 
-    info!("Sending email for email_id {} via hub {}", email_id, hub.id);
+    log::info!("Sending email for email_id {} via hub {}", email_id, hub.id);
 
-    for recipient in recipients {
-        if let Err(e) = send_smtp_message(&hub, &email, &recipient, &domain).await {
-            error!("Failed to send email to {}: {}", recipient.address, e);
+    for recipient in email.recipients {
+        if let Err(e) = send_smtp_message(&hub, &email.email, &recipient, domain).await {
+            log::error!("Failed to send email to {}: {}", recipient.address, e);
             continue;
         }
 
-        info!("Email sent successfully to {}", recipient.address);
+        log::info!("Email sent successfully to {}", recipient.address);
 
-        if let Err(e) = set_email_recipient_sent_status(&mut conn, recipient.id, true) {
-            error!(
+        if let Err(e) = email_repo.update_recipient(
+            recipient.id,
+            &UpdateEmailRecipient {
+                is_sent: Some(true),
+                replied: None,
+                opened: None,
+            },
+        ) {
+            log::error!(
                 "Failed to update sent status for recipient {}: {}",
-                recipient.id, e
+                recipient.id,
+                e
             );
         }
     }
 
-    if let Err(e) = set_email_sent_status(&mut conn, email_id, true) {
-        error!(
-            "Failed to update email sent status for email {}: {}",
-            email_id, e
-        );
-    }
-
-    if let Err(e) = update_email_num_sent(&mut conn, email_id) {
-        error!(
-            "Failed to update email num_sent for email {}: {}",
-            email_id, e
-        );
-    }
-
-    info!("Finished processing email_id: {}", email_id);
+    log::info!("Finished processing email_id: {email_id}");
 
     Ok(())
 }
@@ -157,17 +154,17 @@ async fn main() {
         .bind(&zmq_address)
         .expect("Cannot bind to zmq port");
 
-    let pool = match establish_connection_pool(database_url) {
+    let pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
         Err(e) => {
-            error!("Failed to establish database connection: {}", e);
+            log::error!("Failed to establish database connection: {e}");
             std::process::exit(1);
         }
     };
 
     let pool = Arc::new(Mutex::new(pool));
 
-    info!("Starting email worker");
+    log::info!("Starting email worker");
 
     loop {
         let mut buffer = [0; 4];
@@ -178,13 +175,14 @@ async fn main() {
                 let domain = Arc::clone(&domain);
 
                 tokio::spawn(async move {
-                    if let Err(e) = send_email(email_id, pool_clone, &domain).await {
-                        error!("Error sending email message: {}", e);
+                    let pool = pool_clone.lock().await;
+                    if let Err(e) = send_email(email_id, &pool, &domain).await {
+                        log::error!("Error sending email message: {e}");
                     }
                 });
             }
             Err(e) => {
-                error!("Error receiving message: {}", e);
+                log::error!("Error receiving message: {e}");
                 continue;
             }
         }

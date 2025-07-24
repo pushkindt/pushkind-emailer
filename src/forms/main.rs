@@ -24,7 +24,7 @@ impl From<SendEmailForm> for NewEmail {
                 match read_attachment_file(attachment) {
                     Ok((name, mime, data)) => (name, mime, data),
                     Err(err) => {
-                        log::error!("error reading file: {}", err);
+                        log::error!("error reading file: {err}");
                         (None, None, None)
                     }
                 }
@@ -36,7 +36,7 @@ impl From<SendEmailForm> for NewEmail {
             hub_id: 0,
             message: form.message.0,
             subject: form.subject.0,
-            attachment: attachment,
+            attachment,
             attachment_mime: attachement_mime,
             attachment_name: attchment_name,
             recipients: form.recipients.0,

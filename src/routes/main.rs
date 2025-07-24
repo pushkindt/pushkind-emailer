@@ -3,7 +3,6 @@ use std::error::Error;
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
-use log::error;
 use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
@@ -113,7 +112,7 @@ pub async fn send_email(
 
     let form = match form {
         Ok(form) => form,
-        Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {}", err)),
+        Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
     };
 
     let mut new_email: NewEmail = form.0.into();
@@ -122,12 +121,11 @@ pub async fn send_email(
     match email_repo.create(&new_email) {
         Ok(email) => match send_zmq_email_id(email.email.id, &zmq_config) {
             Ok(_) => HttpResponse::Ok().body("Сообщение создано."),
-            Err(err) => HttpResponse::Ok().body(format!(
-                "Ошибка при добавлении сообщения в очередь: {}",
-                err
-            )),
+            Err(err) => {
+                HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
+            }
         },
-        Err(err) => HttpResponse::Ok().body(format!("Ошибка при создании сообщения: {}", err)),
+        Err(err) => HttpResponse::Ok().body(format!("Ошибка при создании сообщения: {err}")),
     }
 }
 

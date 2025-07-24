@@ -37,7 +37,7 @@ async fn main() -> std::io::Result<()> {
     let pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
         Err(e) => {
-            error!("Failed to establish database connection: {}", e);
+            error!("Failed to establish database connection: {e}");
             std::process::exit(1);
         }
     };
