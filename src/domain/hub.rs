@@ -44,7 +44,12 @@ pub struct UpdateHub<'a> {
 }
 
 impl Hub {
-    pub fn get_usubscribe_url(&self) -> String {
+    /// Generates a `mailto:` link to unsubscribe from emails.
+    ///
+    /// If the hub has a login configured, the returned URL is of the form
+    /// `mailto:<login>?subject=unsubscribe`. Otherwise an empty string is
+    /// returned.
+    pub fn get_unsubscribe_url(&self) -> String {
         match &self.login {
             Some(login) => format!("mailto:{login}?subject=unsubscribe"),
             None => String::from(""),

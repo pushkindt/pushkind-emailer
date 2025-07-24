@@ -25,7 +25,7 @@ async fn send_smtp_message(
 ) -> Result<(), mail_send::Error> {
     let template = hub.email_template.as_deref().unwrap_or_default();
 
-    let unsubscribe_url = hub.get_usubscribe_url();
+    let unsubscribe_url = hub.get_unsubscribe_url();
     let mut body: String;
 
     let template = template.replace("{unsubscribe_url}", &unsubscribe_url);
