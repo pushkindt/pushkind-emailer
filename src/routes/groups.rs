@@ -93,7 +93,8 @@ pub async fn groups_add(
             FlashMessage::success("Группа успешно добавлена.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при создании группы: {}", err)).send();
+            log::error!("Error while creating group: {err}");
+            FlashMessage::error("Ошибка при создании группы.").send();
         }
     }
 
@@ -117,7 +118,8 @@ pub async fn groups_delete(
             FlashMessage::success("Группа удалена.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при удалении группы: {}", err)).send();
+            log::error!("Error while deleting group: {err}");
+            FlashMessage::error("Ошибка при удалении группы.").send();
         }
     }
 
@@ -141,7 +143,8 @@ pub async fn groups_assign(
             FlashMessage::success("Группа назначена получателю.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при назначении группы: {}", err)).send();
+            log::error!("Error while assigning group: {err}");
+            FlashMessage::error("Ошибка при назначении группы.").send();
         }
     }
 
@@ -165,7 +168,8 @@ pub async fn groups_unassign(
             FlashMessage::success("Назначение группы удалено.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при удалении назначения группы: {}", err)).send();
+            log::error!("Error while unassigning group: {err}");
+            FlashMessage::error("Ошибка при удалении назначения группы.").send();
         }
     }
 

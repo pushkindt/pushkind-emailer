@@ -11,7 +11,6 @@
 
 {% block content %}
     {% include 'navigation.html' %}
-
     <div class="container my-2">
         {% include 'main/send_email_form.html' %}
     </div>
@@ -19,14 +18,15 @@
     <div class="container">
         <div class="accordion" id="email-accordion">
 
-            {% for email_recipients in emails | default(value=[]) %}
-                {% set email = email_recipients.0 %}
-                {% set recipients = email_recipients.1 %}
+            {% for email_recipients in emails %}
+                {% set email = email_recipients.email %}
+                {% set recipients = email_recipients.recipients %}
                 {% include 'main/email.html' %}
             {% endfor %}
 
         </div>
     </div>
+
 
 {% endblock %}
 {% block scripts %}
@@ -47,7 +47,7 @@
                 valueField: "id",
                 labelField: "text",
                 searchField: ["text",
-                    {% for field in custom_fields | default(value=[]) %}
+                    {% for field in custom_fields %}
                         "{{field}}",
                     {% endfor %}
                 ],
@@ -67,19 +67,17 @@
                     }
                 },
                 options: [
-                    {% for recipient_fields in recipients | default(value=[]) %}
-                        {% set recipient = recipient_fields.0 %}
-                        {% set fields = recipient_fields.1 %}
+                    {% for recipient in recipients %}
                         {% if recipient.unsubscribed_at %}{% continue %}{% endif %}
                         {
                             ...{
                                 "id": "{{recipient.email}}",
                                 "text": "{{recipient.name}} ({{recipient.email}})",
                             },
-                            ...{{fields | json_encode() | safe}}
+                            ...{{recipient.fields | json_encode() | safe}}
                         },
                     {% endfor %}
-                    {% for group in groups | default(value=[]) %}
+                    {% for group in groups %}
                         {
                             "id": "{{group.id}}",
                             "text": "Группа: {{group.name}}",

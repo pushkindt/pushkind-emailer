@@ -87,7 +87,8 @@ pub async fn settings_save(
             FlashMessage::success("Хаб сохранён.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при изменении хаба: {}", err)).send();
+            log::error!("Error updating hub: {err}");
+            FlashMessage::error("Ошибка при изменении хаба.").send();
         }
     };
     redirect("/settings")

@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use pushkind_common::db::DbPool;
 
-use crate::domain::hub::{Hub, NewHub, UpdateHub};
+use crate::domain::hub::{Hub as DomainHub, NewHub as DomainNewHub, UpdateHub as DomainUpdateHub};
 use crate::models::hub::{Hub as DbHub, NewHub as DbNewHub, UpdateHub as DbUpdateHub};
 use crate::repository::errors::RepositoryResult;
 use crate::repository::{HubReader, HubWriter};
@@ -18,7 +18,7 @@ impl<'a> DieselHubRepository<'a> {
 }
 
 impl HubReader for DieselHubRepository<'_> {
-    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<Hub>> {
+    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<DomainHub>> {
         use crate::schema::hubs;
         let mut conn = self.pool.get()?;
         let result = hubs::table
@@ -28,7 +28,7 @@ impl HubReader for DieselHubRepository<'_> {
         Ok(result.map(Into::into))
     }
 
-    fn list(&self) -> RepositoryResult<Vec<Hub>> {
+    fn list(&self) -> RepositoryResult<Vec<DomainHub>> {
         use crate::schema::hubs;
         let mut conn = self.pool.get()?;
         let result = hubs::table.load::<DbHub>(&mut conn)?;
@@ -37,7 +37,7 @@ impl HubReader for DieselHubRepository<'_> {
 }
 
 impl HubWriter for DieselHubRepository<'_> {
-    fn create(&self, hub: &NewHub) -> RepositoryResult<Hub> {
+    fn create(&self, hub: &DomainNewHub) -> RepositoryResult<DomainHub> {
         use crate::schema::hubs;
         let mut conn = self.pool.get()?;
         let result = diesel::insert_into(hubs::table)
@@ -46,7 +46,7 @@ impl HubWriter for DieselHubRepository<'_> {
         Ok(result.into())
     }
 
-    fn update(&self, id: i32, hub: &UpdateHub) -> RepositoryResult<Hub> {
+    fn update(&self, id: i32, hub: &DomainUpdateHub) -> RepositoryResult<DomainHub> {
         use crate::schema::hubs;
         let mut conn = self.pool.get()?;
         let result = diesel::update(hubs::table.filter(hubs::id.eq(id)))

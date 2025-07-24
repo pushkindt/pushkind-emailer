@@ -34,14 +34,14 @@ pub struct EmailWithRecipients {
     pub recipients: Vec<EmailRecipient>,
 }
 
-pub struct NewEmail<'a> {
-    pub message: &'a str,
-    pub subject: Option<&'a str>,
-    pub attachment: Option<&'a [u8]>,
-    pub attachment_name: Option<&'a str>,
-    pub attachment_mime: Option<&'a str>,
+pub struct NewEmail {
+    pub message: String,
+    pub subject: Option<String>,
+    pub attachment: Option<Vec<u8>>,
+    pub attachment_name: Option<String>,
+    pub attachment_mime: Option<String>,
     pub hub_id: i32,
-    pub recipients: Vec<&'a str>,
+    pub recipients: Vec<String>,
 }
 
 pub struct UpdateEmail {
@@ -51,7 +51,7 @@ pub struct UpdateEmail {
 }
 
 pub struct UpdateEmailRecipient {
-    pub opened: bool,
-    pub is_sent: bool,
-    pub replied: bool,
+    pub opened: Option<bool>,
+    pub is_sent: Option<bool>,
+    pub replied: Option<bool>,
 }

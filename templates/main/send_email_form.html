@@ -2,8 +2,8 @@
     <div class="row mb-3">
         <a class="recipientsDropDown" href="#">Получатели</a>
         <select id="recipients-input" multiple required>
-            {% for retry_recipient in retry_recipients | default(value=[]) %}
-                <option value="{{retry_recipient.address}}" selected></option>
+            {% for recipient in retry.recipients | default(value=[]) %}
+                <option value="{{recipient.address}}" selected></option>
             {% endfor %}
         </select>
         <a id="recipientsNone" href="#" class="text-danger">убрать всех</a>

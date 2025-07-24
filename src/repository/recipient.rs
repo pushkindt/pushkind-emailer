@@ -141,15 +141,15 @@ impl RecipientReader for DieselRecipientRepository<'_> {
 }
 
 impl RecipientWriter for DieselRecipientRepository<'_> {
-    fn create(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<DomainRecipient> {
+    fn create(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<usize> {
         use crate::schema::{groups, groups_recipients, recipient_fields, recipients};
 
         let mut conn = self.pool.get()?;
 
-        conn.transaction::<DomainRecipient, RepositoryError, _>(|conn| {
-            let mut first_recipient: Option<DomainRecipient> = None;
+        conn.transaction::<usize, RepositoryError, _>(|conn| {
+            let mut count_inserted: usize = 0;
 
-            for (idx, new) in recipient.iter().enumerate() {
+            for new in recipient {
                 let db_new = NewRecipient {
                     name: &new.name,
                     email: &new.email,
@@ -214,24 +214,10 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
                     }
                 }
 
-                if idx == 0 {
-                    first_recipient = Some(DomainRecipient {
-                        id: inserted.id,
-                        name: inserted.name,
-                        email: inserted.email,
-                        hub_id: inserted.hub_id,
-                        fields: new.fields.clone().unwrap_or_default(),
-                        created_at: inserted.created_at,
-                        updated_at: inserted.updated_at,
-                        unsubscribed_at: inserted.unsubscribed_at,
-                        groups: group_ids,
-                    });
-                }
+                count_inserted += 1;
             }
 
-            first_recipient.ok_or_else(|| {
-                RepositoryError::ValidationError("empty slice".into())
-            })
+            Ok(count_inserted)
         })
     }
 

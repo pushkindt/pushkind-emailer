@@ -1,4 +1,6 @@
-use crate::domain::email::{EmailWithRecipients, NewEmail, UpdateEmail, UpdateEmailRecipient};
+use crate::domain::email::{
+    EmailRecipient, EmailWithRecipients, NewEmail, UpdateEmail, UpdateEmailRecipient,
+};
 use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
 use crate::domain::hub::{Hub, NewHub, UpdateHub};
 use crate::domain::recipient::{NewRecipient, Recipient, RecipientWithGroups, UpdateRecipient};
@@ -13,6 +15,7 @@ pub mod recipient;
 pub trait EmailReader {
     fn get_by_id(&self, id: i32) -> RepositoryResult<Option<EmailWithRecipients>>;
     fn list(&self, hub_id: i32) -> RepositoryResult<Vec<EmailWithRecipients>>;
+    fn get_recipient(&self, id: i32) -> RepositoryResult<Option<EmailRecipient>>;
 }
 pub trait EmailWriter {
     fn create(&self, email: &NewEmail) -> RepositoryResult<EmailWithRecipients>;
@@ -42,7 +45,7 @@ pub trait RecipientReader {
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>>;
 }
 pub trait RecipientWriter {
-    fn create(&self, recipient: &[NewRecipient]) -> RepositoryResult<Recipient>;
+    fn create(&self, recipient: &[NewRecipient]) -> RepositoryResult<usize>;
     fn update(&self, id: i32, recipient: &UpdateRecipient) -> RepositoryResult<Recipient>;
     fn delete(&self, id: i32) -> RepositoryResult<()>;
     fn delete_all(&self, hub_id: i32) -> RepositoryResult<()>;

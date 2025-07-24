@@ -1,3 +1,4 @@
+use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -10,7 +11,7 @@ use crate::models::hub::Hub;
 pub struct Email {
     pub id: i32,
     pub message: String,
-    pub created_at: chrono::NaiveDateTime,
+    pub created_at: NaiveDateTime,
     pub is_sent: bool,
     pub subject: Option<String>,
     pub attachment: Option<Vec<u8>>,
@@ -27,7 +28,7 @@ pub struct Email {
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewEmail<'a> {
     pub message: &'a str,
-    pub created_at: &'a chrono::NaiveDateTime,
+    pub created_at: NaiveDateTime,
     pub is_sent: bool,
     pub subject: Option<&'a str>,
     pub attachment: Option<&'a [u8]>,
@@ -45,7 +46,7 @@ pub struct EmailRecipient {
     pub email_id: i32,
     pub address: String,
     pub opened: bool,
-    pub updated_at: chrono::NaiveDateTime,
+    pub updated_at: NaiveDateTime,
     pub is_sent: bool,
     pub replied: bool,
 }
@@ -57,7 +58,7 @@ pub struct NewEmailRecipient<'a> {
     pub email_id: i32,
     pub address: &'a str,
     pub opened: bool,
-    pub updated_at: &'a chrono::NaiveDateTime,
+    pub updated_at: NaiveDateTime,
     pub is_sent: bool,
     pub replied: bool,
 }
@@ -93,6 +94,21 @@ impl From<EmailRecipient> for domain::EmailRecipient {
             updated_at: value.updated_at,
             is_sent: value.is_sent,
             replied: value.replied,
+        }
+    }
+}
+
+impl<'a> From<&'a domain::NewEmail> for NewEmail<'a> {
+    fn from(value: &'a domain::NewEmail) -> Self {
+        Self {
+            message: &value.message,
+            created_at: Utc::now().naive_utc(),
+            is_sent: false,
+            subject: value.subject.as_deref(),
+            attachment: value.attachment.as_deref(),
+            attachment_name: value.attachment_name.as_deref(),
+            attachment_mime: value.attachment_mime.as_deref(),
+            hub_id: value.hub_id,
         }
     }
 }
