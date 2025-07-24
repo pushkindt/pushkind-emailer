@@ -142,29 +142,96 @@ impl RecipientReader for DieselRecipientRepository<'_> {
 
 impl RecipientWriter for DieselRecipientRepository<'_> {
     fn create(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<DomainRecipient> {
-        use crate::schema::recipients;
+        use crate::schema::{groups, groups_recipients, recipient_fields, recipients};
+
         let mut conn = self.pool.get()?;
-        let new = recipient
-            .first()
-            .ok_or_else(|| RepositoryError::ValidationError("empty slice".into()))?;
-        let db_new = NewRecipient {
-            name: &new.name,
-            email: &new.email,
-            hub_id: new.hub_id,
-        };
-        let inserted = diesel::insert_into(recipients::table)
-            .values(&db_new)
-            .get_result::<Recipient>(&mut conn)?;
-        Ok(DomainRecipient {
-            id: inserted.id,
-            name: inserted.name,
-            email: inserted.email,
-            hub_id: inserted.hub_id,
-            fields: HashMap::new(),
-            created_at: inserted.created_at,
-            updated_at: inserted.updated_at,
-            unsubscribed_at: inserted.unsubscribed_at,
-            groups: Vec::new(),
+
+        conn.transaction::<DomainRecipient, RepositoryError, _>(|conn| {
+            let mut first_recipient: Option<DomainRecipient> = None;
+
+            for (idx, new) in recipient.iter().enumerate() {
+                let db_new = NewRecipient {
+                    name: &new.name,
+                    email: &new.email,
+                    hub_id: new.hub_id,
+                };
+
+                let inserted = diesel::insert_into(recipients::table)
+                    .values(&db_new)
+                    .get_result::<Recipient>(conn)?;
+
+                // Insert optional fields
+                if let Some(fields) = &new.fields {
+                    let new_fields: Vec<RecipientField> = fields
+                        .iter()
+                        .map(|(f, v)| RecipientField {
+                            recipient_id: inserted.id,
+                            field: f.clone(),
+                            value: v.clone(),
+                        })
+                        .collect();
+                    if !new_fields.is_empty() {
+                        diesel::insert_into(recipient_fields::table)
+                            .values(&new_fields)
+                            .execute(conn)?;
+                    }
+                }
+
+                // Create and assign groups
+                let mut group_ids = Vec::new();
+                if let Some(names) = &new.groups {
+                    for group_name in names {
+                        // Check if group already exists
+                        let existing = groups::table
+                            .filter(groups::name.eq(group_name))
+                            .filter(groups::hub_id.eq(new.hub_id))
+                            .select(Group::as_select())
+                            .first::<Group>(conn)
+                            .optional()?;
+
+                        let group = match existing {
+                            Some(g) => g,
+                            None => {
+                                let new_group = crate::models::group::NewGroup {
+                                    name: group_name,
+                                    hub_id: new.hub_id,
+                                };
+                                diesel::insert_into(groups::table)
+                                    .values(&new_group)
+                                    .get_result::<Group>(conn)?
+                            }
+                        };
+
+                        group_ids.push(group.id);
+
+                        let link = GroupRecipient {
+                            group_id: group.id,
+                            recipient_id: inserted.id,
+                        };
+                        diesel::insert_into(groups_recipients::table)
+                            .values(&link)
+                            .execute(conn)?;
+                    }
+                }
+
+                if idx == 0 {
+                    first_recipient = Some(DomainRecipient {
+                        id: inserted.id,
+                        name: inserted.name,
+                        email: inserted.email,
+                        hub_id: inserted.hub_id,
+                        fields: new.fields.clone().unwrap_or_default(),
+                        created_at: inserted.created_at,
+                        updated_at: inserted.updated_at,
+                        unsubscribed_at: inserted.unsubscribed_at,
+                        groups: group_ids,
+                    });
+                }
+            }
+
+            first_recipient.ok_or_else(|| {
+                RepositoryError::ValidationError("empty slice".into())
+            })
         })
     }
 
