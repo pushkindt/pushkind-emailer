@@ -1,30 +1,29 @@
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use pushkind_common::db::DbPool;
+use pushkind_common::models::auth::AuthenticatedUser;
+use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
 
-use crate::db::{DbPool, get_db_connection};
+use crate::domain::hub::NewHub;
 use crate::forms::settings::SaveHubForm;
-use crate::models::auth::AuthenticatedUser;
-use crate::models::config::ServerConfig;
-use crate::models::hub::Hub;
-use crate::repository::hub::{get_hub, update_hub};
-use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
+use crate::repository::hub::DieselHubRepository;
+use crate::repository::{HubReader, HubWriter};
+use crate::routes::render_template;
 
 #[get("/settings")]
 pub async fn settings(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
-    server_config: web::Data<ServerConfig>,
+    server_config: web::Data<CommonServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "admin", None) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
-    };
+    let hub_repo = DieselHubRepository::new(&pool);
 
     let alerts = flash_messages
         .iter()
@@ -35,9 +34,19 @@ pub async fn settings(
     context.insert("current_user", &user);
     context.insert("current_page", "settings");
 
-    let hub = match get_hub(&mut conn, user.hub_id) {
-        Ok(hub) => hub,
-        Err(_) => Hub::new(user.hub_id),
+    let hub = match hub_repo.get_by_id(user.hub_id) {
+        Ok(Some(hub)) => hub,
+        Ok(None) => match hub_repo.create(&NewHub::new(user.hub_id)) {
+            Ok(hub) => hub,
+            Err(e) => {
+                log::error!("Error creating hub: {e}");
+                return HttpResponse::InternalServerError().finish();
+            }
+        },
+        Err(e) => {
+            log::error!("Error getting hub: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
     };
 
     context.insert("current_hub", &hub);
@@ -56,17 +65,30 @@ pub async fn settings_save(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let hub_repo = DieselHubRepository::new(&pool);
+
+    let hub = match hub_repo.get_by_id(user.hub_id) {
+        Ok(Some(hub)) => hub,
+        Ok(None) => match hub_repo.create(&NewHub::new(user.hub_id)) {
+            Ok(hub) => hub,
+            Err(e) => {
+                log::error!("Error creating hub: {e}");
+                return HttpResponse::InternalServerError().finish();
+            }
+        },
+        Err(e) => {
+            log::error!("Error getting hub: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
     };
 
-    match update_hub(&mut conn, &form.into()) {
+    match hub_repo.update(hub.id, &(&form).into()) {
         Ok(_) => {
             FlashMessage::success("Хаб сохранён.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при изменении хаба: {}", err)).send();
+            log::error!("Error updating hub: {err}");
+            FlashMessage::error("Ошибка при изменении хаба.").send();
         }
     };
     redirect("/settings")

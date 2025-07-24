@@ -1,0 +1,23 @@
+<div class="modal-body">
+    <ul class="list-group">
+        {% for recipient in group.recipients %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{recipient.name}} ({{recipient.email}})
+                <form method="POST" action="/groups/unassign" style="display:inline;">
+                    <input type="hidden" name="group_id" value="{{group.group.id}}">
+                    <input type="hidden" name="recipient_id" value="{{recipient.id}}">
+                    <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Убрать?')">
+                        <i class="bi bi-slash-circle"></i>
+                    </button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<form action="/groups/delete" method="POST">
+    <input type="hidden" value="{{group.group.id}}" name="id" required>
+    <div class="modal-footer">
+        <button class="btn btn-danger" type="submit" onclick="return confirm('Удалить?')">Удалить</button>
+    </div>
+</form>

@@ -1,21 +1,21 @@
 use std::env;
 
 use dotenvy::dotenv;
-use log::{error, info};
+use pushkind_common::db::{DbPool, establish_connection_pool};
 
-use pushkind_emailer::db::{DbConnection, establish_connection_pool, get_db_connection};
-use pushkind_emailer::models::hub::Hub;
-use pushkind_emailer::repository::email::set_email_recipient_replied_status;
-use pushkind_emailer::repository::email::{
-    get_hub_email_recipients_not_replied, update_email_num_replied,
-};
-use pushkind_emailer::repository::hub::list_hubs;
+use pushkind_emailer::domain::email::UpdateEmailRecipient;
+use pushkind_emailer::domain::hub::Hub;
+use pushkind_emailer::repository::email::DieselEmailRepository;
+use pushkind_emailer::repository::hub::DieselHubRepository;
+use pushkind_emailer::repository::{EmailReader, EmailWriter, HubReader};
 
-pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &str) {
-    let recipients = match get_hub_email_recipients_not_replied(db_conn, hub.id) {
+pub fn check_hub_email_replied(db_pool: &DbPool, hub: &Hub, domain: &str) {
+    let email_repo = DieselEmailRepository::new(db_pool);
+
+    let recipients = match email_repo.list_not_replied_recipients(hub.id) {
         Ok(recipients) => recipients,
         Err(e) => {
-            error!("Cannot get recipients: {}", e);
+            log::error!("Cannot get recipients: {e}");
             return;
         }
     };
@@ -26,7 +26,7 @@ pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &s
                 (server, port, username, password)
             }
             _ => {
-                error!("Cannot get imap server and port for the hub");
+                log::error!("Cannot get imap server and port for the hub");
                 return;
             }
         };
@@ -36,14 +36,14 @@ pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &s
     let tls = match native_tls::TlsConnector::builder().build() {
         Ok(tls) => tls,
         Err(e) => {
-            error!("Cannot build tls connector: {}", e);
+            log::error!("Cannot build tls connector: {e}");
             return;
         }
     };
     let client = match imap::connect((imap_server.as_str(), imap_port), imap_server, &tls) {
         Ok(client) => client,
         Err(e) => {
-            error!("Cannot connect to imap server: {}", e);
+            log::error!("Cannot connect to imap server: {e}");
             return;
         }
     };
@@ -51,15 +51,15 @@ pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &s
     let mut session: imap::Session<_> = match client.login(username, password).map_err(|e| e.0) {
         Ok(session) => session,
         Err(e) => {
-            error!("Cannot login to imap server: {}", e);
+            log::error!("Cannot login to imap server: {e}");
             return;
         }
     };
 
     match session.select("INBOX") {
-        Ok(_) => info!("Selected INBOX"),
+        Ok(_) => log::info!("Selected INBOX"),
         Err(e) => {
-            error!("Cannot select INBOX: {}", e);
+            log::error!("Cannot select INBOX: {e}");
             return;
         }
     }
@@ -69,39 +69,42 @@ pub fn check_hub_email_replied(db_conn: &mut DbConnection, hub: &Hub, domain: &s
         let in_reply_to_id = format!("<{}@{}>", recipient.id, domain);
 
         // Search for emails with a matching In-Reply-To header
-        let query = format!("HEADER In-Reply-To {}", in_reply_to_id);
+        let query = format!("HEADER In-Reply-To {in_reply_to_id}");
         let search_result = match session.search(&query) {
             Ok(search_result) => search_result,
             Err(e) => {
-                error!("Cannot search for emails: {}", e);
+                log::error!("Cannot search for emails: {e}");
                 continue;
             }
         };
 
         if search_result.is_empty() {
-            info!(
+            log::info!(
                 "No matching emails found for email_id: {}, recipient: {}.",
-                recipient.email_id, recipient.address
+                recipient.email_id,
+                recipient.address
             );
         } else {
-            info!(
-                "Found emails with In-Reply-To {}: {:?}",
-                in_reply_to_id, search_result
+            log::info!(
+                "Found emails with In-Reply-To {in_reply_to_id}: {search_result:?}"
             );
-            match set_email_recipient_replied_status(db_conn, recipient.email_id, recipient.id) {
-                Ok(_) => info!("Email recipient replied status set"),
-                Err(e) => error!("Cannot set email recipient replied status: {}", e),
-            }
-
-            if let Err(e) = update_email_num_replied(db_conn, recipient.email_id) {
-                error!("Failed to update email num_sent for: {}", e);
+            match email_repo.update_recipient(
+                recipient.id,
+                &UpdateEmailRecipient {
+                    is_sent: Some(true),
+                    replied: Some(true),
+                    opened: Some(true),
+                },
+            ) {
+                Ok(_) => log::info!("Email recipient replied status set"),
+                Err(e) => log::error!("Cannot set email recipient replied status: {e}"),
             }
         }
     }
 
     match session.logout() {
-        Ok(_) => info!("Logged out"),
-        Err(e) => error!("Cannot logout: {}", e),
+        Ok(_) => log::info!("Logged out"),
+        Err(e) => log::error!("Cannot logout: {e}"),
     }
 }
 
@@ -112,32 +115,26 @@ fn main() {
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
     let domain = env::var("DOMAIN").unwrap_or_default();
 
-    let db_pool = match establish_connection_pool(database_url) {
+    let db_pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
         Err(e) => {
-            error!("Cannot establish db connection: {}", e);
+            log::error!("Cannot establish db connection: {e}");
             return;
         }
     };
 
-    let mut db_conn = match get_db_connection(&db_pool) {
-        Some(conn) => conn,
-        None => {
-            error!("Cannot get db connection");
-            return;
-        }
-    };
+    let hub_repo = DieselHubRepository::new(&db_pool);
 
-    let hubs = match list_hubs(&mut db_conn) {
+    let hubs = match hub_repo.list() {
         Ok(hub) => hub,
         Err(e) => {
-            error!("Cannot get hub: {}", e);
+            log::error!("Cannot get hub: {e}");
             return;
         }
     };
 
     for hub in hubs {
-        info!("Checking hub: {}", hub.id);
-        check_hub_email_replied(&mut db_conn, &hub, &domain);
+        log::info!("Checking hub: {}", hub.id);
+        check_hub_email_replied(&db_pool, &hub, &domain);
     }
 }

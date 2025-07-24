@@ -1,7 +1,9 @@
 use serde::Deserialize;
+use validator::Validate;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct AddGroupForm {
+    #[validate(length(min = 1))]
     pub name: String,
 }
 

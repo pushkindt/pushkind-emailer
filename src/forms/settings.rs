@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::models::hub::Hub;
+use crate::domain::hub::UpdateHub;
 
 #[derive(Deserialize)]
 pub struct AddHubForm {
@@ -26,20 +26,19 @@ pub struct SaveHubForm {
     pub message: Option<String>,
 }
 
-impl From<SaveHubForm> for Hub {
-    fn from(val: SaveHubForm) -> Self {
-        Hub {
-            id: val.id,
-            login: val.login,
-            password: val.password,
-            sender: val.sender,
-            smtp_server: val.smtp_server,
+impl<'a> From<&'a SaveHubForm> for UpdateHub<'a> {
+    fn from(val: &'a SaveHubForm) -> Self {
+        Self {
+            login: val.login.as_deref(),
+            password: val.password.as_deref(),
+            sender: val.sender.as_deref(),
+            smtp_server: val.smtp_server.as_deref(),
             smtp_port: val.smtp_port,
-            imap_server: val.imap_server,
+            imap_server: val.imap_server.as_deref(),
             imap_port: val.imap_port,
             created_at: val.created_at,
             updated_at: Some(chrono::Utc::now().naive_utc()),
-            email_template: val.message,
+            email_template: val.message.as_deref(),
         }
     }
 }

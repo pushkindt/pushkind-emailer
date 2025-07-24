@@ -1,23 +1,23 @@
 <div class="modal-body">
     <form action="/recipients/save" method="POST">
-        <input type="hidden" value="{{recipient.id}}" name="id" required>
+        <input type="hidden" value="{{recipient.recipient.id}}" name="id" required>
         <div class="row mb-3">
             <label for="modalUserName" class="col-md-2 col-form-label">Имя</label>
             <div class="col-md-10">
-                <input name="name" type="text" class="form-control" id="modalUserName" value="{{recipient.name}}" placeholder="Имя" required>
-                {% if recipient.unsubscribed_at %}
-                    <small class="text-body-secondary">Получатель отписался {{recipient.unsubscribed_at | date(format="%Y-%m-%d %H:%M")}}</small>
+                <input name="name" type="text" class="form-control" id="modalUserName" value="{{recipient.recipient.name}}" placeholder="Имя" required>
+                {% if recipient.recipient.unsubscribed_at %}
+                    <small class="text-body-secondary">Получатель отписался {{recipient.recipient.unsubscribed_at | date(format="%Y-%m-%d %H:%M")}}</small>
                 {% endif %}
             </div>
         </div>
         <div class="row mb-3">
             <label for="modalUserEmail" class="col-md-2 col-form-label">Электронный адрес</label>
             <div class="col-md-10">
-                <input name="email" type="email" class="form-control" id="modalUserEmail" value="{{recipient.email}}" placeholder="Электронный адрес" required>
+                <input name="email" type="email" class="form-control" id="modalUserEmail" value="{{recipient.recipient.email}}" placeholder="Электронный адрес" required>
             </div>
         </div>
         <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" value="true" {% if not recipient.unsubscribed_at %}checked{% endif %} id="active" name="active">
+            <input class="form-check-input" type="checkbox" value="true" {% if not recipient.recipient.unsubscribed_at %}checked{% endif %} id="active" name="active">
             <label class="form-check-label" for="active">
                 Действующий
             </label>
@@ -27,25 +27,22 @@
             <label for="recipients-assign-form-group-id" class="col-md-2 col-form-label">Группы</label>
             <div class="col-md-10">
                 <select multiple class="form-control my-1" name="groups" id="recipients-assign-form-group-id">
-                    {% if groups %}
-                        {% for group in groups %}
-                            <option value="{{group.id}}" {% if recipient_groups and recipient_groups is containing(group.id) %} selected {% endif %}>{{group.name}}</option>
-                        {% endfor %}
-                    {% endif %}
+                    {% for group in groups %}
+                        <option value="{{group.id}}" {% if recipient.recipient.groups is containing(group.id) %} selected {% endif %}>{{group.name}}</option>
+                    {% endfor %}
                 </select>
             </div>
         </div>
 
         <div id="custom-fields">
-        {% if recipient_fields %}
-            {% for field in recipient_fields %}
 
+            {% for field, value in recipient.recipient.fields %}
                 <div class="row mb-3">
                     <div class="col">
-                        <input type="text" class="form-control" value="{{field.field}}" name="field" required placeholder="Поле">
+                        <input type="text" class="form-control" value="{{field}}" name="field" required placeholder="Поле">
                     </div>
                     <div class="col">
-                        <input type="text" class="form-control" value="{{field.value}}" name="value" required" placeholder="Значение">
+                        <input type="text" class="form-control" value="{{value}}" name="value" required" placeholder="Значение">
                     </div>
                     <div class="col-auto">
                         <a href="#" class="btn btn-danger btn-sm" onclick="removeCustomField(this)">
@@ -55,7 +52,6 @@
                 </div>
 
             {% endfor %}
-        {% endif %}
         </div>
 
         <div class="row mb-3">
@@ -72,7 +68,7 @@
 </div>
 
 <form action="/recipients/delete" method="POST">
-    <input type="hidden" value="{{recipient.id}}" name="id" required>
+    <input type="hidden" value="{{recipient.recipient.id}}" name="id" required>
     <div class="modal-footer">
         <button class="btn btn-danger" type="submit" onclick="return confirm('Удалить?')">Удалить</button>
     </div>

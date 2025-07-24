@@ -1,38 +1,34 @@
-use std::io::Read;
-
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use pushkind_common::db::DbPool;
+use pushkind_common::models::auth::AuthenticatedUser;
+use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
 use tera::Context;
+use validator::Validate;
 
-use crate::db::{DbPool, get_db_connection};
+use crate::domain::recipient::NewRecipient;
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, UploadRecipientsForm,
 };
-use crate::models::auth::AuthenticatedUser;
-use crate::models::config::ServerConfig;
-use crate::repository::recipient::{
-    clean_all_recipients_and_groups, create_recipient, delete_recipient, get_hub_all_groups,
-    get_hub_all_recipients, get_recipient, get_recipient_fields, get_recipient_group_ids,
-    save_recipient, update_recipients_from_csv,
-};
-use crate::routes::{alert_level_to_str, ensure_role, redirect, render_template};
+use crate::repository::group::DieselGroupRepository;
+use crate::repository::recipient::DieselRecipientRepository;
+use crate::repository::{GroupReader, GroupWriter, RecipientReader, RecipientWriter};
+use crate::routes::render_template;
 
 #[get("/recipients")]
-pub async fn recipients(
+pub async fn recipients_show(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
-    server_config: web::Data<ServerConfig>,
+    server_config: web::Data<CommonServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
 
     let alerts = flash_messages
         .iter()
@@ -44,9 +40,15 @@ pub async fn recipients(
     context.insert("current_page", "recipients");
     context.insert("home_url", &server_config.auth_service_url);
 
-    if let Ok(recipients) = get_hub_all_recipients(&mut conn, user.hub_id) {
-        context.insert("recipients", &recipients);
-    }
+    let recipients = match recipient_repo.list(user.hub_id) {
+        Ok(recipients) => recipients,
+        Err(err) => {
+            log::error!("Failed to get recipients: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    context.insert("recipients", &recipients);
 
     render_template("recipients/recipients.html", &context)
 }
@@ -61,17 +63,23 @@ pub async fn recipients_add(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
-    };
+    if form.validate().is_err() {
+        FlashMessage::error("Ошибка при добавлении получателя.").send();
+        return redirect("/recipients");
+    }
 
-    match create_recipient(&mut conn, user.hub_id, &form.name, &form.email) {
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let mut new_recipient: NewRecipient = form.into();
+
+    new_recipient.hub_id = user.hub_id;
+    match recipient_repo.create(&[new_recipient]) {
         Ok(_) => {
             FlashMessage::success("Получатель успешно добавлен.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при создании получателя: {}", err)).send();
+            log::error!("Failed to create recipient: {err}");
+            FlashMessage::error("Ошибка при создании получателя.").send();
         }
     }
 
@@ -88,17 +96,15 @@ pub async fn recipients_delete(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
 
-    match delete_recipient(&mut conn, form.id) {
+    match recipient_repo.delete(form.id) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при удалении получателя: {}", err)).send();
+            log::error!("Failed to delete recipient: {err}");
+            FlashMessage::error("Ошибка при удалении получателя.").send();
         }
     }
 
@@ -111,17 +117,27 @@ pub async fn recipients_clean(user: AuthenticatedUser, pool: web::Data<DbPool>) 
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+    let group_repo = DieselGroupRepository::new(&pool);
 
-    match clean_all_recipients_and_groups(&mut conn, user.hub_id) {
+    match group_repo.delete_all(user.hub_id) {
         Ok(_) => {
-            FlashMessage::success("Все получатели и группы удалены.").send();
+            FlashMessage::success("Все группы удалены.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при удалении групп и получателей: {}", err)).send();
+            log::error!("Failed to delete groups: {err}");
+            FlashMessage::error("Ошибка при удалении групп.").send();
+            return redirect("/recipients");
+        }
+    }
+
+    match recipient_repo.delete_all(user.hub_id) {
+        Ok(_) => {
+            FlashMessage::success("Все получатели удалены.").send();
+        }
+        Err(err) => {
+            log::error!("Failed to delete recipients: {err}");
+            FlashMessage::error("Ошибка при удалении получателей.").send();
         }
     }
 
@@ -138,24 +154,23 @@ pub async fn recipients_upload(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let recipients: Vec<NewRecipient> = match form.parse(user.hub_id) {
+        Ok(recipients) => recipients,
+        Err(err) => {
+            FlashMessage::error(format!("Ошибка при парсинге получателей: {err}")).send();
+            return redirect("/recipients");
+        }
     };
 
-    let mut csv_content = String::new();
-
-    match form.csv.file.read_to_string(&mut csv_content) {
-        Ok(_) => match update_recipients_from_csv(&mut conn, user.hub_id, &csv_content) {
-            Ok(_) => {
-                FlashMessage::success("Файл успешно загружен.").send();
-            }
-            Err(err) => {
-                FlashMessage::error(format!("Ошибка при загрузке файла: {}", err)).send();
-            }
-        },
+    match recipient_repo.create(&recipients) {
+        Ok(_) => {
+            FlashMessage::success("Получатели добавлены.").send();
+        }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при чтении файла: {}", err)).send();
+            log::error!("Failed to add clients: {err}");
+            FlashMessage::error("Ошибка при добавлении получателей.").send();
         }
     }
 
@@ -167,35 +182,39 @@ pub async fn recipients_modal(
     recipient_id: web::Path<i32>,
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
-    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+    let group_repo = DieselGroupRepository::new(&pool);
 
     let mut context = Context::new();
 
     let recipient_id = recipient_id.into_inner();
 
-    if let Ok(recipient) = get_recipient(&mut conn, recipient_id) {
-        context.insert("recipient", &recipient);
+    let recipient = match recipient_repo.get_by_id(recipient_id) {
+        Ok(Some(recipient)) => recipient,
+        Ok(None) => {
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving recipient: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
 
-        if let Ok(fields) = get_recipient_fields(&mut conn, recipient_id) {
-            context.insert("recipient_fields", &fields);
+    let groups = match group_repo.list(user.hub_id) {
+        Ok(groups) => groups,
+        Err(e) => {
+            log::error!("Error retrieving groups: {e}");
+            return HttpResponse::InternalServerError().finish();
         }
-        if let Ok(groups) = get_recipient_group_ids(&mut conn, recipient_id) {
-            context.insert("recipient_groups", &groups);
-        }
-        if let Ok(groups) = get_hub_all_groups(&mut conn, recipient.hub_id) {
-            context.insert("groups", &groups);
-        }
-    }
-    context.insert("home_url", &server_config.auth_service_url);
+    };
+
+    context.insert("recipient", &recipient);
+    context.insert("groups", &groups);
 
     render_template("recipients/modal_body.html", &context)
 }
@@ -210,36 +229,24 @@ pub async fn recipients_save(
         return response;
     };
 
-    let mut conn = match get_db_connection(&pool) {
-        Some(conn) => conn,
-        None => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
 
     let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {
         Ok(form) => form,
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при обработке формы: {}", err)).send();
+            log::error!("Error parsing form: {err}");
+            FlashMessage::error("Ошибка при обработке формы.").send();
             return redirect("/recipients");
         }
     };
 
-    let fields = form.field.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-    let values = form.value.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-    match save_recipient(
-        &mut conn,
-        form.id,
-        &form.name,
-        &form.email,
-        form.active,
-        &form.groups,
-        &fields,
-        &values,
-    ) {
+    match recipient_repo.update(form.id, &form.into()) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при сохранении получателя: {}", err)).send();
+            log::error!("Error saving recipient: {err}");
+            FlashMessage::error("Ошибка при сохранении получателя.").send();
         }
     }
 

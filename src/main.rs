@@ -2,26 +2,25 @@ use std::env;
 
 use actix_files::Files;
 use actix_identity::IdentityMiddleware;
-use actix_session::config::CookieContentSecurity;
 use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use actix_web::cookie::Key;
 use actix_web::{App, HttpServer, middleware, web};
 use actix_web_flash_messages::{FlashMessagesFramework, storage::CookieMessageStore};
 use dotenvy::dotenv;
 use log::error;
+use pushkind_common::db::establish_connection_pool;
+use pushkind_common::middleware::RedirectUnauthorized;
+use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::routes::logout;
 
-use pushkind_emailer::db::establish_connection_pool;
-use pushkind_emailer::middleware::RedirectUnauthorized;
 use pushkind_emailer::models::config::ServerConfig;
 use pushkind_emailer::routes::groups::{
-    groups, groups_add, groups_assign, groups_delete, groups_unassign,
+    groups, groups_add, groups_assign, groups_delete, groups_modal, groups_unassign,
 };
-use pushkind_emailer::routes::main::{
-    delete_email, index, logout, not_assigned, retry_email, send_email, track_email,
-};
+use pushkind_emailer::routes::main::{delete_email, index, not_assigned, send_email, track_email};
 use pushkind_emailer::routes::recipients::{
-    recipients, recipients_add, recipients_clean, recipients_delete, recipients_modal,
-    recipients_save, recipients_upload,
+    recipients_add, recipients_clean, recipients_delete, recipients_modal, recipients_save,
+    recipients_show, recipients_upload,
 };
 use pushkind_emailer::routes::settings::{settings, settings_save};
 
@@ -35,10 +34,10 @@ async fn main() -> std::io::Result<()> {
     let address = env::var("ADDRESS").unwrap_or("127.0.0.1".to_string());
     let zmq_address = env::var("ZMQ_ADDRESS").unwrap_or("tcp://127.0.0.1:5555".to_string());
 
-    let pool = match establish_connection_pool(database_url) {
+    let pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
         Err(e) => {
-            error!("Failed to establish database connection: {}", e);
+            error!("Failed to establish database connection: {e}");
             std::process::exit(1);
         }
     };
@@ -58,8 +57,8 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let server_config = ServerConfig {
-        zmq_address,
+    let server_config = ServerConfig { zmq_address };
+    let common_config = CommonServerConfig {
         secret: secret.unwrap_or_default(),
         auth_service_url,
     };
@@ -90,11 +89,10 @@ async fn main() -> std::io::Result<()> {
                     .service(index)
                     .service(send_email)
                     .service(delete_email)
-                    .service(retry_email)
                     .service(track_email)
                     .service(settings)
                     .service(settings_save)
-                    .service(recipients)
+                    .service(recipients_show)
                     .service(recipients_add)
                     .service(recipients_delete)
                     .service(recipients_clean)
@@ -105,10 +103,12 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_add)
                     .service(groups_delete)
                     .service(groups_assign)
+                    .service(groups_modal)
                     .service(groups_unassign),
             )
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(server_config.clone()))
+            .app_data(web::Data::new(common_config.clone()))
     })
     .bind((address, port))?
     .run()
