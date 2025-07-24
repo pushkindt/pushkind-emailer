@@ -178,7 +178,6 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
                 }
 
                 // Create and assign groups
-                let mut group_ids = Vec::new();
                 if let Some(names) = &new.groups {
                     for group_name in names {
                         // Check if group already exists
@@ -201,8 +200,6 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
                                     .get_result::<Group>(conn)?
                             }
                         };
-
-                        group_ids.push(group.id);
 
                         let link = GroupRecipient {
                             group_id: group.id,
