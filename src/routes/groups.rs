@@ -173,7 +173,7 @@ pub async fn groups_unassign(
 }
 
 #[post("/groups/modal/{group_id}")]
-pub async fn group_modal(
+pub async fn groups_modal(
     group_id: web::Path<i32>,
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,

@@ -15,10 +15,9 @@ use crate::forms::recipients::{
 use crate::repository::group::DieselGroupRepository;
 use crate::repository::recipient::{
     DieselRecipientRepository, clean_all_recipients_and_groups, create_recipient, delete_recipient,
-    get_hub_all_groups, get_hub_all_recipients, get_recipient, get_recipient_fields,
-    get_recipient_group_ids, save_recipient, update_recipients_from_csv,
+    get_hub_all_recipients, update_recipients_from_csv,
 };
-use crate::repository::{GroupReader, RecipientReader};
+use crate::repository::{GroupReader, RecipientReader, RecipientWriter};
 use crate::routes::render_template;
 
 #[get("/recipients")]
@@ -217,36 +216,24 @@ pub async fn recipients_save(
         return response;
     };
 
-    let mut conn = match pool.get() {
-        Ok(conn) => conn,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+    let recipient_repo = DieselRecipientRepository::new(&pool);
 
     let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {
         Ok(form) => form,
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при обработке формы: {}", err)).send();
+            log::error!("Error parsing form: {err}");
+            FlashMessage::error("Ошибка при обработке формы.").send();
             return redirect("/recipients");
         }
     };
 
-    let fields = form.field.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-    let values = form.value.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-    match save_recipient(
-        &mut conn,
-        form.id,
-        &form.name,
-        &form.email,
-        form.active,
-        &form.groups,
-        &fields,
-        &values,
-    ) {
+    match recipient_repo.update(form.id, &form.into()) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
         }
         Err(err) => {
-            FlashMessage::error(format!("Ошибка при сохранении получателя: {}", err)).send();
+            log::error!("Error saving recipient: {err}");
+            FlashMessage::error("Ошибка при сохранении получателя.").send();
         }
     }
 

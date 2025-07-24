@@ -30,10 +30,10 @@ pub struct NewRecipient<'a> {
     pub hub_id: i32,
 }
 
-pub struct UpdateRecipient<'a> {
-    pub name: &'a str,
-    pub email: &'a str,
-    pub fields: &'a HashMap<String, String>,
+pub struct UpdateRecipient {
+    pub name: String,
+    pub email: String,
+    pub fields: HashMap<String, String>,
     pub unsubscribed_at: Option<NaiveDateTime>,
-    pub groups: &'a Vec<i32>,
+    pub groups: Vec<i32>,
 }

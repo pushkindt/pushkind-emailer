@@ -1,7 +1,6 @@
 use diesel::prelude::*;
 use serde::Serialize;
 
-use crate::domain::recipient as domain;
 use crate::models::hub::Hub;
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]

@@ -181,8 +181,8 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         // Update basic recipient info
         diesel::update(recipients::table.filter(recipients::id.eq(id)))
             .set((
-                recipients::name.eq(recipient.name),
-                recipients::email.eq(recipient.email),
+                recipients::name.eq(&recipient.name),
+                recipients::email.eq(&recipient.email),
                 recipients::unsubscribed_at.eq(recipient.unsubscribed_at),
             ))
             .execute(&mut conn)?;
@@ -190,7 +190,7 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         // Update fields (delete all → insert new)
         diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(id)))
             .execute(&mut conn)?;
-        for (field, value) in recipient.fields {
+        for (field, value) in &recipient.fields {
             let new_field = RecipientField {
                 recipient_id: id,
                 field: field.clone(),
@@ -204,7 +204,7 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         // Update group associations (delete all → insert new)
         diesel::delete(groups_recipients::table.filter(groups_recipients::recipient_id.eq(id)))
             .execute(&mut conn)?;
-        for group_id in recipient.groups {
+        for group_id in &recipient.groups {
             let link = GroupRecipient {
                 group_id: *group_id,
                 recipient_id: id,

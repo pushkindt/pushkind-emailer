@@ -23,7 +23,10 @@ impl<'a> DieselEmailRepository<'a> {
     }
 }
 
-use crate::domain::email::{EmailWithRecipients as DomainEmailWithRecipients, NewEmail as DomainNewEmail, UpdateEmail as DomainUpdateEmail, UpdateEmailRecipient as DomainUpdateEmailRecipient};
+use crate::domain::email::{
+    EmailWithRecipients as DomainEmailWithRecipients, NewEmail as DomainNewEmail,
+    UpdateEmail as DomainUpdateEmail, UpdateEmailRecipient as DomainUpdateEmailRecipient,
+};
 use crate::repository::errors::RepositoryError;
 
 impl EmailReader for DieselEmailRepository<'_> {
@@ -163,7 +166,11 @@ impl EmailWriter for DieselEmailRepository<'_> {
         })
     }
 
-    fn update(&self, email_id: i32, updates: &DomainUpdateEmail) -> RepositoryResult<DomainEmailWithRecipients> {
+    fn update(
+        &self,
+        email_id: i32,
+        updates: &DomainUpdateEmail,
+    ) -> RepositoryResult<DomainEmailWithRecipients> {
         use crate::schema::emails::dsl as emails;
         let mut conn = self.pool.get()?;
         diesel::update(emails::emails.filter(emails::id.eq(email_id)))
@@ -189,7 +196,11 @@ impl EmailWriter for DieselEmailRepository<'_> {
         })
     }
 
-    fn update_recipient(&self, recipient_id: i32, updates: &DomainUpdateEmailRecipient) -> RepositoryResult<DomainEmailWithRecipients> {
+    fn update_recipient(
+        &self,
+        recipient_id: i32,
+        updates: &DomainUpdateEmailRecipient,
+    ) -> RepositoryResult<DomainEmailWithRecipients> {
         use crate::schema::email_recipients::dsl as er;
         let mut conn = self.pool.get()?;
         let email_id: i32 = er::email_recipients
@@ -226,7 +237,8 @@ impl EmailWriter for DieselEmailRepository<'_> {
     fn delete(&self, id: i32) -> RepositoryResult<()> {
         use crate::schema::{email_recipients, emails};
         let mut conn = self.pool.get()?;
-        diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id))).execute(&mut conn)?;
+        diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
+            .execute(&mut conn)?;
         diesel::delete(emails::table.filter(emails::id.eq(id))).execute(&mut conn)?;
         Ok(())
     }
