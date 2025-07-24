@@ -9,7 +9,6 @@ use mail_send::mail_builder::{
     headers::{HeaderType, url::URL},
 };
 use pushkind_common::db::{DbPool, establish_connection_pool};
-use tokio::sync::Mutex;
 
 use pushkind_emailer::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
 use pushkind_emailer::domain::hub::Hub;
@@ -162,7 +161,7 @@ async fn main() {
         }
     };
 
-    let pool = Arc::new(Mutex::new(pool));
+    let pool = Arc::new(pool);
 
     log::info!("Starting email worker");
 
@@ -175,8 +174,7 @@ async fn main() {
                 let domain = Arc::clone(&domain);
 
                 tokio::spawn(async move {
-                    let pool = pool_clone.lock().await;
-                    if let Err(e) = send_email(email_id, &pool, &domain).await {
+                    if let Err(e) = send_email(email_id, &pool_clone, &domain).await {
                         log::error!("Error sending email message: {e}");
                     }
                 });
