@@ -89,6 +89,15 @@ impl From<csv::Error> for UploadRecipientsFormError {
 }
 
 impl UploadRecipientsForm {
+    /// Parses the uploaded CSV into a list of [`NewRecipient`] values.
+    ///
+    /// The file must contain a header row with at least `name` and `email`
+    /// columns.  A `groups` column can specify comma separated group names and
+    /// any additional columns are treated as custom fields for the recipient.
+    ///
+    /// # Errors
+    /// Returns [`UploadRecipientsFormError`] when the file cannot be read or the
+    /// CSV data is invalid.
     pub fn parse(&mut self, hub_id: i32) -> Result<Vec<NewRecipient>, UploadRecipientsFormError> {
         let mut csv_content = String::new();
         self.csv.file.read_to_string(&mut csv_content)?;
