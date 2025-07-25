@@ -1,5 +1,5 @@
 use actix_multipart::form::MultipartForm;
-use actix_web::{HttpResponse, Responder, get, post, web};
+use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
@@ -10,8 +10,10 @@ use validator::Validate;
 
 use crate::domain::recipient::NewRecipient;
 use crate::forms::recipients::{
-    AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, UploadRecipientsForm,
+    AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, SourceRecipientForm,
+    UploadRecipientsForm,
 };
+use crate::models::config::ServerConfig;
 use crate::repository::group::DieselGroupRepository;
 use crate::repository::recipient::DieselRecipientRepository;
 use crate::repository::{GroupReader, GroupWriter, RecipientReader, RecipientWriter};
@@ -22,7 +24,8 @@ pub async fn recipients_show(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
-    server_config: web::Data<CommonServerConfig>,
+    common_config: web::Data<CommonServerConfig>,
+    server_config: web::Data<ServerConfig>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -38,7 +41,8 @@ pub async fn recipients_show(
     context.insert("alerts", &alerts);
     context.insert("current_user", &user);
     context.insert("current_page", "recipients");
-    context.insert("home_url", &server_config.auth_service_url);
+    context.insert("home_url", &common_config.auth_service_url);
+    context.insert("crm_service_url", &server_config.crm_service_url);
 
     let recipients = match recipient_repo.list(user.hub_id) {
         Ok(recipients) => recipients,
@@ -247,6 +251,49 @@ pub async fn recipients_save(
         Err(err) => {
             log::error!("Error saving recipient: {err}");
             FlashMessage::error("Ошибка при сохранении получателя.").send();
+        }
+    }
+
+    redirect("/recipients")
+}
+
+#[post("/recipients/source")]
+pub async fn recipients_source(
+    req: HttpRequest,
+    user: AuthenticatedUser,
+    pool: web::Data<DbPool>,
+    web::Form(form): web::Form<SourceRecipientForm>,
+) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
+    let id_cookie = match req.cookie("id") {
+        Some(cookie) => cookie,
+        None => {
+            log::error!("No id cookie found");
+            return redirect("/recipients");
+        }
+    };
+
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let new_recipients: Vec<NewRecipient> = match form.load(id_cookie.value()).await {
+        Ok(recipients) => recipients,
+        Err(err) => {
+            log::error!("Failed to load recipients: {err}");
+            FlashMessage::error("Ошибка при загрузке получателей.").send();
+            return redirect("/recipients");
+        }
+    };
+
+    match recipient_repo.create(&new_recipients) {
+        Ok(_) => {
+            FlashMessage::success("Получатели успешно добавлены.").send();
+        }
+        Err(err) => {
+            log::error!("Failed to create recipients: {err}");
+            FlashMessage::error("Ошибка при добавлении получателя.").send();
         }
     }
 

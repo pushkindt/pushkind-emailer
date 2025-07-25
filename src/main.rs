@@ -20,7 +20,7 @@ use pushkind_emailer::routes::groups::{
 use pushkind_emailer::routes::main::{delete_email, index, not_assigned, send_email, track_email};
 use pushkind_emailer::routes::recipients::{
     recipients_add, recipients_clean, recipients_delete, recipients_modal, recipients_save,
-    recipients_show, recipients_upload,
+    recipients_show, recipients_source, recipients_upload,
 };
 use pushkind_emailer::routes::settings::{settings, settings_save};
 
@@ -33,6 +33,7 @@ async fn main() -> std::io::Result<()> {
     let port = port.parse::<u16>().unwrap_or(8080);
     let address = env::var("ADDRESS").unwrap_or("127.0.0.1".to_string());
     let zmq_address = env::var("ZMQ_ADDRESS").unwrap_or("tcp://127.0.0.1:5555".to_string());
+    let crm_service_url = env::var("CRM_SERVICE_URL").unwrap_or_default();
 
     let pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
@@ -57,7 +58,10 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let server_config = ServerConfig { zmq_address };
+    let server_config = ServerConfig {
+        zmq_address,
+        crm_service_url,
+    };
     let common_config = CommonServerConfig {
         secret: secret.unwrap_or_default(),
         auth_service_url,
@@ -99,6 +103,7 @@ async fn main() -> std::io::Result<()> {
                     .service(recipients_upload)
                     .service(recipients_modal)
                     .service(recipients_save)
+                    .service(recipients_source)
                     .service(groups)
                     .service(groups_add)
                     .service(groups_delete)

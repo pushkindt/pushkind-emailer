@@ -17,15 +17,29 @@
         <div class="col-lg-6">
             <h5>Получатели</h5>
             <form method="POST" action="/recipients/add">
-                <div class="row mb-3">
+                <div class="row my-1">
                     <div class="col-lg">
-                        <input class="form-control my-1" type="text" name="name" placeholder="Имя" required>
+                        <input class="form-control" type="text" name="name" placeholder="Имя" required>
                     </div>
                     <div class="col-lg">
-                        <input class="form-control my-1" type="email" name="email" placeholder="Электронный адрес" required>
+                        <input class="form-control" type="email" name="email" placeholder="Электронный адрес" required>
                     </div>
                     <div class="col-lg-3 text-end">
-                        <button class="btn btn-primary my-1" type="submit">Добавить</button>
+                        <button class="btn btn-primary" type="submit">Добавить</button>
+                    </div>
+                </div>
+            </form>
+            <form method="POST" action="/recipients/source">
+                <div class="row my-1">
+                    <div class="col">
+                        <select class="form-select" aria-label="API source" required name="source">
+                            <option selected>Выбор сервиса</option>
+                            <option value="{{crm_service_url}}/api/v1/clients">CRM</option>
+                            <option value="{{home_url}}/api/v1/users">USERS</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-3 text-end">
+                        <button class="btn btn-primary" type="submit">Загрузить</button>
                     </div>
                 </div>
             </form>
@@ -33,17 +47,17 @@
         <div class="col-lg-6">
             <h5>Массовая загрузка/удаление</h5>
             <form method="POST" action="/recipients/upload" enctype="multipart/form-data">
-                <div class="row">
+                <div class="row my-1">
                     <div class="col-lg">
-                        <input class="form-control my-1" type="file" name="csv" id="uploadRecipients" accept=".csv" required>
+                        <input class="form-control" type="file" name="csv" id="uploadRecipients" accept=".csv" required>
                     </div>
                     <div class="col-lg-3 text-end">
-                        <button class="btn btn-primary my-1" type="submit">Загрузить</button>
+                        <button class="btn btn-primary" type="submit">Загрузить</button>
                     </div>
                 </div>
             </form>
             <form method="POST" action="/recipients/clean">
-                <div class="row">
+                <div class="row my-1">
                     <div class="col-lg">
                         <small class="text-muted">"name","email","group1,group2","произвольные","поля"</small>
                     </div>

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::group::Group;
 
@@ -38,6 +38,7 @@ pub struct RecipientWithGroups {
 }
 
 /// Data required to create a new [`Recipient`].
+#[derive(Deserialize)]
 pub struct NewRecipient {
     /// Name of the recipient.
     pub name: String,

@@ -3,6 +3,7 @@ use std::io::Read;
 
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
 use csv;
+use reqwest::header::COOKIE;
 use serde::Deserialize;
 use thiserror::Error;
 use validator::Validate;
@@ -15,6 +16,11 @@ pub struct AddRecipientForm {
     pub name: String,
     #[validate(email)]
     pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct SourceRecipientForm {
+    pub source: String, // URL of the service to fetch a JSON array of NewRecipient
 }
 
 #[derive(Deserialize)]
@@ -158,6 +164,41 @@ impl From<AddRecipientForm> for NewRecipient {
             hub_id: 0,
             groups: None,
             fields: None,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SourceRecipientFormError {
+    #[error("Error reading api")]
+    RequestError,
+    #[error("Error parsing api")]
+    DeserializeError,
+}
+
+impl From<reqwest::Error> for SourceRecipientFormError {
+    fn from(_: reqwest::Error) -> Self {
+        Self::RequestError
+    }
+}
+
+impl SourceRecipientForm {
+    pub async fn load(
+        &self,
+        id_value: &str,
+    ) -> Result<Vec<NewRecipient>, SourceRecipientFormError> {
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&self.source)
+            .header(COOKIE, format!("id={}", id_value))
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            let recipients: Vec<NewRecipient> = response.json().await?;
+            Ok(recipients)
+        } else {
+            Err(SourceRecipientFormError::RequestError)
         }
     }
 }
