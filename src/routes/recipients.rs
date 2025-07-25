@@ -268,6 +268,11 @@ pub async fn recipients_source(
         return response;
     };
 
+    if form.validate().is_err() {
+        FlashMessage::error("Ошибка валидации формы.").send();
+        return redirect("/recipients");
+    }
+
     let id_cookie = match req.cookie("id") {
         Some(cookie) => cookie,
         None => {

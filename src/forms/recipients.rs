@@ -18,8 +18,9 @@ pub struct AddRecipientForm {
     pub email: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct SourceRecipientForm {
+    #[validate(url)]
     pub source: String, // URL of the service to fetch a JSON array of NewRecipient
 }
 
