@@ -159,7 +159,8 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
                 let inserted = diesel::insert_into(recipients::table)
                     .values(&db_new)
                     .on_conflict((recipients::email, recipients::hub_id))
-                    .do_nothing()
+                    .do_update()
+                    .set((recipients::name.eq(&new.name),))
                     .get_result::<Recipient>(conn)?;
 
                 // Insert optional fields
