@@ -23,6 +23,8 @@ jobs:
         with:
           name: pushkind-emailer
           path: ./target/release/pushkind-emailer
+          path: ./target/release/send_email
+          path: ./target/release/check_reply
   deploy:
     needs: build
     runs-on: ubuntu-latest
