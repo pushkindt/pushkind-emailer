@@ -112,6 +112,15 @@ pub async fn groups_delete(
     };
 
     let group_repo = DieselGroupRepository::new(&pool);
+    let group_exists = match group_repo.get_by_id(form.id) {
+        Ok(Some(group)) if group.group.hub_id == user.hub_id => true,
+        _ => false,
+    };
+
+    if !group_exists {
+        FlashMessage::error("Группа не найдена.").send();
+        return redirect("/groups");
+    }
 
     match group_repo.delete(form.id) {
         Ok(_) => {
@@ -137,6 +146,21 @@ pub async fn groups_assign(
     };
 
     let group_repo = DieselGroupRepository::new(&pool);
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let group_ok = matches!(
+        group_repo.get_by_id(form.group_id),
+        Ok(Some(g)) if g.group.hub_id == user.hub_id
+    );
+    let recipient_ok = matches!(
+        recipient_repo.get_by_id(form.recipient_id),
+        Ok(Some(r)) if r.recipient.hub_id == user.hub_id
+    );
+
+    if !group_ok || !recipient_ok {
+        FlashMessage::error("Группа или получатель не найдены.").send();
+        return redirect("/groups");
+    }
 
     match group_repo.assign_recipient(form.group_id, form.recipient_id) {
         Ok(_) => {
@@ -162,6 +186,21 @@ pub async fn groups_unassign(
     };
 
     let group_repo = DieselGroupRepository::new(&pool);
+    let recipient_repo = DieselRecipientRepository::new(&pool);
+
+    let group_ok = matches!(
+        group_repo.get_by_id(form.group_id),
+        Ok(Some(g)) if g.group.hub_id == user.hub_id
+    );
+    let recipient_ok = matches!(
+        recipient_repo.get_by_id(form.recipient_id),
+        Ok(Some(r)) if r.recipient.hub_id == user.hub_id
+    );
+
+    if !group_ok || !recipient_ok {
+        FlashMessage::error("Группа или получатель не найдены.").send();
+        return redirect("/groups");
+    }
 
     match group_repo.unassign_recipient(form.group_id, form.recipient_id) {
         Ok(_) => {
@@ -187,19 +226,14 @@ pub async fn groups_modal(
     };
 
     let group_repo = DieselGroupRepository::new(&pool);
-
     let mut context = Context::new();
 
     let group_id = group_id.into_inner();
 
     let group = match group_repo.get_by_id(group_id) {
-        Ok(Some(group)) => group,
-        Ok(None) => {
+        Ok(Some(group)) if group.group.hub_id == user.hub_id => group,
+        _ => {
             return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving recipient: {e}");
-            return HttpResponse::InternalServerError().finish();
         }
     };
 

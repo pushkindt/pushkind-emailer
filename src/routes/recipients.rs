@@ -101,6 +101,15 @@ pub async fn recipients_delete(
     };
 
     let recipient_repo = DieselRecipientRepository::new(&pool);
+    let recipient_exists = matches!(
+        recipient_repo.get_by_id(form.id),
+        Ok(Some(r)) if r.recipient.hub_id == user.hub_id
+    );
+
+    if !recipient_exists {
+        FlashMessage::error("Получатель не найден.").send();
+        return redirect("/recipients");
+    }
 
     match recipient_repo.delete(form.id) {
         Ok(_) => {
@@ -199,13 +208,9 @@ pub async fn recipients_modal(
     let recipient_id = recipient_id.into_inner();
 
     let recipient = match recipient_repo.get_by_id(recipient_id) {
-        Ok(Some(recipient)) => recipient,
-        Ok(None) => {
+        Ok(Some(recipient)) if recipient.recipient.hub_id == user.hub_id => recipient,
+        _ => {
             return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving recipient: {e}");
-            return HttpResponse::InternalServerError().finish();
         }
     };
 
@@ -244,7 +249,18 @@ pub async fn recipients_save(
         }
     };
 
-    match recipient_repo.update(form.id, &form.into()) {
+    let recipient_id = form.id;
+    let recipient_exists = matches!(
+        recipient_repo.get_by_id(recipient_id),
+        Ok(Some(r)) if r.recipient.hub_id == user.hub_id
+    );
+
+    if !recipient_exists {
+        FlashMessage::error("Получатель не найден.").send();
+        return redirect("/recipients");
+    }
+
+    match recipient_repo.update(recipient_id, &form.into()) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
         }
