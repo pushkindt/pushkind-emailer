@@ -11,13 +11,14 @@ use log::error;
 use pushkind_common::db::establish_connection_pool;
 use pushkind_common::middleware::RedirectUnauthorized;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::logout;
+use pushkind_common::routes::{logout, not_assigned};
+use tera::Tera;
 
 use pushkind_emailer::models::config::ServerConfig;
 use pushkind_emailer::routes::groups::{
     groups, groups_add, groups_assign, groups_delete, groups_modal, groups_unassign,
 };
-use pushkind_emailer::routes::main::{delete_email, index, not_assigned, send_email, track_email};
+use pushkind_emailer::routes::main::{delete_email, index, send_email, track_email};
 use pushkind_emailer::routes::recipients::{
     recipients_add, recipients_clean, recipients_delete, recipients_modal, recipients_save,
     recipients_show, recipients_source, recipients_upload,
@@ -72,6 +73,14 @@ async fn main() -> std::io::Result<()> {
     let message_store = CookieMessageStore::builder(secret_key.clone()).build();
     let message_framework = FlashMessagesFramework::builder(message_store).build();
 
+    let tera = match Tera::new("templates/**/*") {
+        Ok(t) => t,
+        Err(e) => {
+            log::error!("Parsing error(s): {e}");
+            std::process::exit(1);
+        }
+    };
+
     HttpServer::new(move || {
         App::new()
             .wrap(message_framework.clone())
@@ -111,6 +120,7 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_modal)
                     .service(groups_unassign),
             )
+            .app_data(web::Data::new(tera.clone()))
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(server_config.clone()))
             .app_data(web::Data::new(common_config.clone()))

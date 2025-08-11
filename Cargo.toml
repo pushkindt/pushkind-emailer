@@ -14,7 +14,12 @@ actix-web = "4.11.0"
 lazy_static = "1.5.0"
 serde = { version = "1.0.219", features = ["derive"] }
 tera = { version = "1.20.0", features = ["builtins"] }
-diesel = { version = "2.2.12", features = ["sqlite", "r2d2", "chrono", "returning_clauses_for_sqlite_3_35"] }
+diesel = { version = "2.2.12", features = [
+    "sqlite",
+    "r2d2",
+    "chrono",
+    "returning_clauses_for_sqlite_3_35",
+] }
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
 actix-files = "0.6.6"
@@ -32,7 +37,10 @@ thiserror = "2.0.12"
 uuid = { version = "1.17.0", features = ["v4"] }
 jsonwebtoken = "9.3.1"
 actix-web-flash-messages = { version = "0.5.0", features = ["cookies"] }
-pushkind-common = { git = "https://github.com/pushkindt/pushkind-common.git", branch = "main", features = ["db"] }
+pushkind-common = { git = "https://github.com/pushkindt/pushkind-common.git", branch = "main", features = [
+    "db",
+    "actix",
+] }
 validator = { version = "0.20.0", features = ["derive"] }
 reqwest = { version = "0.12.22", features = ["json"] }
 

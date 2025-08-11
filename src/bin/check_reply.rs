@@ -85,9 +85,7 @@ pub fn check_hub_email_replied(db_pool: &DbPool, hub: &Hub, domain: &str) {
                 recipient.address
             );
         } else {
-            log::info!(
-                "Found emails with In-Reply-To {in_reply_to_id}: {search_result:?}"
-            );
+            log::info!("Found emails with In-Reply-To {in_reply_to_id}: {search_result:?}");
             match email_repo.update_recipient(
                 recipient.id,
                 &UpdateEmailRecipient {

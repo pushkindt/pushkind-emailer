@@ -1,8 +1,8 @@
-use pushkind_emailer::forms::recipients::UploadRecipientsForm;
 use actix_multipart::form::tempfile::TempFile;
-use tempfile::NamedTempFile;
-use std::io::{Write, Seek, SeekFrom};
+use pushkind_emailer::forms::recipients::UploadRecipientsForm;
 use std::collections::HashMap;
+use std::io::{Seek, SeekFrom, Write};
+use tempfile::NamedTempFile;
 
 #[test]
 fn upload_recipients_parse() {
@@ -10,7 +10,12 @@ fn upload_recipients_parse() {
     let mut file = NamedTempFile::new().unwrap();
     write!(file, "{}", csv_content).unwrap();
     file.as_file_mut().seek(SeekFrom::Start(0)).unwrap();
-    let temp = TempFile { file, content_type: None, file_name: Some("r.csv".into()), size: csv_content.len() };
+    let temp = TempFile {
+        file,
+        content_type: None,
+        file_name: Some("r.csv".into()),
+        size: csv_content.len(),
+    };
 
     let mut form = UploadRecipientsForm { csv: temp };
     let res = form.parse(42).unwrap();

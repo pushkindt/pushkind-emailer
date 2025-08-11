@@ -3,8 +3,9 @@ use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
-use tera::Context;
+use pushkind_common::routes::{base_context, render_template};
+use pushkind_common::routes::{ensure_role, redirect};
+use tera::{Context, Tera};
 use validator::Validate;
 
 use crate::domain::group::NewGroup;
@@ -12,7 +13,6 @@ use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupFo
 use crate::repository::group::DieselGroupRepository;
 use crate::repository::recipient::DieselRecipientRepository;
 use crate::repository::{GroupReader, GroupWriter, RecipientReader};
-use crate::routes::render_template;
 
 #[get("/groups")]
 pub async fn groups(
@@ -20,6 +20,7 @@ pub async fn groups(
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
     server_config: web::Data<CommonServerConfig>,
+    tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -50,20 +51,17 @@ pub async fn groups(
         }
     };
 
-    let alerts = flash_messages
-        .iter()
-        .map(|f| (f.content(), alert_level_to_str(&f.level())))
-        .collect::<Vec<_>>();
-    let mut context = Context::new();
-    context.insert("alerts", &alerts);
-    context.insert("current_user", &user);
-    context.insert("current_page", "groups");
-    context.insert("home_url", &server_config.auth_service_url);
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "groups",
+        &server_config.auth_service_url,
+    );
     context.insert("groups", &groups);
     context.insert("custom_fields", &custom_fields);
     context.insert("recipients", &recipients);
 
-    render_template("groups/groups.html", &context)
+    render_template(&tera, "groups/groups.html", &context)
 }
 
 #[post("/groups/add")]
@@ -181,6 +179,7 @@ pub async fn groups_modal(
     group_id: web::Path<i32>,
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
+    tera: web::Data<Tera>,
 ) -> impl Responder {
     if ensure_role(&user, "emailer", Some("/na")).is_err() {
         return HttpResponse::Unauthorized().finish();
@@ -205,5 +204,5 @@ pub async fn groups_modal(
 
     context.insert("group", &group);
 
-    render_template("groups/modal_body.html", &context)
+    render_template(&tera, "groups/modal_body.html", &context)
 }
