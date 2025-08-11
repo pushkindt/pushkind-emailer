@@ -4,8 +4,9 @@ use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
-use tera::Context;
+use pushkind_common::routes::{base_context, render_template};
+use pushkind_common::routes::{ensure_role, redirect};
+use tera::{Context, Tera};
 use validator::Validate;
 
 use crate::domain::recipient::NewRecipient;
@@ -17,7 +18,6 @@ use crate::models::config::ServerConfig;
 use crate::repository::group::DieselGroupRepository;
 use crate::repository::recipient::DieselRecipientRepository;
 use crate::repository::{GroupReader, GroupWriter, RecipientReader, RecipientWriter};
-use crate::routes::render_template;
 
 #[get("/recipients")]
 pub async fn recipients_show(
@@ -26,6 +26,7 @@ pub async fn recipients_show(
     pool: web::Data<DbPool>,
     common_config: web::Data<CommonServerConfig>,
     server_config: web::Data<ServerConfig>,
+    tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -33,15 +34,12 @@ pub async fn recipients_show(
 
     let recipient_repo = DieselRecipientRepository::new(&pool);
 
-    let alerts = flash_messages
-        .iter()
-        .map(|f| (f.content(), alert_level_to_str(&f.level())))
-        .collect::<Vec<_>>();
-    let mut context = Context::new();
-    context.insert("alerts", &alerts);
-    context.insert("current_user", &user);
-    context.insert("current_page", "recipients");
-    context.insert("home_url", &common_config.auth_service_url);
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "recipients",
+        &common_config.auth_service_url,
+    );
     context.insert("crm_service_url", &server_config.crm_service_url);
 
     let recipients = match recipient_repo.list(user.hub_id) {
@@ -54,7 +52,7 @@ pub async fn recipients_show(
 
     context.insert("recipients", &recipients);
 
-    render_template("recipients/recipients.html", &context)
+    render_template(&tera, "recipients/recipients.html", &context)
 }
 
 #[post("/recipients/add")]
@@ -186,6 +184,7 @@ pub async fn recipients_modal(
     recipient_id: web::Path<i32>,
     user: AuthenticatedUser,
     pool: web::Data<DbPool>,
+    tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -220,7 +219,7 @@ pub async fn recipients_modal(
     context.insert("recipient", &recipient);
     context.insert("groups", &groups);
 
-    render_template("recipients/modal_body.html", &context)
+    render_template(&tera, "recipients/modal_body.html", &context)
 }
 
 #[post("/recipients/save")]

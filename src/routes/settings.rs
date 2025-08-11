@@ -3,14 +3,14 @@ use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
-use tera::Context;
+use pushkind_common::routes::{base_context, render_template};
+use pushkind_common::routes::{ensure_role, redirect};
+use tera::Tera;
 
 use crate::domain::hub::NewHub;
 use crate::forms::settings::SaveHubForm;
 use crate::repository::hub::DieselHubRepository;
 use crate::repository::{HubReader, HubWriter};
-use crate::routes::render_template;
 
 #[get("/settings")]
 pub async fn settings(
@@ -18,6 +18,7 @@ pub async fn settings(
     flash_messages: IncomingFlashMessages,
     pool: web::Data<DbPool>,
     server_config: web::Data<CommonServerConfig>,
+    tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "admin", None) {
         return response;
@@ -25,14 +26,12 @@ pub async fn settings(
 
     let hub_repo = DieselHubRepository::new(&pool);
 
-    let alerts = flash_messages
-        .iter()
-        .map(|f| (f.content(), alert_level_to_str(&f.level())))
-        .collect::<Vec<_>>();
-    let mut context = Context::new();
-    context.insert("alerts", &alerts);
-    context.insert("current_user", &user);
-    context.insert("current_page", "settings");
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "settings",
+        &server_config.auth_service_url,
+    );
 
     let hub = match hub_repo.get_by_id(user.hub_id) {
         Ok(Some(hub)) => hub,
@@ -50,9 +49,8 @@ pub async fn settings(
     };
 
     context.insert("current_hub", &hub);
-    context.insert("home_url", &server_config.auth_service_url);
 
-    render_template("settings/settings.html", &context)
+    render_template(&tera, "settings/settings.html", &context)
 }
 
 #[post("/settings/save")]

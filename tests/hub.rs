@@ -15,7 +15,10 @@ fn unsubscribe_url_with_login() {
         imap_port: None,
         email_template: None,
     };
-    assert_eq!(hub.unsubscribe_url(), "mailto:user@example.com?subject=unsubscribe");
+    assert_eq!(
+        hub.unsubscribe_url(),
+        "mailto:user@example.com?subject=unsubscribe"
+    );
 }
 
 #[test]

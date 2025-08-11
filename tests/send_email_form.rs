@@ -1,7 +1,7 @@
-use pushkind_emailer::{forms::main::SendEmailForm, domain::email::NewEmail};
-use actix_multipart::form::{text::Text, json::Json as MpJson, tempfile::TempFile};
+use actix_multipart::form::{json::Json as MpJson, tempfile::TempFile, text::Text};
+use pushkind_emailer::{domain::email::NewEmail, forms::main::SendEmailForm};
+use std::io::{Seek, SeekFrom, Write};
 use tempfile::NamedTempFile;
-use std::io::{Write, Seek, SeekFrom};
 
 #[test]
 fn send_email_form_into_new_email_with_attachment() {

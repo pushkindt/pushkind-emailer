@@ -1,7 +1,7 @@
-use pushkind_emailer::utils::read_attachment_file;
 use actix_multipart::form::tempfile::TempFile;
+use pushkind_emailer::utils::read_attachment_file;
+use std::io::{Seek, SeekFrom, Write};
 use tempfile::NamedTempFile;
-use std::io::{Write, Seek, SeekFrom};
 
 #[test]
 fn read_attachment_file_returns_tuple() {

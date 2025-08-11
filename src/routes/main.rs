@@ -6,9 +6,10 @@ use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{alert_level_to_str, ensure_role, redirect};
+use pushkind_common::routes::{base_context, render_template};
+use pushkind_common::routes::{ensure_role, redirect};
 use serde::Deserialize;
-use tera::Context;
+use tera::Tera;
 
 use crate::domain::email::{NewEmail, UpdateEmailRecipient};
 use crate::forms::main::{DeleteEmailForm, SendEmailForm};
@@ -17,7 +18,6 @@ use crate::repository::email::DieselEmailRepository;
 use crate::repository::group::DieselGroupRepository;
 use crate::repository::recipient::DieselRecipientRepository;
 use crate::repository::{EmailReader, EmailWriter, GroupReader, RecipientReader};
-use crate::routes::render_template;
 use crate::utils::send_zmq_email_id;
 
 #[derive(Deserialize)]
@@ -32,6 +32,7 @@ pub async fn index(
     pool: web::Data<DbPool>,
     flash_messages: IncomingFlashMessages,
     server_config: web::Data<CommonServerConfig>,
+    tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
@@ -46,16 +47,13 @@ pub async fn index(
         None => None,
     };
 
-    let alerts = flash_messages
-        .iter()
-        .map(|f| (f.content(), alert_level_to_str(&f.level())))
-        .collect::<Vec<_>>();
-    let mut context = Context::new();
-    context.insert("alerts", &alerts);
-    context.insert("current_user", &user);
-    context.insert("current_page", "index");
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "index",
+        &server_config.auth_service_url,
+    );
     context.insert("retry", &retry);
-    context.insert("home_url", &server_config.auth_service_url);
 
     let recipients = match recipient_repo.list(user.hub_id) {
         Ok(recipients) => recipients,
@@ -94,7 +92,7 @@ pub async fn index(
     context.insert("emails", &emails);
     context.insert("custom_fields", &custom_fields);
 
-    render_template("main/index.html", &context)
+    render_template(&tera, "main/index.html", &context)
 }
 
 #[post("/send_email")]
@@ -184,23 +182,4 @@ pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) 
     }
 
     redirect("/assets/placeholder.png")
-}
-
-#[get("/na")]
-pub async fn not_assigned(
-    user: AuthenticatedUser,
-    flash_messages: IncomingFlashMessages,
-    server_config: web::Data<CommonServerConfig>,
-) -> impl Responder {
-    let alerts = flash_messages
-        .iter()
-        .map(|f| (f.content(), alert_level_to_str(&f.level())))
-        .collect::<Vec<_>>();
-    let mut context = Context::new();
-    context.insert("alerts", &alerts);
-    context.insert("current_user", &user);
-    context.insert("current_page", "index");
-    context.insert("home_url", &server_config.auth_service_url);
-
-    render_template("main/not_assigned.html", &context)
 }
