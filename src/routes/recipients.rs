@@ -185,7 +185,7 @@ pub async fn recipients_modal(
 
     let recipient_id = recipient_id.into_inner();
 
-    let recipient = match repo.get_group_by_id(recipient_id) {
+    let recipient = match repo.get_recipient_by_id(recipient_id) {
         Ok(Some(recipient)) => recipient,
         Ok(None) => {
             return HttpResponse::NotFound().finish();
