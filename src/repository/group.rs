@@ -1,30 +1,18 @@
 use std::collections::HashMap;
 
 use diesel::prelude::*;
-use pushkind_common::db::DbPool;
+use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::group::{Group as DomainGroup, GroupWithRecipients, NewGroup as DomainNewGroup};
 use crate::domain::recipient::Recipient as DomainRecipient;
 use crate::models::group::{Group as DbGroup, GroupRecipient, NewGroup as DbNewGroup};
 use crate::models::recipient::{Recipient as DbRecipient, RecipientField};
-use crate::repository::errors::RepositoryResult;
-use crate::repository::{GroupReader, GroupWriter};
+use crate::repository::{DieselRepository, GroupReader, GroupWriter};
 
-/// Diesel implementation of [`GroupRepository`].
-pub struct DieselGroupRepository<'a> {
-    pool: &'a DbPool,
-}
-
-impl<'a> DieselGroupRepository<'a> {
-    pub fn new(pool: &'a DbPool) -> Self {
-        Self { pool }
-    }
-}
-
-impl GroupReader for DieselGroupRepository<'_> {
-    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<GroupWithRecipients>> {
+impl GroupReader for DieselRepository {
+    fn get_group_by_id(&self, id: i32) -> RepositoryResult<Option<GroupWithRecipients>> {
         use crate::schema::{groups, groups_recipients, recipients};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         // Load group by id
         let db_group: Option<DbGroup> = groups::table
@@ -97,9 +85,9 @@ impl GroupReader for DieselGroupRepository<'_> {
         }))
     }
 
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<DomainGroup>> {
+    fn list_groups(&self, hub_id: i32) -> RepositoryResult<Vec<DomainGroup>> {
         use crate::schema::groups;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         // Fetch groups for hub
         let db_groups: Vec<DbGroup> = groups::table
@@ -111,10 +99,10 @@ impl GroupReader for DieselGroupRepository<'_> {
     }
 }
 
-impl GroupWriter for DieselGroupRepository<'_> {
-    fn create(&self, group: &DomainNewGroup) -> RepositoryResult<DomainGroup> {
+impl GroupWriter for DieselRepository {
+    fn create_group(&self, group: &DomainNewGroup) -> RepositoryResult<DomainGroup> {
         use crate::schema::groups;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
         let db_new = DbNewGroup {
             name: group.name,
             hub_id: group.hub_id,
@@ -125,16 +113,16 @@ impl GroupWriter for DieselGroupRepository<'_> {
         Ok(inserted.into())
     }
 
-    fn delete(&self, id: i32) -> RepositoryResult<()> {
+    fn delete_group(&self, id: i32) -> RepositoryResult<()> {
         use crate::schema::groups;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
         diesel::delete(groups::table.filter(groups::id.eq(id))).execute(&mut conn)?;
         Ok(())
     }
 
-    fn delete_all(&self, hub_id: i32) -> RepositoryResult<()> {
+    fn delete_all_groups(&self, hub_id: i32) -> RepositoryResult<()> {
         use crate::schema::{groups, groups_recipients};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         // Step 1: Get IDs of groups belonging to this hub
         let group_ids = groups::table
@@ -154,9 +142,9 @@ impl GroupWriter for DieselGroupRepository<'_> {
         Ok(())
     }
 
-    fn assign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
+    fn assign_recipient_to_group(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
         use crate::schema::groups_recipients;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
         let new = GroupRecipient {
             group_id,
             recipient_id,
@@ -167,10 +155,14 @@ impl GroupWriter for DieselGroupRepository<'_> {
         Ok(())
     }
 
-    fn unassign_recipient(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
+    fn unassign_recipient_to_group(
+        &self,
+        group_id: i32,
+        recipient_id: i32,
+    ) -> RepositoryResult<()> {
         use crate::schema::groups_recipients;
 
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         diesel::delete(
             groups_recipients::table.filter(

@@ -1,7 +1,6 @@
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
-use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{base_context, render_template};
@@ -15,15 +14,13 @@ use crate::forms::recipients::{
     UploadRecipientsForm,
 };
 use crate::models::config::ServerConfig;
-use crate::repository::group::DieselGroupRepository;
-use crate::repository::recipient::DieselRecipientRepository;
-use crate::repository::{GroupReader, GroupWriter, RecipientReader, RecipientWriter};
+use crate::repository::{DieselRepository, GroupReader, GroupWriter, RecipientWriter};
 
 #[get("/recipients")]
 pub async fn recipients_show(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     common_config: web::Data<CommonServerConfig>,
     server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
@@ -31,8 +28,6 @@ pub async fn recipients_show(
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
-
-    let recipient_repo = DieselRecipientRepository::new(&pool);
 
     let mut context = base_context(
         &flash_messages,
@@ -42,7 +37,7 @@ pub async fn recipients_show(
     );
     context.insert("crm_service_url", &server_config.crm_service_url);
 
-    let recipients = match recipient_repo.list(user.hub_id) {
+    let recipients = match repo.list_groups(user.hub_id) {
         Ok(recipients) => recipients,
         Err(err) => {
             log::error!("Failed to get recipients: {err}");
@@ -58,7 +53,7 @@ pub async fn recipients_show(
 #[post("/recipients/add")]
 pub async fn recipients_add(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<AddRecipientForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -70,12 +65,10 @@ pub async fn recipients_add(
         return redirect("/recipients");
     }
 
-    let recipient_repo = DieselRecipientRepository::new(&pool);
-
     let mut new_recipient: NewRecipient = form.into();
 
     new_recipient.hub_id = user.hub_id;
-    match recipient_repo.create(&[new_recipient]) {
+    match repo.create_recipients(&[new_recipient]) {
         Ok(_) => {
             FlashMessage::success("Получатель успешно добавлен.").send();
         }
@@ -91,16 +84,14 @@ pub async fn recipients_add(
 #[post("/recipients/delete")]
 pub async fn recipients_delete(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<DeleteRecipientForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let recipient_repo = DieselRecipientRepository::new(&pool);
-
-    match recipient_repo.delete(form.id) {
+    match repo.delete_group(form.id) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
         }
@@ -114,15 +105,15 @@ pub async fn recipients_delete(
 }
 
 #[post("/recipients/clean")]
-pub async fn recipients_clean(user: AuthenticatedUser, pool: web::Data<DbPool>) -> impl Responder {
+pub async fn recipients_clean(
+    user: AuthenticatedUser,
+    repo: web::Data<DieselRepository>,
+) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let recipient_repo = DieselRecipientRepository::new(&pool);
-    let group_repo = DieselGroupRepository::new(&pool);
-
-    match group_repo.delete_all(user.hub_id) {
+    match repo.delete_all_groups(user.hub_id) {
         Ok(_) => {
             FlashMessage::success("Все группы удалены.").send();
         }
@@ -133,7 +124,7 @@ pub async fn recipients_clean(user: AuthenticatedUser, pool: web::Data<DbPool>) 
         }
     }
 
-    match recipient_repo.delete_all(user.hub_id) {
+    match repo.delete_all_groups(user.hub_id) {
         Ok(_) => {
             FlashMessage::success("Все получатели удалены.").send();
         }
@@ -149,14 +140,12 @@ pub async fn recipients_clean(user: AuthenticatedUser, pool: web::Data<DbPool>) 
 #[post("/recipients/upload")]
 pub async fn recipients_upload(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     MultipartForm(mut form): MultipartForm<UploadRecipientsForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
-
-    let recipient_repo = DieselRecipientRepository::new(&pool);
 
     let recipients: Vec<NewRecipient> = match form.parse(user.hub_id) {
         Ok(recipients) => recipients,
@@ -166,7 +155,7 @@ pub async fn recipients_upload(
         }
     };
 
-    match recipient_repo.create(&recipients) {
+    match repo.create_recipients(&recipients) {
         Ok(_) => {
             FlashMessage::success("Получатели добавлены.").send();
         }
@@ -183,21 +172,18 @@ pub async fn recipients_upload(
 pub async fn recipients_modal(
     recipient_id: web::Path<i32>,
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let recipient_repo = DieselRecipientRepository::new(&pool);
-    let group_repo = DieselGroupRepository::new(&pool);
-
     let mut context = Context::new();
 
     let recipient_id = recipient_id.into_inner();
 
-    let recipient = match recipient_repo.get_by_id(recipient_id) {
+    let recipient = match repo.get_group_by_id(recipient_id) {
         Ok(Some(recipient)) => recipient,
         Ok(None) => {
             return HttpResponse::NotFound().finish();
@@ -208,7 +194,7 @@ pub async fn recipients_modal(
         }
     };
 
-    let groups = match group_repo.list(user.hub_id) {
+    let groups = match repo.list_groups(user.hub_id) {
         Ok(groups) => groups,
         Err(e) => {
             log::error!("Error retrieving groups: {e}");
@@ -225,14 +211,12 @@ pub async fn recipients_modal(
 #[post("/recipients/save")]
 pub async fn recipients_save(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     form: web::Bytes,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
-
-    let recipient_repo = DieselRecipientRepository::new(&pool);
 
     let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {
         Ok(form) => form,
@@ -243,7 +227,7 @@ pub async fn recipients_save(
         }
     };
 
-    match recipient_repo.update(form.id, &form.into()) {
+    match repo.update_recipient(form.id, &form.into()) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
         }
@@ -260,7 +244,7 @@ pub async fn recipients_save(
 pub async fn recipients_source(
     req: HttpRequest,
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<SourceRecipientForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -280,8 +264,6 @@ pub async fn recipients_source(
         }
     };
 
-    let recipient_repo = DieselRecipientRepository::new(&pool);
-
     let new_recipients: Vec<NewRecipient> = match form.load(id_cookie.value()).await {
         Ok(recipients) => recipients,
         Err(err) => {
@@ -291,7 +273,7 @@ pub async fn recipients_source(
         }
     };
 
-    match recipient_repo.create(&new_recipients) {
+    match repo.create_recipients(&new_recipients) {
         Ok(_) => {
             FlashMessage::success("Получатели успешно добавлены.").send();
         }

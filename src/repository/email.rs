@@ -1,14 +1,11 @@
-use pushkind_common::db::DbPool;
-
 use diesel::prelude::*;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use crate::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     NewEmail as DomainNewEmail, UpdateEmail as DomainUpdateEmail,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
-use crate::repository::errors::RepositoryError;
-use crate::repository::errors::RepositoryResult;
 use crate::{
     models::{
         email::{
@@ -17,27 +14,16 @@ use crate::{
         },
         recipient::Recipient as DbRecipient,
     },
-    repository::{EmailReader, EmailWriter},
+    repository::{DieselRepository, EmailReader, EmailWriter},
 };
 
-/// Diesel implementation of [`EmailRepository`].
-pub struct DieselEmailRepository<'a> {
-    pool: &'a DbPool,
-}
-
-impl<'a> DieselEmailRepository<'a> {
-    pub fn new(pool: &'a DbPool) -> Self {
-        Self { pool }
-    }
-}
-
-impl EmailReader for DieselEmailRepository<'_> {
-    fn list_not_replied_recipients(
+impl EmailReader for DieselRepository {
+    fn list_emails_not_replied_recipients(
         &self,
         hub_id: i32,
     ) -> RepositoryResult<Vec<DomainEmailRecipient>> {
         use crate::schema::{email_recipients, emails};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         let recipients = email_recipients::table
             .filter(email_recipients::replied.eq(false))
@@ -51,7 +37,7 @@ impl EmailReader for DieselEmailRepository<'_> {
 
     fn get_recipient(&self, id: i32) -> RepositoryResult<Option<DomainEmailRecipient>> {
         use crate::schema::email_recipients;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         let recipient = email_recipients::table
             .filter(email_recipients::id.eq(id))
@@ -62,9 +48,9 @@ impl EmailReader for DieselEmailRepository<'_> {
         Ok(recipient.map(Into::into))
     }
 
-    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
+    fn get_email_by_id(&self, id: i32) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
         use crate::schema::{email_recipients, emails};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         let email = emails::table
             .filter(emails::id.eq(id))
@@ -87,9 +73,9 @@ impl EmailReader for DieselEmailRepository<'_> {
         }
     }
 
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<DomainEmailWithRecipients>> {
+    fn list_emails(&self, hub_id: i32) -> RepositoryResult<Vec<DomainEmailWithRecipients>> {
         use crate::schema::emails;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         let db_emails: Vec<DbEmail> = emails::table
             .filter(emails::hub_id.eq(hub_id))
@@ -118,10 +104,10 @@ impl EmailReader for DieselEmailRepository<'_> {
     }
 }
 
-impl EmailWriter for DieselEmailRepository<'_> {
-    fn create(&self, email: &DomainNewEmail) -> RepositoryResult<DomainEmailWithRecipients> {
+impl EmailWriter for DieselRepository {
+    fn create_email(&self, email: &DomainNewEmail) -> RepositoryResult<DomainEmailWithRecipients> {
         use crate::schema::{email_recipients, emails, groups_recipients, recipients as rec};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         conn.transaction::<_, RepositoryError, _>(|conn| {
             let created_at = chrono::Utc::now().naive_utc();
@@ -189,13 +175,13 @@ impl EmailWriter for DieselEmailRepository<'_> {
         })
     }
 
-    fn update(
+    fn update_email(
         &self,
         email_id: i32,
         updates: &DomainUpdateEmail,
     ) -> RepositoryResult<DomainEmailWithRecipients> {
         use crate::schema::emails;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
         diesel::update(emails::table.filter(emails::id.eq(email_id)))
             .set((
                 emails::num_sent.eq(updates.num_sent),
@@ -226,7 +212,7 @@ impl EmailWriter for DieselEmailRepository<'_> {
     ) -> RepositoryResult<DomainEmailWithRecipients> {
         use crate::schema::{email_recipients, emails};
 
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
         let email_id: i32 = email_recipients::table
             .filter(email_recipients::id.eq(recipient_id))
             .select(email_recipients::email_id)
@@ -299,9 +285,9 @@ impl EmailWriter for DieselEmailRepository<'_> {
         })
     }
 
-    fn delete(&self, id: i32) -> RepositoryResult<()> {
+    fn delete_email(&self, id: i32) -> RepositoryResult<()> {
         use crate::schema::{email_recipients, emails};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
         diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
             .execute(&mut conn)?;
         diesel::delete(emails::table.filter(emails::id.eq(id))).execute(&mut conn)?;
