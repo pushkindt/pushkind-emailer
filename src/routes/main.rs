@@ -13,7 +13,7 @@ use tera::Tera;
 use crate::domain::email::{NewEmail, UpdateEmailRecipient};
 use crate::forms::main::{DeleteEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
-use crate::repository::{DieselRepository, EmailReader, EmailWriter, RecipientReader};
+use crate::repository::{DieselRepository, EmailReader, EmailWriter, GroupReader, RecipientReader};
 use crate::utils::send_zmq_email_id;
 
 #[derive(Deserialize)]
@@ -47,7 +47,7 @@ pub async fn index(
     );
     context.insert("retry", &retry);
 
-    let recipients = match repo.list_emails(user.hub_id) {
+    let recipients = match repo.list_recipients(user.hub_id) {
         Ok(recipients) => recipients,
         Err(e) => {
             log::error!("Failed to list recipients: {e}");
@@ -55,7 +55,7 @@ pub async fn index(
         }
     };
 
-    let groups = match repo.list_emails(user.hub_id) {
+    let groups = match repo.list_groups(user.hub_id) {
         Ok(groups) => groups,
         Err(e) => {
             log::error!("Failed to list groups: {e}");

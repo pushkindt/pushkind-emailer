@@ -23,7 +23,7 @@ pub async fn groups(
         return response;
     };
 
-    let recipients = match repo.list_groups(user.hub_id) {
+    let recipients = match repo.list_recipients(user.hub_id) {
         Ok(recipients) => recipients,
         Err(err) => {
             log::error!("Error while listing recipients: {err}");
