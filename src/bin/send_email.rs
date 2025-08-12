@@ -12,8 +12,8 @@ use pushkind_common::db::{DbPool, establish_connection_pool};
 
 use pushkind_emailer::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
 use pushkind_emailer::domain::hub::Hub;
-use pushkind_emailer::repository::email::DieselEmailRepository;
-use pushkind_emailer::repository::hub::DieselHubRepository;
+use pushkind_emailer::repository::email::DieselRepository;
+use pushkind_emailer::repository::hub::DieselRepository;
 use pushkind_emailer::repository::{EmailReader, EmailWriter, HubReader};
 
 async fn send_smtp_message(
@@ -87,17 +87,17 @@ async fn send_smtp_message(
 }
 
 async fn send_email(email_id: i32, db_pool: &DbPool, domain: &str) -> Result<(), Box<dyn Error>> {
-    let email_repo = DieselEmailRepository::new(db_pool);
-    let hub_repo = DieselHubRepository::new(db_pool);
+    let email_repo = DieselRepository::new(db_pool);
+    let hub_repo = DieselRepository::new(db_pool);
 
-    let email = match email_repo.get_by_id(email_id)? {
+    let email = match email_repo.get_email_by_id(email_id)? {
         Some(email) => email,
         None => {
             log::error!("Email not found for email_id: {email_id}");
             return Ok(());
         }
     };
-    let hub = match hub_repo.get_by_id(email.email.hub_id)? {
+    let hub = match hub_repo.get_email_by_id(email.email.hub_id)? {
         Some(hub) => hub,
         None => {
             log::error!("Hub not found for email_id: {email_id}");

@@ -1,6 +1,5 @@
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
-use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{base_context, render_template};
@@ -10,15 +9,13 @@ use validator::Validate;
 
 use crate::domain::group::NewGroup;
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
-use crate::repository::group::DieselGroupRepository;
-use crate::repository::recipient::DieselRecipientRepository;
-use crate::repository::{GroupReader, GroupWriter, RecipientReader};
+use crate::repository::{DieselRepository, GroupReader, GroupWriter, RecipientReader};
 
 #[get("/groups")]
 pub async fn groups(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     server_config: web::Data<CommonServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
@@ -26,24 +23,21 @@ pub async fn groups(
         return response;
     };
 
-    let group_repo = DieselGroupRepository::new(&pool);
-    let recipient_repo = DieselRecipientRepository::new(&pool);
-
-    let recipients = match recipient_repo.list(user.hub_id) {
+    let recipients = match repo.list_groups(user.hub_id) {
         Ok(recipients) => recipients,
         Err(err) => {
             log::error!("Error while listing recipients: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
-    let groups = match group_repo.list(user.hub_id) {
+    let groups = match repo.list_groups(user.hub_id) {
         Ok(groups) => groups,
         Err(err) => {
             log::error!("Error while listing groups: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
-    let custom_fields = match recipient_repo.list_custom_fields(user.hub_id) {
+    let custom_fields = match repo.list_custom_fields(user.hub_id) {
         Ok(custom_fields) => custom_fields,
         Err(err) => {
             log::error!("Error while listing custom fields: {err}");
@@ -67,7 +61,7 @@ pub async fn groups(
 #[post("/groups/add")]
 pub async fn groups_add(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<AddGroupForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -79,14 +73,12 @@ pub async fn groups_add(
         return redirect("/groups");
     }
 
-    let group_repo = DieselGroupRepository::new(&pool);
-
     let new_group = NewGroup {
         hub_id: user.hub_id,
         name: &form.name,
     };
 
-    match group_repo.create(&new_group) {
+    match repo.create_group(&new_group) {
         Ok(_) => {
             FlashMessage::success("Группа успешно добавлена.").send();
         }
@@ -102,16 +94,14 @@ pub async fn groups_add(
 #[post("/groups/delete")]
 pub async fn groups_delete(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<DeleteGroupForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let group_repo = DieselGroupRepository::new(&pool);
-
-    match group_repo.delete(form.id) {
+    match repo.delete_group(form.id) {
         Ok(_) => {
             FlashMessage::success("Группа удалена.").send();
         }
@@ -127,16 +117,14 @@ pub async fn groups_delete(
 #[post("/groups/assign")]
 pub async fn groups_assign(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<AssignGroupRecipientForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let group_repo = DieselGroupRepository::new(&pool);
-
-    match group_repo.assign_recipient(form.group_id, form.recipient_id) {
+    match repo.assign_recipient_to_group(form.group_id, form.recipient_id) {
         Ok(_) => {
             FlashMessage::success("Группа назначена получателю.").send();
         }
@@ -152,16 +140,14 @@ pub async fn groups_assign(
 #[post("/groups/unassign")]
 pub async fn groups_unassign(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<AssignGroupRecipientForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let group_repo = DieselGroupRepository::new(&pool);
-
-    match group_repo.unassign_recipient(form.group_id, form.recipient_id) {
+    match repo.unassign_recipient_to_group(form.group_id, form.recipient_id) {
         Ok(_) => {
             FlashMessage::success("Назначение группы удалено.").send();
         }
@@ -178,20 +164,18 @@ pub async fn groups_unassign(
 pub async fn groups_modal(
     group_id: web::Path<i32>,
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
     if ensure_role(&user, "emailer", Some("/na")).is_err() {
         return HttpResponse::Unauthorized().finish();
     };
 
-    let group_repo = DieselGroupRepository::new(&pool);
-
     let mut context = Context::new();
 
     let group_id = group_id.into_inner();
 
-    let group = match group_repo.get_by_id(group_id) {
+    let group = match repo.get_group_by_id(group_id) {
         Ok(Some(group)) => group,
         Ok(None) => {
             return HttpResponse::NotFound().finish();

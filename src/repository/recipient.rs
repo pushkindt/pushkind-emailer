@@ -1,7 +1,7 @@
-use pushkind_common::db::DbPool;
 use std::collections::HashMap;
 
 use diesel::prelude::*;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use crate::domain::recipient::{
     NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups,
@@ -9,25 +9,13 @@ use crate::domain::recipient::{
 };
 use crate::models::group::{Group, GroupRecipient};
 use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
-use crate::repository::errors::{RepositoryError, RepositoryResult};
-use crate::repository::{RecipientReader, RecipientWriter};
+use crate::repository::{DieselRepository, RecipientReader, RecipientWriter};
 
-/// Diesel implementation of [`RecipientRepository`].
-pub struct DieselRecipientRepository<'a> {
-    pool: &'a DbPool,
-}
-
-impl<'a> DieselRecipientRepository<'a> {
-    pub fn new(pool: &'a DbPool) -> Self {
-        Self { pool }
-    }
-}
-
-impl RecipientReader for DieselRecipientRepository<'_> {
-    fn get_by_id(&self, id: i32) -> RepositoryResult<Option<RecipientWithGroups>> {
+impl RecipientReader for DieselRepository {
+    fn get_recipient_by_id(&self, id: i32) -> RepositoryResult<Option<RecipientWithGroups>> {
         use crate::schema::{groups, recipients};
 
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         let recipient = recipients::table
             .filter(recipients::id.eq(id))
@@ -65,9 +53,9 @@ impl RecipientReader for DieselRecipientRepository<'_> {
         }))
     }
 
-    fn list(&self, hub_id: i32) -> RepositoryResult<Vec<DomainRecipient>> {
+    fn list_recipients(&self, hub_id: i32) -> RepositoryResult<Vec<DomainRecipient>> {
         use crate::schema::recipients;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         // Load recipients for the hub
         let db_recipients: Vec<Recipient> = recipients::table
@@ -126,7 +114,7 @@ impl RecipientReader for DieselRecipientRepository<'_> {
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {
         use crate::schema::{recipient_fields, recipients};
 
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         let fields: Vec<String> = recipient_fields::table
             .inner_join(recipients::table)
@@ -140,11 +128,11 @@ impl RecipientReader for DieselRecipientRepository<'_> {
     }
 }
 
-impl RecipientWriter for DieselRecipientRepository<'_> {
-    fn create(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<usize> {
+impl RecipientWriter for DieselRepository {
+    fn create_recipients(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<usize> {
         use crate::schema::{groups, groups_recipients, recipient_fields, recipients};
 
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         conn.transaction::<usize, RepositoryError, _>(|conn| {
             let mut count_inserted: usize = 0;
@@ -222,13 +210,13 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         })
     }
 
-    fn update(
+    fn update_recipient(
         &self,
         id: i32,
         recipient: &DomainUpdateRecipient,
     ) -> RepositoryResult<DomainRecipient> {
         use crate::schema::{groups_recipients, recipient_fields, recipients};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         // Update basic recipient info
         diesel::update(recipients::table.filter(recipients::id.eq(id)))
@@ -302,16 +290,16 @@ impl RecipientWriter for DieselRecipientRepository<'_> {
         })
     }
 
-    fn delete(&self, id: i32) -> RepositoryResult<()> {
+    fn delete_recipient(&self, id: i32) -> RepositoryResult<()> {
         use crate::schema::recipients;
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
         diesel::delete(recipients::table.filter(recipients::id.eq(id))).execute(&mut conn)?;
         Ok(())
     }
 
-    fn delete_all(&self, hub_id: i32) -> RepositoryResult<()> {
+    fn delete_all_recipients(&self, hub_id: i32) -> RepositoryResult<()> {
         use crate::schema::{groups_recipients, recipient_fields, recipients};
-        let mut conn = self.pool.get()?;
+        let mut conn = self.conn()?;
 
         // Step 1: Find recipient IDs for the given hub
         let recipient_ids = recipients::table

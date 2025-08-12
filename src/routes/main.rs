@@ -3,7 +3,6 @@ use std::error::Error;
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
-use pushkind_common::db::DbPool;
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{base_context, render_template};
@@ -14,10 +13,7 @@ use tera::Tera;
 use crate::domain::email::{NewEmail, UpdateEmailRecipient};
 use crate::forms::main::{DeleteEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
-use crate::repository::email::DieselEmailRepository;
-use crate::repository::group::DieselGroupRepository;
-use crate::repository::recipient::DieselRecipientRepository;
-use crate::repository::{EmailReader, EmailWriter, GroupReader, RecipientReader};
+use crate::repository::{DieselRepository, EmailReader, EmailWriter, RecipientReader};
 use crate::utils::send_zmq_email_id;
 
 #[derive(Deserialize)]
@@ -29,7 +25,7 @@ struct IndexQueryParams {
 pub async fn index(
     params: web::Query<IndexQueryParams>,
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     flash_messages: IncomingFlashMessages,
     server_config: web::Data<CommonServerConfig>,
     tera: web::Data<Tera>,
@@ -38,12 +34,8 @@ pub async fn index(
         return response;
     };
 
-    let recipient_repo = DieselRecipientRepository::new(&pool);
-    let group_repo = DieselGroupRepository::new(&pool);
-    let email_repo = DieselEmailRepository::new(&pool);
-
     let retry = match params.retry {
-        Some(email_id) => email_repo.get_by_id(email_id).ok(),
+        Some(email_id) => repo.get_email_by_id(email_id).ok(),
         None => None,
     };
 
@@ -55,7 +47,7 @@ pub async fn index(
     );
     context.insert("retry", &retry);
 
-    let recipients = match recipient_repo.list(user.hub_id) {
+    let recipients = match repo.list_emails(user.hub_id) {
         Ok(recipients) => recipients,
         Err(e) => {
             log::error!("Failed to list recipients: {e}");
@@ -63,7 +55,7 @@ pub async fn index(
         }
     };
 
-    let groups = match group_repo.list(user.hub_id) {
+    let groups = match repo.list_emails(user.hub_id) {
         Ok(groups) => groups,
         Err(e) => {
             log::error!("Failed to list groups: {e}");
@@ -71,7 +63,7 @@ pub async fn index(
         }
     };
 
-    let emails = match email_repo.list(user.hub_id) {
+    let emails = match repo.list_emails(user.hub_id) {
         Ok(emails) => emails,
         Err(e) => {
             log::error!("Failed to list emails: {e}");
@@ -79,7 +71,7 @@ pub async fn index(
         }
     };
 
-    let custom_fields = match recipient_repo.list_custom_fields(user.hub_id) {
+    let custom_fields = match repo.list_custom_fields(user.hub_id) {
         Ok(custom_fields) => custom_fields,
         Err(e) => {
             log::error!("Failed to list custom fields: {e}");
@@ -98,15 +90,13 @@ pub async fn index(
 #[post("/send_email")]
 pub async fn send_email(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     zmq_config: web::Data<ServerConfig>,
     form: Result<MultipartForm<SendEmailForm>, Box<dyn Error>>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
-
-    let email_repo = DieselEmailRepository::new(&pool);
 
     let form = match form {
         Ok(form) => form,
@@ -116,7 +106,7 @@ pub async fn send_email(
     let mut new_email: NewEmail = form.0.into();
     new_email.hub_id = user.hub_id;
 
-    match email_repo.create(&new_email) {
+    match repo.create_email(&new_email) {
         Ok(email) => match send_zmq_email_id(email.email.id, &zmq_config) {
             Ok(_) => HttpResponse::Ok().body("Сообщение создано."),
             Err(err) => {
@@ -130,16 +120,14 @@ pub async fn send_email(
 #[post("/delete_email")]
 pub async fn delete_email(
     user: AuthenticatedUser,
-    pool: web::Data<DbPool>,
+    repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<DeleteEmailForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let email_repo = DieselEmailRepository::new(&pool);
-
-    let email = match email_repo.get_by_id(form.id) {
+    let email = match repo.get_email_by_id(form.id) {
         Ok(Some(email)) if email.email.hub_id == user.hub_id => email.email,
         _ => {
             FlashMessage::error("Сообщение не найдено.").send();
@@ -147,7 +135,7 @@ pub async fn delete_email(
         }
     };
 
-    match email_repo.delete(email.id) {
+    match repo.delete_email(email.id) {
         Ok(_) => {
             FlashMessage::success("Сообщение удалено.").send();
         }
@@ -161,12 +149,13 @@ pub async fn delete_email(
 }
 
 #[get("/track/{recipient_id}")]
-pub async fn track_email(recipient_id: web::Path<i32>, pool: web::Data<DbPool>) -> impl Responder {
-    let email_repo = DieselEmailRepository::new(&pool);
-
+pub async fn track_email(
+    recipient_id: web::Path<i32>,
+    repo: web::Data<DieselRepository>,
+) -> impl Responder {
     let recipient_id = recipient_id.into_inner();
 
-    if email_repo
+    if repo
         .update_recipient(
             recipient_id,
             &UpdateEmailRecipient {

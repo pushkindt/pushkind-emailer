@@ -15,6 +15,7 @@ use pushkind_common::routes::{logout, not_assigned};
 use tera::Tera;
 
 use pushkind_emailer::models::config::ServerConfig;
+use pushkind_emailer::repository::DieselRepository;
 use pushkind_emailer::routes::groups::{
     groups, groups_add, groups_assign, groups_delete, groups_modal, groups_unassign,
 };
@@ -43,6 +44,7 @@ async fn main() -> std::io::Result<()> {
             std::process::exit(1);
         }
     };
+    let repo = DieselRepository::new(pool);
 
     let secret = env::var("SECRET_KEY");
     let secret_key = match &secret {
@@ -121,7 +123,7 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_unassign),
             )
             .app_data(web::Data::new(tera.clone()))
-            .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(repo.clone()))
             .app_data(web::Data::new(server_config.clone()))
             .app_data(web::Data::new(common_config.clone()))
     })

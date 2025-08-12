@@ -5,14 +5,14 @@ use pushkind_common::db::{DbPool, establish_connection_pool};
 
 use pushkind_emailer::domain::email::UpdateEmailRecipient;
 use pushkind_emailer::domain::hub::Hub;
-use pushkind_emailer::repository::email::DieselEmailRepository;
-use pushkind_emailer::repository::hub::DieselHubRepository;
+use pushkind_emailer::repository::email::DieselRepository;
+use pushkind_emailer::repository::hub::DieselRepository;
 use pushkind_emailer::repository::{EmailReader, EmailWriter, HubReader};
 
 pub fn check_hub_email_replied(db_pool: &DbPool, hub: &Hub, domain: &str) {
-    let email_repo = DieselEmailRepository::new(db_pool);
+    let email_repo = DieselRepository::new(db_pool);
 
-    let recipients = match email_repo.list_not_replied_recipients(hub.id) {
+    let recipients = match email_repo.list_emails_not_replied_recipients(hub.id) {
         Ok(recipients) => recipients,
         Err(e) => {
             log::error!("Cannot get recipients: {e}");
@@ -121,9 +121,9 @@ fn main() {
         }
     };
 
-    let hub_repo = DieselHubRepository::new(&db_pool);
+    let hub_repo = DieselRepository::new(&db_pool);
 
-    let hubs = match hub_repo.list() {
+    let hubs = match hub_repo.list_emails() {
         Ok(hub) => hub,
         Err(e) => {
             log::error!("Cannot get hub: {e}");
