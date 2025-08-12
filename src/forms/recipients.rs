@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
-use csv;
 use reqwest::header::COOKIE;
 use serde::Deserialize;
 use thiserror::Error;
@@ -10,6 +9,7 @@ use validator::Validate;
 
 use crate::domain::recipient::{NewRecipient, UpdateRecipient};
 
+/// Form for adding a single recipient manually.
 #[derive(Deserialize, Validate)]
 pub struct AddRecipientForm {
     #[validate(length(min = 1))]
@@ -18,23 +18,27 @@ pub struct AddRecipientForm {
     pub email: String,
 }
 
+/// Form specifying an external source to load recipients from.
 #[derive(Deserialize, Validate)]
 pub struct SourceRecipientForm {
     #[validate(url)]
     pub source: String, // URL of the service to fetch a JSON array of NewRecipient
 }
 
+/// Form used to delete a recipient by identifier.
 #[derive(Deserialize)]
 pub struct DeleteRecipientForm {
     pub id: i32,
 }
 
+/// Form for uploading a CSV file containing recipients.
 #[derive(MultipartForm)]
 pub struct UploadRecipientsForm {
     #[multipart(limit = "10MB")]
     pub csv: TempFile,
 }
 
+/// Form data for updating an existing recipient.
 #[derive(Deserialize)]
 pub struct SaveRecipientForm {
     pub id: i32,
@@ -75,11 +79,12 @@ impl From<SaveRecipientForm> for UpdateRecipient {
     }
 }
 
+/// Errors that can occur while processing an uploaded CSV of recipients.
 #[derive(Debug, Error)]
 pub enum UploadRecipientsFormError {
-    #[error("Error reading csv file")]
+    #[error("Error reading CSV file")]
     FileReadError,
-    #[error("Error parsing csv file")]
+    #[error("Error parsing CSV file")]
     CsvParseError,
 }
 
@@ -144,6 +149,11 @@ impl UploadRecipientsForm {
                 }
             }
 
+            if name.trim().is_empty() || email.trim().is_empty() {
+                // Skip records missing required fields.
+                continue;
+            }
+
             recipients.push(NewRecipient {
                 name,
                 email,
@@ -169,11 +179,12 @@ impl From<AddRecipientForm> for NewRecipient {
     }
 }
 
+/// Errors returned when loading recipients from a remote service.
 #[derive(Debug, Error)]
 pub enum SourceRecipientFormError {
-    #[error("Error reading api")]
+    #[error("Error reading API")]
     RequestError,
-    #[error("Error parsing api")]
+    #[error("Error parsing API")]
     DeserializeError,
 }
 
@@ -184,6 +195,9 @@ impl From<reqwest::Error> for SourceRecipientFormError {
 }
 
 impl SourceRecipientForm {
+    /// Loads recipients from the external service specified in [`SourceRecipientForm`].
+    ///
+    /// The `id_value` is sent as a cookie named `id` with the request.
     pub async fn load(
         &self,
         id_value: &str,
@@ -191,7 +205,7 @@ impl SourceRecipientForm {
         let client = reqwest::Client::new();
         let response = client
             .get(&self.source)
-            .header(COOKIE, format!("id={}", id_value))
+            .header(COOKIE, format!("id={id_value}"))
             .send()
             .await?;
 

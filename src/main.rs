@@ -1,3 +1,5 @@
+//! Binary that launches the HTTP server for the pushkind emailer application.
+
 use std::env;
 
 use actix_files::Files;
@@ -26,6 +28,7 @@ use pushkind_emailer::routes::recipients::{
 };
 use pushkind_emailer::routes::settings::{settings, settings_save};
 
+/// Application entry point launching the Actix Web server.
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));

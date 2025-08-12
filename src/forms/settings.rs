@@ -2,16 +2,19 @@ use serde::Deserialize;
 
 use crate::domain::hub::UpdateHub;
 
+/// Form to create a new hub configuration.
 #[derive(Deserialize)]
 pub struct AddHubForm {
     pub hub_name: String,
 }
 
+/// Form to activate an existing hub by its identifier.
 #[derive(Deserialize)]
 pub struct ActivateHubForm {
     pub hub_id: i32,
 }
 
+/// Form for updating hub configuration details.
 #[derive(Deserialize)]
 pub struct SaveHubForm {
     pub id: i32,
@@ -43,6 +46,7 @@ impl<'a> From<&'a SaveHubForm> for UpdateHub<'a> {
     }
 }
 
+/// Form to remove a hub from the system.
 #[derive(Deserialize)]
 pub struct DeleteHubForm {
     pub id: i32,

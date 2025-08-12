@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 use crate::{domain::email::NewEmail, utils::read_attachment_file};
 
+/// Form data for sending a new email with optional attachment.
 #[derive(MultipartForm)]
 pub struct SendEmailForm {
     pub message: Text<String>,
@@ -12,12 +13,14 @@ pub struct SendEmailForm {
     pub recipients: MpJson<Vec<String>>,
 }
 
+/// Form data to remove an existing email.
 #[derive(Deserialize)]
 pub struct DeleteEmailForm {
     pub id: i32,
 }
 
 impl From<SendEmailForm> for NewEmail {
+    /// Converts a [`SendEmailForm`] into the domain [`NewEmail`] type.
     fn from(mut form: SendEmailForm) -> Self {
         let (attachment_name, attachment_mime, attachment) =
             if let Some(attachment) = form.attachment.as_mut() {
