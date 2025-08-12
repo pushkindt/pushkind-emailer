@@ -8,13 +8,11 @@ use mail_send::mail_builder::{
     MessageBuilder,
     headers::{HeaderType, url::URL},
 };
-use pushkind_common::db::{DbPool, establish_connection_pool};
+use pushkind_common::db::establish_connection_pool;
 
 use pushkind_emailer::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
 use pushkind_emailer::domain::hub::Hub;
-use pushkind_emailer::repository::email::DieselRepository;
-use pushkind_emailer::repository::hub::DieselRepository;
-use pushkind_emailer::repository::{EmailReader, EmailWriter, HubReader};
+use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 
 async fn send_smtp_message(
     hub: &Hub,
@@ -63,10 +61,10 @@ async fn send_smtp_message(
         email.attachment_mime.as_deref(),
         email.attachment_name.as_deref(),
         email.attachment.as_deref(),
-    ) {
-        if !name.is_empty() && !content.is_empty() {
-            message = message.attachment(mime, name, content);
-        }
+    ) && !name.is_empty()
+        && !content.is_empty()
+    {
+        message = message.attachment(mime, name, content);
     }
 
     let smtp_server = hub.smtp_server.as_deref().unwrap_or_default();
@@ -86,18 +84,19 @@ async fn send_smtp_message(
         .await
 }
 
-async fn send_email(email_id: i32, db_pool: &DbPool, domain: &str) -> Result<(), Box<dyn Error>> {
-    let email_repo = DieselRepository::new(db_pool);
-    let hub_repo = DieselRepository::new(db_pool);
-
-    let email = match email_repo.get_email_by_id(email_id)? {
+async fn send_email(
+    email_id: i32,
+    repo: DieselRepository,
+    domain: &str,
+) -> Result<(), Box<dyn Error>> {
+    let email = match repo.get_email_by_id(email_id)? {
         Some(email) => email,
         None => {
             log::error!("Email not found for email_id: {email_id}");
             return Ok(());
         }
     };
-    let hub = match hub_repo.get_email_by_id(email.email.hub_id)? {
+    let hub = match repo.get_hub_by_id(email.email.hub_id)? {
         Some(hub) => hub,
         None => {
             log::error!("Hub not found for email_id: {email_id}");
@@ -115,7 +114,7 @@ async fn send_email(email_id: i32, db_pool: &DbPool, domain: &str) -> Result<(),
 
         log::info!("Email sent successfully to {}", recipient.address);
 
-        if let Err(e) = email_repo.update_recipient(
+        if let Err(e) = repo.update_recipient(
             recipient.id,
             &UpdateEmailRecipient {
                 is_sent: Some(true),
@@ -145,7 +144,6 @@ async fn main() {
     let zmq_address =
         env::var("ZMQ_ADDRESS").unwrap_or_else(|_| "tcp://127.0.0.1:5555".to_string());
     let domain = Arc::from(env::var("DOMAIN").unwrap_or_default());
-    //
 
     let context = zmq::Context::new();
     let responder = context.socket(zmq::PULL).expect("Cannot create zmq socket");
@@ -161,7 +159,7 @@ async fn main() {
         }
     };
 
-    let pool = Arc::new(pool);
+    let repo = DieselRepository::new(pool);
 
     log::info!("Starting email worker");
 
@@ -170,11 +168,11 @@ async fn main() {
         match responder.recv_into(&mut buffer, 0) {
             Ok(_) => {
                 let email_id = i32::from_be_bytes(buffer);
-                let pool_clone = Arc::clone(&pool);
                 let domain = Arc::clone(&domain);
+                let repo = repo.clone();
 
                 tokio::spawn(async move {
-                    if let Err(e) = send_email(email_id, &pool_clone, &domain).await {
+                    if let Err(e) = send_email(email_id, repo, &domain).await {
                         log::error!("Error sending email message: {e}");
                     }
                 });

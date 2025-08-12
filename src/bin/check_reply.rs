@@ -1,18 +1,14 @@
 use std::env;
 
 use dotenvy::dotenv;
-use pushkind_common::db::{DbPool, establish_connection_pool};
+use pushkind_common::db::establish_connection_pool;
 
 use pushkind_emailer::domain::email::UpdateEmailRecipient;
 use pushkind_emailer::domain::hub::Hub;
-use pushkind_emailer::repository::email::DieselRepository;
-use pushkind_emailer::repository::hub::DieselRepository;
-use pushkind_emailer::repository::{EmailReader, EmailWriter, HubReader};
+use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 
-pub fn check_hub_email_replied(db_pool: &DbPool, hub: &Hub, domain: &str) {
-    let email_repo = DieselRepository::new(db_pool);
-
-    let recipients = match email_repo.list_emails_not_replied_recipients(hub.id) {
+pub fn check_hub_email_replied(repo: DieselRepository, hub: &Hub, domain: &str) {
+    let recipients = match repo.list_emails_not_replied_recipients(hub.id) {
         Ok(recipients) => recipients,
         Err(e) => {
             log::error!("Cannot get recipients: {e}");
@@ -86,7 +82,7 @@ pub fn check_hub_email_replied(db_pool: &DbPool, hub: &Hub, domain: &str) {
             );
         } else {
             log::info!("Found emails with In-Reply-To {in_reply_to_id}: {search_result:?}");
-            match email_repo.update_recipient(
+            match repo.update_recipient(
                 recipient.id,
                 &UpdateEmailRecipient {
                     is_sent: Some(true),
@@ -121,18 +117,18 @@ fn main() {
         }
     };
 
-    let hub_repo = DieselRepository::new(&db_pool);
+    let repo = DieselRepository::new(db_pool);
 
-    let hubs = match hub_repo.list_emails() {
+    let hubs = match repo.list_hubs() {
         Ok(hub) => hub,
         Err(e) => {
-            log::error!("Cannot get hub: {e}");
+            log::error!("Cannot get hubs: {e}");
             return;
         }
     };
 
     for hub in hubs {
         log::info!("Checking hub: {}", hub.id);
-        check_hub_email_replied(&db_pool, &hub, &domain);
+        check_hub_email_replied(repo.clone(), &hub, &domain);
     }
 }
