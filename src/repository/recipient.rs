@@ -291,8 +291,12 @@ impl RecipientWriter for DieselRepository {
     }
 
     fn delete_recipient(&self, id: i32) -> RepositoryResult<()> {
-        use crate::schema::recipients;
+        use crate::schema::{groups_recipients, recipient_fields, recipients};
         let mut conn = self.conn()?;
+        diesel::delete(groups_recipients::table.filter(groups_recipients::recipient_id.eq(id)))
+            .execute(&mut conn)?;
+        diesel::delete(recipient_fields::table.filter(recipient_fields::recipient_id.eq(id)))
+            .execute(&mut conn)?;
         diesel::delete(recipients::table.filter(recipients::id.eq(id))).execute(&mut conn)?;
         Ok(())
     }
