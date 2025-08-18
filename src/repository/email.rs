@@ -132,6 +132,7 @@ impl EmailWriter for DieselRepository {
                         updated_at: created_at,
                         is_sent: false,
                         replied: false,
+                        name: Some(&r.name),
                     };
                     diesel::insert_into(email_recipients::table)
                         .values(&new_rec)
@@ -155,6 +156,7 @@ impl EmailWriter for DieselRepository {
                             updated_at: created_at,
                             is_sent: false,
                             replied: false,
+                            name: Some(&member.name),
                         };
                         diesel::insert_into(email_recipients::table)
                             .values(&new_rec)

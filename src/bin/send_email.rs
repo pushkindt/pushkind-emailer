@@ -25,7 +25,9 @@ async fn send_smtp_message(
     let unsubscribe_url = hub.unsubscribe_url();
     let mut body: String;
 
-    let template = template.replace("{unsubscribe_url}", &unsubscribe_url);
+    let template = template
+        .replace("{unsubscribe_url}", &unsubscribe_url)
+        .replace("{name}", recipient.name.as_deref().unwrap_or_default());
 
     if template.contains("{message}") {
         body = template.replace("{message}", &email.message);
