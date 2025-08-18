@@ -49,6 +49,7 @@ pub struct EmailRecipient {
     pub updated_at: NaiveDateTime,
     pub is_sent: bool,
     pub replied: bool,
+    pub name: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -61,6 +62,19 @@ pub struct NewEmailRecipient<'a> {
     pub updated_at: NaiveDateTime,
     pub is_sent: bool,
     pub replied: bool,
+    pub name: Option<&'a str>,
+}
+
+impl Email {
+    pub fn get_recipients(
+        &self,
+        conn: &mut SqliteConnection,
+    ) -> Result<Vec<EmailRecipient>, diesel::result::Error> {
+        use crate::schema::email_recipients::dsl::*;
+        email_recipients
+            .filter(email_id.eq(self.id))
+            .load::<EmailRecipient>(conn)
+    }
 }
 
 use crate::domain::email as domain;
@@ -94,6 +108,7 @@ impl From<EmailRecipient> for domain::EmailRecipient {
             updated_at: value.updated_at,
             is_sent: value.is_sent,
             replied: value.replied,
+            name: value.name,
         }
     }
 }
