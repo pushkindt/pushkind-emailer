@@ -93,7 +93,7 @@ pub async fn recipients_delete(
         return response;
     };
 
-    match repo.delete_group(form.id) {
+    match repo.delete_recipient(form.id) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
         }
@@ -126,7 +126,7 @@ pub async fn recipients_clean(
         }
     }
 
-    match repo.delete_all_groups(user.hub_id) {
+    match repo.delete_all_recipients(user.hub_id) {
         Ok(_) => {
             FlashMessage::success("Все получатели удалены.").send();
         }

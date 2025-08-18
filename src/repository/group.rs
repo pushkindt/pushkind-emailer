@@ -114,8 +114,10 @@ impl GroupWriter for DieselRepository {
     }
 
     fn delete_group(&self, id: i32) -> RepositoryResult<()> {
-        use crate::schema::groups;
+        use crate::schema::{groups, groups_recipients};
         let mut conn = self.conn()?;
+        diesel::delete(groups_recipients::table.filter(groups_recipients::group_id.eq(id)))
+            .execute(&mut conn)?;
         diesel::delete(groups::table.filter(groups::id.eq(id))).execute(&mut conn)?;
         Ok(())
     }
