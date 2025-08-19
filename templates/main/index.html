@@ -67,6 +67,12 @@
                     }
                 },
                 options: [
+                    {% for group in groups %}
+                        {
+                            "id": "{{group.id}}",
+                            "text": "Группа: {{group.name}}",
+                        },
+                    {% endfor %}
                     {% for recipient in recipients %}
                         {% if recipient.unsubscribed_at %}{% continue %}{% endif %}
                         {
@@ -75,12 +81,6 @@
                                 "text": "{{recipient.name}} ({{recipient.email}})",
                             },
                             ...{{recipient.fields | json_encode() | safe}}
-                        },
-                    {% endfor %}
-                    {% for group in groups %}
-                        {
-                            "id": "{{group.id}}",
-                            "text": "Группа: {{group.name}}",
                         },
                     {% endfor %}
                 ],
