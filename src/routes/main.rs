@@ -11,7 +11,7 @@ use serde::Deserialize;
 use tera::Tera;
 
 use crate::domain::email::{NewEmail, UpdateEmailRecipient};
-use crate::forms::main::{DeleteEmailForm, SendEmailForm};
+use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
 use crate::repository::{DieselRepository, EmailReader, EmailWriter, GroupReader, RecipientReader};
 use crate::utils::send_zmq_email_id;
@@ -144,6 +144,35 @@ pub async fn delete_email(
             FlashMessage::error("Ошибка при удалении сообщения.").send();
         }
     }
+
+    redirect("/")
+}
+
+#[post("/resend_email")]
+pub async fn resend_email(
+    user: AuthenticatedUser,
+    repo: web::Data<DieselRepository>,
+    zmq_config: web::Data<ServerConfig>,
+    web::Form(form): web::Form<ResendEmailForm>,
+) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
+    let email = match repo.get_email_by_id(form.id) {
+        Ok(Some(email)) if email.email.hub_id == user.hub_id => email,
+        _ => {
+            FlashMessage::error("Сообщение не найдено.").send();
+            return redirect("/");
+        }
+    };
+
+    match send_zmq_email_id(email.email.id, &zmq_config) {
+        Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очеред повторно."),
+        Err(err) => {
+            HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
+        }
+    };
 
     redirect("/")
 }

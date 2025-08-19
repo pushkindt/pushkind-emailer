@@ -19,6 +19,12 @@ pub struct DeleteEmailForm {
     pub id: i32,
 }
 
+/// Form data to resend an existing email (only unsent).
+#[derive(Deserialize)]
+pub struct ResendEmailForm {
+    pub id: i32,
+}
+
 impl From<SendEmailForm> for NewEmail {
     /// Converts a [`SendEmailForm`] into the domain [`NewEmail`] type.
     fn from(mut form: SendEmailForm) -> Self {

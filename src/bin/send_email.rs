@@ -109,6 +109,11 @@ async fn send_email(
     log::info!("Sending email for email_id {} via hub {}", email_id, hub.id);
 
     for recipient in email.recipients {
+        if recipient.is_sent {
+            log::info!("Skipping already sent email to {}", recipient.address);
+            continue;
+        }
+
         if let Err(e) = send_smtp_message(&hub, &email.email, &recipient, domain).await {
             log::error!("Failed to send email to {}: {}", recipient.address, e);
             continue;

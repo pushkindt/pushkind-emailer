@@ -25,8 +25,16 @@
                 </div>
                 <div class="col-auto">
                     <a href="?retry={{email.id}}" class="btn btn-warning btn-sm" onclick="return confirm('Повторить?')">
-                        <i class="bi bi-arrow-clockwise"></i>
+                        <i class="bi bi-copy"></i>
                     </a>
+                </div>
+                <div class="col-auto">
+                    <form method="POST" action="/resend_email" class="d-inline">
+                        <input type="hidden" value="{{email.id}}" name="id">
+                        <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Отправить неотправленные?')">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
             <div class="row">
