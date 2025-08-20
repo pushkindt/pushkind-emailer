@@ -36,6 +36,7 @@ pub fn send_zmq_email_id(id: i32, zmq_config: &ServerConfig) -> Result<(), Box<d
 /// - `data` contains the file bytes.
 ///
 /// Any I/O error while reading the file is propagated to the caller.
+#[allow(clippy::type_complexity)]
 pub fn read_attachment_file(
     attachment: &mut TempFile,
 ) -> std::io::Result<(Option<String>, Option<String>, Option<Vec<u8>>)> {
