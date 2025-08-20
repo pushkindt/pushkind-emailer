@@ -201,3 +201,48 @@ pub async fn track_email(
 
     redirect("/assets/placeholder.png")
 }
+
+#[get("/emails/{email_id}/recipients/export")]
+pub async fn export_email_recipients(
+    user: AuthenticatedUser,
+    repo: web::Data<DieselRepository>,
+    email_id: web::Path<i32>,
+) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
+    let email_id = email_id.into_inner();
+    let email = match repo.get_email_by_id(email_id) {
+        Ok(Some(email)) if email.email.hub_id == user.hub_id => email,
+        Ok(_) => return HttpResponse::NotFound().finish(),
+        Err(err) => {
+            log::error!("Failed to get email: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    let mut writer = csv::Writer::from_writer(vec![]);
+    for recipient in email.recipients {
+        if let Err(err) = writer.serialize(recipient) {
+            log::error!("Failed to write recipient to csv: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    }
+
+    let data = match writer.into_inner() {
+        Ok(data) => data,
+        Err(err) => {
+            log::error!("Failed to finalize csv: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    HttpResponse::Ok()
+        .content_type("text/csv")
+        .append_header((
+            "Content-Disposition",
+            format!("attachment; filename=\"recipients_{email_id}.csv\""),
+        ))
+        .body(data)
+}
