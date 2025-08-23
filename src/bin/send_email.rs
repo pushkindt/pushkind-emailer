@@ -12,6 +12,7 @@ use pushkind_common::db::establish_connection_pool;
 
 use pushkind_emailer::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
 use pushkind_emailer::domain::hub::Hub;
+use pushkind_emailer::models::zmq::ZMQMessage;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 
 async fn send_smtp_message(
@@ -171,10 +172,10 @@ async fn main() {
     log::info!("Starting email worker");
 
     loop {
-        let mut buffer = [0; 4];
-        match responder.recv_into(&mut buffer, 0) {
-            Ok(_) => {
-                let email_id = i32::from_be_bytes(buffer);
+        let msg = responder.recv_bytes(0).unwrap();
+        match serde_json::from_slice::<ZMQMessage>(&msg) {
+            Ok(parsed) => {
+                let email_id = parsed.email_id;
                 let domain = Arc::clone(&domain);
                 let repo = repo.clone();
 

@@ -1,28 +1,6 @@
-use std::{error::Error, io::Read};
+use std::io::Read;
 
 use actix_multipart::form::tempfile::TempFile;
-use log::info;
-
-use crate::models::config::ServerConfig;
-
-/// Pushes a new email ID to the background delivery service over ZeroMQ.
-///
-/// The function establishes a [`zmq::PUSH`] socket using the address from
-/// `zmq_config` and sends the big-endian byte representation of `id`.
-/// If any ZeroMQ operation fails the underlying error is returned.
-pub fn send_zmq_email_id(id: i32, zmq_config: &ServerConfig) -> Result<(), Box<dyn Error>> {
-    let context = zmq::Context::new();
-    let requester = context.socket(zmq::PUSH)?;
-    requester.connect(&zmq_config.zmq_address)?;
-
-    let buffer = id.to_be_bytes().to_vec();
-
-    requester.send(buffer, 0)?;
-
-    info!("Sent email id: {id}");
-
-    Ok(())
-}
 
 /// Reads an uploaded attachment into memory returning metadata and contents.
 ///
