@@ -7,14 +7,15 @@ use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{base_context, render_template};
 use pushkind_common::routes::{ensure_role, redirect};
+use pushkind_common::zmq::send_zmq_message;
 use serde::Deserialize;
 use tera::Tera;
 
 use crate::domain::email::{NewEmail, UpdateEmailRecipient};
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
+use crate::models::zmq::ZMQMessage;
 use crate::repository::{DieselRepository, EmailReader, EmailWriter, GroupReader, RecipientReader};
-use crate::utils::send_zmq_email_id;
 
 #[derive(Deserialize)]
 struct IndexQueryParams {
@@ -107,7 +108,12 @@ pub async fn send_email(
     new_email.hub_id = user.hub_id;
 
     match repo.create_email(&new_email) {
-        Ok(email) => match send_zmq_email_id(email.email.id, &zmq_config) {
+        Ok(email) => match send_zmq_message(
+            &ZMQMessage {
+                email_id: email.email.id,
+            },
+            &zmq_config.zmq_address,
+        ) {
             Ok(_) => HttpResponse::Ok().body("Сообщение создано."),
             Err(err) => {
                 HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
@@ -167,7 +173,12 @@ pub async fn resend_email(
         }
     };
 
-    match send_zmq_email_id(email.email.id, &zmq_config) {
+    match send_zmq_message(
+        &ZMQMessage {
+            email_id: email.email.id,
+        },
+        &zmq_config.zmq_address,
+    ) {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очеред повторно."),
         Err(err) => {
             HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
