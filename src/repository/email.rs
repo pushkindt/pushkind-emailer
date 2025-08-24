@@ -118,9 +118,9 @@ impl EmailWriter for DieselRepository {
                 .get_result(conn)?;
 
             for item in &email.recipients {
-                if item.contains('@') {
+                if item.address.contains('@') {
                     let r: DbRecipient = rec::table
-                        .filter(rec::email.eq(item.trim()))
+                        .filter(rec::email.eq(item.address.trim()))
                         .filter(rec::unsubscribed_at.is_null())
                         .select(DbRecipient::as_select())
                         .first(conn)?;
@@ -139,6 +139,7 @@ impl EmailWriter for DieselRepository {
                         .execute(conn)?;
                 } else {
                     let group_id: i32 = item
+                        .address
                         .parse()
                         .map_err(|_| RepositoryError::ValidationError("invalid group id".into()))?;
 

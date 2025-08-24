@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 /// An email message stored in the system.
@@ -60,6 +60,15 @@ pub struct EmailWithRecipients {
     pub recipients: Vec<EmailRecipient>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct NewEmailRecipient {
+    /// Email address of the recipient.
+    pub address: String,
+    /// Optional recipient name.
+    pub name: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
 /// Parameters required to create a new [`Email`].
 pub struct NewEmail {
     /// Body of the message to be sent.
@@ -75,7 +84,7 @@ pub struct NewEmail {
     /// Hub to which the email belongs.
     pub hub_id: i32,
     /// List of recipient email addresses.
-    pub recipients: Vec<String>,
+    pub recipients: Vec<NewEmailRecipient>,
 }
 
 /// Counters used to update email statistics.

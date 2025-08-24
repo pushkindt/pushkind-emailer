@@ -1,7 +1,10 @@
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
 use serde::Deserialize;
 
-use crate::{domain::email::NewEmail, utils::read_attachment_file};
+use crate::{
+    domain::email::{NewEmail, NewEmailRecipient},
+    utils::read_attachment_file,
+};
 
 /// Form data for sending a new email with optional attachment.
 #[derive(MultipartForm)]
@@ -48,7 +51,15 @@ impl From<SendEmailForm> for NewEmail {
             attachment,
             attachment_mime,
             attachment_name,
-            recipients: form.recipients.0,
+            recipients: form
+                .recipients
+                .0
+                .iter()
+                .map(|address| NewEmailRecipient {
+                    address: address.to_owned(),
+                    name: None,
+                })
+                .collect(),
         }
     }
 }

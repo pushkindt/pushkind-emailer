@@ -14,7 +14,7 @@ use tera::Tera;
 use crate::domain::email::{NewEmail, UpdateEmailRecipient};
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
-use crate::models::zmq::ZMQMessage;
+use crate::models::zmq::ZMQSendEmailMessage;
 use crate::repository::{DieselRepository, EmailReader, EmailWriter, GroupReader, RecipientReader};
 
 #[derive(Deserialize)]
@@ -91,7 +91,6 @@ pub async fn index(
 #[post("/send_email")]
 pub async fn send_email(
     user: AuthenticatedUser,
-    repo: web::Data<DieselRepository>,
     zmq_config: web::Data<ServerConfig>,
     form: Result<MultipartForm<SendEmailForm>, Box<dyn Error>>,
 ) -> impl Responder {
@@ -107,19 +106,13 @@ pub async fn send_email(
     let mut new_email: NewEmail = form.0.into();
     new_email.hub_id = user.hub_id;
 
-    match repo.create_email(&new_email) {
-        Ok(email) => match send_zmq_message(
-            &ZMQMessage {
-                email_id: email.email.id,
-            },
-            &zmq_config.zmq_address,
-        ) {
-            Ok(_) => HttpResponse::Ok().body("Сообщение создано."),
-            Err(err) => {
-                HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
-            }
-        },
-        Err(err) => HttpResponse::Ok().body(format!("Ошибка при создании сообщения: {err}")),
+    let zmq_message = ZMQSendEmailMessage::NewEmail(new_email);
+
+    match send_zmq_message(&zmq_message, &zmq_config.zmq_address) {
+        Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь."),
+        Err(err) => {
+            HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
+        }
     }
 }
 
@@ -173,12 +166,9 @@ pub async fn resend_email(
         }
     };
 
-    match send_zmq_message(
-        &ZMQMessage {
-            email_id: email.email.id,
-        },
-        &zmq_config.zmq_address,
-    ) {
+    let zmq_message = ZMQSendEmailMessage::RetryEmail(email.email.id);
+
+    match send_zmq_message(&zmq_message, &zmq_config.zmq_address) {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очеред повторно."),
         Err(err) => {
             HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
