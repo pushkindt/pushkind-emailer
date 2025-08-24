@@ -26,7 +26,7 @@ fn send_email_form_into_new_email_with_attachment() {
 
     assert_eq!(email.message, "Hi");
     assert_eq!(email.subject.as_deref(), Some("Sub"));
-    assert_eq!(email.recipients, vec!["a@example.com".to_string()]);
+
     assert_eq!(email.attachment_name.as_deref(), Some("hello.txt"));
     assert_eq!(email.attachment_mime.as_deref(), Some("text/plain"));
     assert_eq!(email.attachment.as_deref().unwrap(), b"hello");

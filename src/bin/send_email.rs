@@ -12,7 +12,7 @@ use pushkind_common::db::establish_connection_pool;
 
 use pushkind_emailer::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
 use pushkind_emailer::domain::hub::Hub;
-use pushkind_emailer::models::zmq::ZMQMessage;
+use pushkind_emailer::models::zmq::ZMQSendEmailMessage;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 
 async fn send_smtp_message(
@@ -88,26 +88,34 @@ async fn send_smtp_message(
 }
 
 async fn send_email(
-    email_id: i32,
+    msg: ZMQSendEmailMessage,
     repo: DieselRepository,
     domain: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let email = match repo.get_email_by_id(email_id)? {
-        Some(email) => email,
-        None => {
-            log::error!("Email not found for email_id: {email_id}");
-            return Ok(());
-        }
+    let email = match msg {
+        ZMQSendEmailMessage::RetryEmail(email_id) => match repo.get_email_by_id(email_id)? {
+            Some(email) => email,
+            None => {
+                log::error!("Email not found for email_id: {email_id}");
+                return Err("Email not found".into());
+            }
+        },
+        ZMQSendEmailMessage::NewEmail(new_email) => repo.create_email(&new_email)?,
     };
+
     let hub = match repo.get_hub_by_id(email.email.hub_id)? {
         Some(hub) => hub,
         None => {
-            log::error!("Hub not found for email_id: {email_id}");
+            log::error!("Hub not found for email_id: {}", email.email.id);
             return Ok(());
         }
     };
 
-    log::info!("Sending email for email_id {} via hub {}", email_id, hub.id);
+    log::info!(
+        "Sending email for email_id {} via hub {}",
+        email.email.id,
+        hub.id
+    );
 
     for recipient in email.recipients {
         if recipient.is_sent {
@@ -138,7 +146,7 @@ async fn send_email(
         }
     }
 
-    log::info!("Finished processing email_id: {email_id}");
+    log::info!("Finished processing email_id: {}", email.email.id);
 
     Ok(())
 }
@@ -173,14 +181,13 @@ async fn main() {
 
     loop {
         let msg = responder.recv_bytes(0).unwrap();
-        match serde_json::from_slice::<ZMQMessage>(&msg) {
+        match serde_json::from_slice::<ZMQSendEmailMessage>(&msg) {
             Ok(parsed) => {
-                let email_id = parsed.email_id;
                 let domain = Arc::clone(&domain);
                 let repo = repo.clone();
 
                 tokio::spawn(async move {
-                    if let Err(e) = send_email(email_id, repo, &domain).await {
+                    if let Err(e) = send_email(parsed, repo, &domain).await {
                         log::error!("Error sending email message: {e}");
                     }
                 });

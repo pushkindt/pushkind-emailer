@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ZMQMessage {
-    pub email_id: i32,
+use crate::domain::email::NewEmail;
+
+#[derive(Serialize, Deserialize)]
+pub enum ZMQSendEmailMessage {
+    NewEmail(NewEmail),
+    RetryEmail(i32),
 }
