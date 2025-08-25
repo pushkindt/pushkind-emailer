@@ -39,7 +39,7 @@ async fn main() -> std::io::Result<()> {
     let port = env::var("PORT").unwrap_or("8080".to_string());
     let port = port.parse::<u16>().unwrap_or(8080);
     let address = env::var("ADDRESS").unwrap_or("127.0.0.1".to_string());
-    let zmq_address = env::var("ZMQ_ADDRESS").unwrap_or("tcp://127.0.0.1:5555".to_string());
+    let zmq_address = env::var("ZMQ_EMAILER_PUB").unwrap_or("tcp://127.0.0.1:5557".to_string());
     let crm_service_url = env::var("CRM_SERVICE_URL").unwrap_or_default();
 
     let pool = match establish_connection_pool(&database_url) {

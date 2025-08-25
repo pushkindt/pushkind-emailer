@@ -157,15 +157,16 @@ async fn main() {
     dotenv().ok(); // Load .env file
 
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
-    let zmq_address =
-        env::var("ZMQ_ADDRESS").unwrap_or_else(|_| "tcp://127.0.0.1:5555".to_string());
     let domain = Arc::from(env::var("DOMAIN").unwrap_or_default());
 
+    let zmq_address =
+        env::var("ZMQ_EMAILER_SUB").unwrap_or_else(|_| "tcp://127.0.0.1:5558".to_string());
     let context = zmq::Context::new();
-    let responder = context.socket(zmq::PULL).expect("Cannot create zmq socket");
+    let responder = context.socket(zmq::SUB).expect("Cannot create zmq socket");
     responder
-        .bind(&zmq_address)
-        .expect("Cannot bind to zmq port");
+        .connect(&zmq_address)
+        .expect("Cannot connect to zmq port");
+    responder.set_subscribe(b"").expect("SUBSCRIBE failed");
 
     let pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
