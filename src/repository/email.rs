@@ -1,11 +1,11 @@
 use diesel::prelude::*;
-use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
-
-use crate::domain::email::{
+use pushkind_common::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     NewEmail as DomainNewEmail, UpdateEmail as DomainUpdateEmail,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
+
 use crate::{
     models::{
         email::{

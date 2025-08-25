@@ -1,9 +1,9 @@
 use pushkind_common::db::{DbConnection, DbPool};
-use pushkind_common::repository::errors::RepositoryResult;
-
-use crate::domain::email::{
+use pushkind_common::domain::email::{
     EmailRecipient, EmailWithRecipients, NewEmail, UpdateEmail, UpdateEmailRecipient,
 };
+use pushkind_common::repository::errors::RepositoryResult;
+
 use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
 use crate::domain::hub::{Hub, NewHub, UpdateHub};
 use crate::domain::recipient::{NewRecipient, Recipient, RecipientWithGroups, UpdateRecipient};

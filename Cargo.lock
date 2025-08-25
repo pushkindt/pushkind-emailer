@@ -2672,7 +2672,7 @@ dependencies = [
 [[package]]
 name = "pushkind-common"
 version = "0.1.0"
-source = "git+https://github.com/pushkindt/pushkind-common.git?branch=main#489873ebaf49742eb09f173b2e9d1bbc00985a28"
+source = "git+https://github.com/pushkindt/pushkind-common.git?branch=main#eb809405a82aca5e7a014f0c07cf8da901384b9f"
 dependencies = [
  "actix-identity",
  "actix-web",
@@ -2687,6 +2687,7 @@ dependencies = [
  "serde_json",
  "tera",
  "thiserror 2.0.16",
+ "tokio",
  "zmq",
 ]
 

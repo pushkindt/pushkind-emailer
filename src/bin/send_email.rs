@@ -9,10 +9,10 @@ use mail_send::mail_builder::{
     headers::{HeaderType, url::URL},
 };
 use pushkind_common::db::establish_connection_pool;
+use pushkind_common::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
+use pushkind_common::models::zmq::emailer::ZMQSendEmailMessage;
 
-use pushkind_emailer::domain::email::{Email, EmailRecipient, UpdateEmailRecipient};
 use pushkind_emailer::domain::hub::Hub;
-use pushkind_emailer::models::zmq::ZMQSendEmailMessage;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 
 async fn send_smtp_message(

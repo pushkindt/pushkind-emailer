@@ -2,8 +2,8 @@ use std::env;
 
 use dotenvy::dotenv;
 use pushkind_common::db::establish_connection_pool;
+use pushkind_common::domain::email::UpdateEmailRecipient;
 
-use pushkind_emailer::domain::email::UpdateEmailRecipient;
 use pushkind_emailer::domain::hub::Hub;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 
