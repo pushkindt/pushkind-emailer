@@ -1,5 +1,6 @@
 use actix_multipart::form::{json::Json as MpJson, tempfile::TempFile, text::Text};
-use pushkind_emailer::{domain::email::NewEmail, forms::main::SendEmailForm};
+use pushkind_common::domain::email::NewEmail;
+use pushkind_emailer::forms::main::SendEmailForm;
 use std::io::{Seek, SeekFrom, Write};
 use tempfile::NamedTempFile;
 

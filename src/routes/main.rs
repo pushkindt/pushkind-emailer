@@ -1,20 +1,20 @@
 use std::error::Error;
+use std::sync::Arc;
 
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use pushkind_common::domain::email::{NewEmail, UpdateEmailRecipient};
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::models::zmq::emailer::ZMQSendEmailMessage;
 use pushkind_common::routes::{base_context, render_template};
 use pushkind_common::routes::{ensure_role, redirect};
-use pushkind_common::zmq::send_zmq_message_pub;
+use pushkind_common::zmq::ZmqSender;
 use serde::Deserialize;
 use tera::Tera;
 
-use crate::domain::email::{NewEmail, UpdateEmailRecipient};
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
-use crate::models::config::ServerConfig;
-use crate::models::zmq::ZMQSendEmailMessage;
 use crate::repository::{DieselRepository, EmailReader, EmailWriter, GroupReader, RecipientReader};
 
 #[derive(Deserialize)]
@@ -91,7 +91,7 @@ pub async fn index(
 #[post("/send_email")]
 pub async fn send_email(
     user: AuthenticatedUser,
-    zmq_config: web::Data<ServerConfig>,
+    zmq_sender: web::Data<Arc<ZmqSender>>,
     form: Result<MultipartForm<SendEmailForm>, Box<dyn Error>>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -108,7 +108,7 @@ pub async fn send_email(
 
     let zmq_message = ZMQSendEmailMessage::NewEmail(new_email);
 
-    match send_zmq_message_pub(&zmq_message, &zmq_config.zmq_address, Some(200)) {
+    match zmq_sender.send_json(&zmq_message).await {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь."),
         Err(err) => {
             HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
@@ -151,7 +151,7 @@ pub async fn delete_email(
 pub async fn resend_email(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    zmq_config: web::Data<ServerConfig>,
+    zmq_sender: web::Data<Arc<ZmqSender>>,
     web::Form(form): web::Form<ResendEmailForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -168,8 +168,8 @@ pub async fn resend_email(
 
     let zmq_message = ZMQSendEmailMessage::RetryEmail(email.email.id);
 
-    match send_zmq_message_pub(&zmq_message, &zmq_config.zmq_address, Some(200)) {
-        Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очеред повторно."),
+    match zmq_sender.send_json(&zmq_message).await {
+        Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь повторно."),
         Err(err) => {
             HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
         }

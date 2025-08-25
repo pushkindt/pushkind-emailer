@@ -1,10 +1,8 @@
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
+use pushkind_common::domain::email::{NewEmail, NewEmailRecipient};
 use serde::Deserialize;
 
-use crate::{
-    domain::email::{NewEmail, NewEmailRecipient},
-    utils::read_attachment_file,
-};
+use crate::utils::read_attachment_file;
 
 /// Form data for sending a new email with optional attachment.
 #[derive(MultipartForm)]

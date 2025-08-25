@@ -1,4 +1,3 @@
-pub mod email;
 pub mod group;
 pub mod hub;
 pub mod recipient;

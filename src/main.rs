@@ -1,6 +1,7 @@
 //! Binary that launches the HTTP server for the pushkind emailer application.
 
 use std::env;
+use std::sync::Arc;
 
 use actix_files::Files;
 use actix_identity::IdentityMiddleware;
@@ -14,6 +15,7 @@ use pushkind_common::db::establish_connection_pool;
 use pushkind_common::middleware::RedirectUnauthorized;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{logout, not_assigned};
+use pushkind_common::zmq::{ZmqSender, ZmqSenderOptions};
 use tera::Tera;
 
 use pushkind_emailer::models::config::ServerConfig;
@@ -66,10 +68,11 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let server_config = ServerConfig {
-        zmq_address,
-        crm_service_url,
-    };
+    let zmq_sender = Arc::new(ZmqSender::start(ZmqSenderOptions::pub_default(
+        &zmq_address,
+    )));
+
+    let server_config = ServerConfig { crm_service_url };
     let common_config = CommonServerConfig {
         secret: secret.unwrap_or_default(),
         auth_service_url,
@@ -133,6 +136,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(repo.clone()))
             .app_data(web::Data::new(server_config.clone()))
             .app_data(web::Data::new(common_config.clone()))
+            .app_data(web::Data::new(zmq_sender.clone()))
     })
     .bind((address, port))?
     .run()

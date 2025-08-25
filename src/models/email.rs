@@ -1,5 +1,6 @@
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
+use pushkind_common::domain::email as domain;
 use serde::Serialize;
 
 use crate::models::hub::Hub;
@@ -76,8 +77,6 @@ impl Email {
             .load::<EmailRecipient>(conn)
     }
 }
-
-use crate::domain::email as domain;
 
 impl From<Email> for domain::Email {
     fn from(value: Email) -> Self {
