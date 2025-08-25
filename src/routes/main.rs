@@ -7,7 +7,7 @@ use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{base_context, render_template};
 use pushkind_common::routes::{ensure_role, redirect};
-use pushkind_common::zmq::send_zmq_message;
+use pushkind_common::zmq::send_zmq_message_pub;
 use serde::Deserialize;
 use tera::Tera;
 
@@ -108,7 +108,7 @@ pub async fn send_email(
 
     let zmq_message = ZMQSendEmailMessage::NewEmail(new_email);
 
-    match send_zmq_message(&zmq_message, &zmq_config.zmq_address) {
+    match send_zmq_message_pub(&zmq_message, &zmq_config.zmq_address, Some(200)) {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь."),
         Err(err) => {
             HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
@@ -168,7 +168,7 @@ pub async fn resend_email(
 
     let zmq_message = ZMQSendEmailMessage::RetryEmail(email.email.id);
 
-    match send_zmq_message(&zmq_message, &zmq_config.zmq_address) {
+    match send_zmq_message_pub(&zmq_message, &zmq_config.zmq_address, Some(200)) {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очеред повторно."),
         Err(err) => {
             HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
