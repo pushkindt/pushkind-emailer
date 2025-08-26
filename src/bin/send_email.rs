@@ -93,13 +93,15 @@ async fn send_email(
     domain: &str,
 ) -> Result<(), Box<dyn Error>> {
     let email = match msg {
-        ZMQSendEmailMessage::RetryEmail(email_id) => match repo.get_email_by_id(email_id)? {
-            Some(email) => email,
-            None => {
-                log::error!("Email not found for email_id: {email_id}");
-                return Err("Email not found".into());
+        ZMQSendEmailMessage::RetryEmail((email_id, hub_id)) => {
+            match repo.get_email_by_id(email_id, hub_id)? {
+                Some(email) => email,
+                None => {
+                    log::error!("Email not found for email_id: {email_id}");
+                    return Err("Email not found".into());
+                }
             }
-        },
+        }
         ZMQSendEmailMessage::NewEmail(new_email) => repo.create_email(&new_email)?,
     };
 

@@ -11,7 +11,7 @@ use crate::forms::settings::SaveHubForm;
 use crate::repository::{DieselRepository, HubReader, HubWriter};
 
 #[get("/settings")]
-pub async fn settings(
+pub async fn settings_show(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     repo: web::Data<DieselRepository>,

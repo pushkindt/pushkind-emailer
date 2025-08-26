@@ -12,7 +12,7 @@ use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupFo
 use crate::repository::{DieselRepository, GroupReader, GroupWriter, RecipientReader};
 
 #[get("/groups")]
-pub async fn groups(
+pub async fn groups_show(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     repo: web::Data<DieselRepository>,
@@ -101,7 +101,18 @@ pub async fn groups_delete(
         return response;
     };
 
-    match repo.delete_group(form.id) {
+    let group = match repo.get_group_by_id(form.id, user.hub_id) {
+        Ok(Some(group)) => group,
+        Ok(None) => {
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving group: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    match repo.delete_group(group.group.id) {
         Ok(_) => {
             FlashMessage::success("Группа удалена.").send();
         }
@@ -124,7 +135,18 @@ pub async fn groups_assign(
         return response;
     };
 
-    match repo.assign_recipient_to_group(form.group_id, form.recipient_id) {
+    let group = match repo.get_group_by_id(form.group_id, user.hub_id) {
+        Ok(Some(group)) => group,
+        Ok(None) => {
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving group: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    match repo.assign_recipient_to_group(group.group.id, form.recipient_id) {
         Ok(_) => {
             FlashMessage::success("Группа назначена получателю.").send();
         }
@@ -147,7 +169,18 @@ pub async fn groups_unassign(
         return response;
     };
 
-    match repo.unassign_recipient_to_group(form.group_id, form.recipient_id) {
+    let group = match repo.get_group_by_id(form.group_id, user.hub_id) {
+        Ok(Some(group)) => group,
+        Ok(None) => {
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving group: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    match repo.unassign_recipient_to_group(group.group.id, form.recipient_id) {
         Ok(_) => {
             FlashMessage::success("Назначение группы удалено.").send();
         }
@@ -175,13 +208,13 @@ pub async fn groups_modal(
 
     let group_id = group_id.into_inner();
 
-    let group = match repo.get_group_by_id(group_id) {
+    let group = match repo.get_group_by_id(group_id, user.hub_id) {
         Ok(Some(group)) => group,
         Ok(None) => {
             return HttpResponse::NotFound().finish();
         }
         Err(e) => {
-            log::error!("Error retrieving recipient: {e}");
+            log::error!("Error retrieving group: {e}");
             return HttpResponse::InternalServerError().finish();
         }
     };

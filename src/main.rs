@@ -21,7 +21,7 @@ use tera::Tera;
 use pushkind_emailer::models::config::ServerConfig;
 use pushkind_emailer::repository::DieselRepository;
 use pushkind_emailer::routes::groups::{
-    groups, groups_add, groups_assign, groups_delete, groups_modal, groups_unassign,
+    groups_add, groups_assign, groups_delete, groups_modal, groups_show, groups_unassign,
 };
 use pushkind_emailer::routes::main::{
     delete_email, export_email_recipients, index, resend_email, send_email, track_email,
@@ -30,7 +30,7 @@ use pushkind_emailer::routes::recipients::{
     recipients_add, recipients_clean, recipients_delete, recipients_modal, recipients_save,
     recipients_show, recipients_source, recipients_upload,
 };
-use pushkind_emailer::routes::settings::{settings, settings_save};
+use pushkind_emailer::routes::settings::{settings_save, settings_show};
 
 /// Application entry point launching the Actix Web server.
 #[actix_web::main]
@@ -115,7 +115,7 @@ async fn main() -> std::io::Result<()> {
                     .service(delete_email)
                     .service(track_email)
                     .service(export_email_recipients)
-                    .service(settings)
+                    .service(settings_show)
                     .service(settings_save)
                     .service(recipients_show)
                     .service(recipients_add)
@@ -125,7 +125,7 @@ async fn main() -> std::io::Result<()> {
                     .service(recipients_modal)
                     .service(recipients_save)
                     .service(recipients_source)
-                    .service(groups)
+                    .service(groups_show)
                     .service(groups_add)
                     .service(groups_delete)
                     .service(groups_assign)

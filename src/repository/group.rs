@@ -10,13 +10,18 @@ use crate::models::recipient::{Recipient as DbRecipient, RecipientField};
 use crate::repository::{DieselRepository, GroupReader, GroupWriter};
 
 impl GroupReader for DieselRepository {
-    fn get_group_by_id(&self, id: i32) -> RepositoryResult<Option<GroupWithRecipients>> {
+    fn get_group_by_id(
+        &self,
+        id: i32,
+        hub_id: i32,
+    ) -> RepositoryResult<Option<GroupWithRecipients>> {
         use crate::schema::{groups, groups_recipients, recipients};
         let mut conn = self.conn()?;
 
         // Load group by id
         let db_group: Option<DbGroup> = groups::table
             .filter(groups::id.eq(id))
+            .filter(groups::hub_id.eq(hub_id))
             .select(DbGroup::as_select())
             .first(&mut conn)
             .optional()?;
