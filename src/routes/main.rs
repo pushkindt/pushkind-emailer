@@ -36,7 +36,7 @@ pub async fn index(
     };
 
     let retry = match params.retry {
-        Some(email_id) => repo.get_email_by_id(email_id).ok(),
+        Some(email_id) => repo.get_email_by_id(email_id, user.hub_id).ok(),
         None => None,
     };
 
@@ -92,6 +92,7 @@ pub async fn index(
 pub async fn send_email(
     user: AuthenticatedUser,
     zmq_sender: web::Data<Arc<ZmqSender>>,
+    repo: web::Data<DieselRepository>,
     form: Result<MultipartForm<SendEmailForm>, Box<dyn Error>>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -103,7 +104,12 @@ pub async fn send_email(
         Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
     };
 
-    let mut new_email: NewEmail = form.0.into();
+    let mut new_email: NewEmail = match form.0.to_new_email(user.hub_id, repo.get_ref()) {
+        Ok(new_email) => new_email,
+        Err(err) => {
+            return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}"));
+        }
+    };
     new_email.hub_id = user.hub_id;
 
     let zmq_message = ZMQSendEmailMessage::NewEmail(new_email);
@@ -126,8 +132,8 @@ pub async fn delete_email(
         return response;
     };
 
-    let email = match repo.get_email_by_id(form.id) {
-        Ok(Some(email)) if email.email.hub_id == user.hub_id => email.email,
+    let email = match repo.get_email_by_id(form.id, user.hub_id) {
+        Ok(Some(email)) => email.email,
         _ => {
             FlashMessage::error("Сообщение не найдено.").send();
             return redirect("/");
@@ -158,15 +164,15 @@ pub async fn resend_email(
         return response;
     };
 
-    let email = match repo.get_email_by_id(form.id) {
-        Ok(Some(email)) if email.email.hub_id == user.hub_id => email,
+    let email = match repo.get_email_by_id(form.id, user.hub_id) {
+        Ok(Some(email)) => email,
         _ => {
             FlashMessage::error("Сообщение не найдено.").send();
             return redirect("/");
         }
     };
 
-    let zmq_message = ZMQSendEmailMessage::RetryEmail(email.email.id);
+    let zmq_message = ZMQSendEmailMessage::RetryEmail((email.email.id, user.hub_id));
 
     match zmq_sender.send_json(&zmq_message).await {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь повторно."),
@@ -214,8 +220,8 @@ pub async fn export_email_recipients(
     };
 
     let email_id = email_id.into_inner();
-    let email = match repo.get_email_by_id(email_id) {
-        Ok(Some(email)) if email.email.hub_id == user.hub_id => email,
+    let email = match repo.get_email_by_id(email_id, user.hub_id) {
+        Ok(Some(email)) => email,
         Ok(_) => return HttpResponse::NotFound().finish(),
         Err(err) => {
             log::error!("Failed to get email: {err}");

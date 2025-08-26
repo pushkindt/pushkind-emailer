@@ -1,8 +1,11 @@
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
-use pushkind_common::domain::email::{NewEmail, NewEmailRecipient};
+use pushkind_common::{
+    domain::email::{NewEmail, NewEmailRecipient},
+    repository::errors::RepositoryResult,
+};
 use serde::Deserialize;
 
-use crate::utils::read_attachment_file;
+use crate::{repository::RecipientReader, utils::read_attachment_file};
 
 /// Form data for sending a new email with optional attachment.
 #[derive(MultipartForm)]
@@ -26,11 +29,14 @@ pub struct ResendEmailForm {
     pub id: i32,
 }
 
-impl From<SendEmailForm> for NewEmail {
+impl SendEmailForm {
     /// Converts a [`SendEmailForm`] into the domain [`NewEmail`] type.
-    fn from(mut form: SendEmailForm) -> Self {
+    pub fn to_new_email<R>(mut self, hub_id: i32, repo: &R) -> RepositoryResult<NewEmail>
+    where
+        R: RecipientReader,
+    {
         let (attachment_name, attachment_mime, attachment) =
-            if let Some(attachment) = form.attachment.as_mut() {
+            if let Some(attachment) = self.attachment.as_mut() {
                 match read_attachment_file(attachment) {
                     Ok((name, mime, data)) => (name, mime, data),
                     Err(err) => {
@@ -42,22 +48,59 @@ impl From<SendEmailForm> for NewEmail {
                 (None, None, None)
             };
 
-        Self {
-            hub_id: 0,
-            message: form.message.0,
-            subject: form.subject.0,
+        let mut emails: Vec<String> = vec![];
+        let mut groups: Vec<i32> = vec![];
+
+        for address in self.recipients.0 {
+            match address.parse::<i32>() {
+                Ok(group_id) => groups.push(group_id),
+                Err(_) => emails.push(address),
+            }
+        }
+
+        let mut recipients: Vec<NewEmailRecipient> = vec![];
+
+        let group_recipients: Vec<NewEmailRecipient> =
+            match repo.list_recipients_by_groups(&groups, hub_id) {
+                Ok(groups) => groups
+                    .into_iter()
+                    .map(|recipient| NewEmailRecipient {
+                        address: recipient.email,
+                        name: Some(recipient.name),
+                    })
+                    .collect(),
+                Err(e) => return Err(e),
+            };
+
+        recipients.extend(group_recipients);
+
+        let individual_recipients: Vec<NewEmailRecipient> = match repo.list_recipients_by_emails(
+            &emails.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),
+            hub_id,
+        ) {
+            Ok(recipients) => recipients
+                .into_iter()
+                .map(|recipient| NewEmailRecipient {
+                    address: recipient.email,
+                    name: Some(recipient.name),
+                })
+                .collect(),
+            Err(e) => return Err(e),
+        };
+
+        recipients.extend(individual_recipients);
+
+        recipients.sort_by(|a, b| a.address.cmp(&b.address));
+        recipients.dedup_by(|a, b| a.address == b.address);
+
+        Ok(NewEmail {
+            hub_id,
+            message: self.message.0,
+            subject: self.subject.0,
             attachment,
             attachment_mime,
             attachment_name,
-            recipients: form
-                .recipients
-                .0
-                .iter()
-                .map(|address| NewEmailRecipient {
-                    address: address.to_owned(),
-                    name: None,
-                })
-                .collect(),
-        }
+            recipients,
+        })
     }
 }

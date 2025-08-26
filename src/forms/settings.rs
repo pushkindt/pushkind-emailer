@@ -8,12 +8,6 @@ pub struct AddHubForm {
     pub hub_name: String,
 }
 
-/// Form to activate an existing hub by its identifier.
-#[derive(Deserialize)]
-pub struct ActivateHubForm {
-    pub hub_id: i32,
-}
-
 /// Form for updating hub configuration details.
 #[derive(Deserialize)]
 pub struct SaveHubForm {

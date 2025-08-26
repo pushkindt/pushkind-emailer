@@ -93,7 +93,18 @@ pub async fn recipients_delete(
         return response;
     };
 
-    match repo.delete_recipient(form.id) {
+    let recipient = match repo.get_recipient_by_id(form.id, user.hub_id) {
+        Ok(Some(recipient)) => recipient.recipient,
+        Ok(None) => {
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving recipient: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    match repo.delete_recipient(recipient.id) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
         }
@@ -185,7 +196,7 @@ pub async fn recipients_modal(
 
     let recipient_id = recipient_id.into_inner();
 
-    let recipient = match repo.get_recipient_by_id(recipient_id) {
+    let recipient = match repo.get_recipient_by_id(recipient_id, user.hub_id) {
         Ok(Some(recipient)) => recipient,
         Ok(None) => {
             return HttpResponse::NotFound().finish();
@@ -229,7 +240,19 @@ pub async fn recipients_save(
         }
     };
 
-    match repo.update_recipient(form.id, &form.into()) {
+    let recipient = match repo.get_recipient_by_id(form.id, user.hub_id) {
+        Ok(Some(recipient)) => recipient.recipient,
+        Ok(None) => {
+            log::error!("Recipient not found");
+            return HttpResponse::NotFound().finish();
+        }
+        Err(e) => {
+            log::error!("Error retrieving recipient: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    match repo.update_recipient(recipient.id, &form.into()) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
         }

@@ -7,12 +7,9 @@ use pushkind_common::domain::email::{
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use crate::{
-    models::{
-        email::{
-            Email as DbEmail, EmailRecipient as DbEmailRecipient, NewEmail as DbNewEmail,
-            NewEmailRecipient as DbNewEmailRecipient,
-        },
-        recipient::Recipient as DbRecipient,
+    models::email::{
+        Email as DbEmail, EmailRecipient as DbEmailRecipient, NewEmail as DbNewEmail,
+        NewEmailRecipient as DbNewEmailRecipient,
     },
     repository::{DieselRepository, EmailReader, EmailWriter},
 };
@@ -35,12 +32,18 @@ impl EmailReader for DieselRepository {
         Ok(recipients.into_iter().map(Into::into).collect())
     }
 
-    fn get_recipient(&self, id: i32) -> RepositoryResult<Option<DomainEmailRecipient>> {
-        use crate::schema::email_recipients;
+    fn get_recipient(
+        &self,
+        id: i32,
+        hub_id: i32,
+    ) -> RepositoryResult<Option<DomainEmailRecipient>> {
+        use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
 
         let recipient = email_recipients::table
             .filter(email_recipients::id.eq(id))
+            .inner_join(emails::table)
+            .filter(emails::hub_id.eq(hub_id))
             .select(DbEmailRecipient::as_select())
             .first::<DbEmailRecipient>(&mut conn)
             .optional()?;
@@ -48,12 +51,17 @@ impl EmailReader for DieselRepository {
         Ok(recipient.map(Into::into))
     }
 
-    fn get_email_by_id(&self, id: i32) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
+    fn get_email_by_id(
+        &self,
+        id: i32,
+        hub_id: i32,
+    ) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
         use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
 
         let email = emails::table
             .filter(emails::id.eq(id))
+            .filter(emails::hub_id.eq(hub_id))
             .select(DbEmail::as_select())
             .first::<DbEmail>(&mut conn)
             .optional()?;
@@ -106,7 +114,7 @@ impl EmailReader for DieselRepository {
 
 impl EmailWriter for DieselRepository {
     fn create_email(&self, email: &DomainNewEmail) -> RepositoryResult<DomainEmailWithRecipients> {
-        use crate::schema::{email_recipients, emails, groups_recipients, recipients as rec};
+        use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
 
         conn.transaction::<_, RepositoryError, _>(|conn| {
@@ -118,52 +126,18 @@ impl EmailWriter for DieselRepository {
                 .get_result(conn)?;
 
             for item in &email.recipients {
-                if item.address.contains('@') {
-                    let r: DbRecipient = rec::table
-                        .filter(rec::email.eq(item.address.trim()))
-                        .filter(rec::unsubscribed_at.is_null())
-                        .select(DbRecipient::as_select())
-                        .first(conn)?;
-
-                    let new_rec = DbNewEmailRecipient {
-                        email_id: inserted.id,
-                        address: &r.email,
-                        opened: false,
-                        updated_at: created_at,
-                        is_sent: false,
-                        replied: false,
-                        name: Some(&r.name),
-                    };
-                    diesel::insert_into(email_recipients::table)
-                        .values(&new_rec)
-                        .execute(conn)?;
-                } else {
-                    let group_id: i32 = item
-                        .address
-                        .parse()
-                        .map_err(|_| RepositoryError::ValidationError("invalid group id".into()))?;
-
-                    let members: Vec<DbRecipient> = groups_recipients::table
-                        .filter(groups_recipients::group_id.eq(group_id))
-                        .inner_join(rec::table.on(groups_recipients::recipient_id.eq(rec::id)))
-                        .select(DbRecipient::as_select())
-                        .load(conn)?;
-
-                    for member in members {
-                        let new_rec = DbNewEmailRecipient {
-                            email_id: inserted.id,
-                            address: &member.email,
-                            opened: false,
-                            updated_at: created_at,
-                            is_sent: false,
-                            replied: false,
-                            name: Some(&member.name),
-                        };
-                        diesel::insert_into(email_recipients::table)
-                            .values(&new_rec)
-                            .execute(conn)?;
-                    }
-                }
+                let new_rec = DbNewEmailRecipient {
+                    email_id: inserted.id,
+                    address: &item.address,
+                    opened: false,
+                    updated_at: created_at,
+                    is_sent: false,
+                    replied: false,
+                    name: item.name.as_deref(),
+                };
+                diesel::insert_into(email_recipients::table)
+                    .values(&new_rec)
+                    .execute(conn)?;
             }
 
             let recipients = email_recipients::table
