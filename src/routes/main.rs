@@ -8,6 +8,7 @@ use pushkind_common::domain::email::{NewEmail, UpdateEmailRecipient};
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::models::zmq::emailer::ZMQSendEmailMessage;
+use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::{base_context, render_template};
 use pushkind_common::routes::{ensure_role, redirect};
 use pushkind_common::zmq::ZmqSender;
@@ -23,6 +24,7 @@ use crate::repository::{
 #[derive(Deserialize)]
 struct IndexQueryParams {
     retry: Option<i32>,
+    page: Option<usize>,
 }
 
 #[get("/")]
@@ -70,9 +72,12 @@ pub async fn index(
         }
     };
 
-    let query = EmailListQuery::new(user.hub_id);
+    let page = params.page.unwrap_or(1);
+
+    let query = EmailListQuery::new(user.hub_id).paginate(page, DEFAULT_ITEMS_PER_PAGE);
+
     let emails = match repo.list_emails(query) {
-        Ok((_total, emails)) => emails,
+        Ok((total, emails)) => Paginated::new(emails, page, total.div_ceil(DEFAULT_ITEMS_PER_PAGE)),
         Err(e) => {
             log::error!("Failed to list emails: {e}");
             return HttpResponse::InternalServerError().finish();

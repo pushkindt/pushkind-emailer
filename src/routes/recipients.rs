@@ -3,8 +3,10 @@ use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::models::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
+use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::{base_context, render_template};
 use pushkind_common::routes::{ensure_role, redirect};
+use serde::Deserialize;
 use tera::{Context, Tera};
 use validator::Validate;
 
@@ -19,8 +21,14 @@ use crate::repository::{
     RecipientReader, RecipientWriter,
 };
 
+#[derive(Deserialize)]
+struct RecipientsQueryParams {
+    page: Option<usize>,
+}
+
 #[get("/recipients")]
 pub async fn recipients_show(
+    params: web::Query<RecipientsQueryParams>,
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     repo: web::Data<DieselRepository>,
@@ -40,10 +48,13 @@ pub async fn recipients_show(
     );
     context.insert("crm_service_url", &server_config.crm_service_url);
 
-    let query = RecipientListQuery::new(user.hub_id);
+    let page = params.page.unwrap_or(1);
+    let query = RecipientListQuery::new(user.hub_id).paginate(page, DEFAULT_ITEMS_PER_PAGE);
 
     let recipients = match repo.list_recipients(query) {
-        Ok((_total, recipients)) => recipients,
+        Ok((total, recipients)) => {
+            Paginated::new(recipients, page, total.div_ceil(DEFAULT_ITEMS_PER_PAGE))
+        }
         Err(err) => {
             log::error!("Failed to get recipients: {err}");
             return HttpResponse::InternalServerError().finish();
