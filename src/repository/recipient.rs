@@ -62,21 +62,47 @@ impl RecipientReader for DieselRepository {
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
-        use crate::schema::recipients;
+        use crate::schema::{groups_recipients, recipients};
         let mut conn = self.conn()?;
 
+        let query_builder = || {
+            let mut items = recipients::table
+                .filter(recipients::hub_id.eq(query.hub_id))
+                .select(Recipient::as_select())
+                .into_boxed::<diesel::sqlite::Sqlite>();
+
+            if let Some(emails) = query.emails.as_ref() {
+                items = items.filter(recipients::email.eq_any(emails));
+            }
+            if let Some(group_ids) = query.group_ids.as_ref() {
+                items = items.filter(
+                    recipients::id.eq_any(
+                        groups_recipients::table
+                            .filter(groups_recipients::group_id.eq_any(group_ids))
+                            .select(groups_recipients::recipient_id),
+                    ),
+                );
+            }
+
+            items
+        };
+
+        let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
+
+        let mut items = query_builder();
+
+        // Apply pagination if requested
+        if let Some(pagination) = &query.pagination {
+            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
+            let limit = pagination.per_page as i64;
+            items = items.offset(offset).limit(limit);
+        }
+
         // Load recipients for the hub
-        let db_recipients: Vec<Recipient> = recipients::table
-            .filter(recipients::hub_id.eq(query.hub_id))
-            // .filter(recipients::email.eq_any(emails))
-            // .inner_join(groups_recipients::table)
-            // .filter(groups_recipients::group_id.eq_any(group_ids))
-            .select(Recipient::as_select())
-            .order(recipients::name.desc())
-            .load(&mut conn)?;
+        let db_recipients: Vec<Recipient> = items.order(recipients::name.desc()).load(&mut conn)?;
 
         if db_recipients.is_empty() {
-            return Ok((0, Vec::new()));
+            return Ok((total, Vec::new()));
         }
 
         // Load recipient fields, grouped by recipient
@@ -119,7 +145,7 @@ impl RecipientReader for DieselRepository {
             })
             .collect();
 
-        Ok((recipients.len(), recipients))
+        Ok((total, recipients))
     }
 
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {

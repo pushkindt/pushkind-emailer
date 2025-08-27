@@ -94,15 +94,33 @@ impl GroupReader for DieselRepository {
         use crate::schema::groups;
         let mut conn = self.conn()?;
 
-        // Fetch groups for hub
-        let db_groups: Vec<DbGroup> = groups::table
-            .filter(groups::hub_id.eq(query.hub_id))
-            .select(DbGroup::as_select())
-            .load(&mut conn)?;
+        let query_builder = || {
+            groups::table
+                .filter(groups::hub_id.eq(query.hub_id))
+                .select(DbGroup::as_select())
+                .into_boxed::<diesel::sqlite::Sqlite>()
+        };
 
-        let result: Vec<DomainGroup> = db_groups.into_iter().map(|g| g.into()).collect();
+        let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
 
-        Ok((result.len(), result))
+        let mut items = query_builder();
+
+        // Apply pagination if requested
+        if let Some(pagination) = &query.pagination {
+            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
+            let limit = pagination.per_page as i64;
+            items = items.offset(offset).limit(limit);
+        }
+
+        // Final load
+        let items = items
+            .order(groups::name.asc())
+            .load::<DbGroup>(&mut conn)?
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<DomainGroup>>();
+
+        Ok((total, items))
     }
 }
 

@@ -89,14 +89,30 @@ impl EmailReader for DieselRepository {
         use crate::schema::emails;
         let mut conn = self.conn()?;
 
-        let db_emails: Vec<DbEmail> = emails::table
-            .filter(emails::hub_id.eq(query.hub_id))
+        let query_builder = || {
+            emails::table
+                .filter(emails::hub_id.eq(query.hub_id))
+                .select(DbEmail::as_select())
+                .into_boxed::<diesel::sqlite::Sqlite>()
+        };
+
+        let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
+
+        let mut items = query_builder();
+
+        // Apply pagination if requested
+        if let Some(pagination) = &query.pagination {
+            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
+            let limit = pagination.per_page as i64;
+            items = items.offset(offset).limit(limit);
+        }
+
+        let db_emails = items
             .order(emails::created_at.desc())
-            .select(DbEmail::as_select())
-            .load(&mut conn)?;
+            .load::<DbEmail>(&mut conn)?;
 
         if db_emails.is_empty() {
-            return Ok((0, Vec::new()));
+            return Ok((total, vec![]));
         }
 
         let db_recipients: Vec<DbEmailRecipient> = DbEmailRecipient::belonging_to(&db_emails)
@@ -114,7 +130,7 @@ impl EmailReader for DieselRepository {
             })
             .collect();
 
-        Ok((result.len(), result))
+        Ok((total, result))
     }
 }
 
