@@ -6,7 +6,6 @@ use crate::domain::hub::{Hub as DomainHub, NewHub as DomainNewHub, UpdateHub as 
 
 #[derive(Queryable, Selectable, Serialize, Deserialize)]
 #[diesel(table_name = crate::schema::hubs)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Hub {
     pub id: i32,
     pub login: Option<String>,

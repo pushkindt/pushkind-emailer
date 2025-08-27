@@ -3,10 +3,10 @@ use serde::Serialize;
 
 use crate::models::hub::Hub;
 
-#[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
+#[derive(Queryable, Selectable, Serialize, Identifiable, Associations, QueryableByName)]
 #[diesel(table_name = crate::schema::recipients)]
 #[diesel(belongs_to(Hub, foreign_key = hub_id))]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[diesel(foreign_derive)]
 pub struct Recipient {
     pub id: i32,
     pub name: String,
@@ -19,7 +19,6 @@ pub struct Recipient {
 
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::recipients)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewRecipient<'a> {
     pub name: &'a str,
     pub email: &'a str,
@@ -30,7 +29,6 @@ pub struct NewRecipient<'a> {
 #[diesel(table_name = crate::schema::recipient_fields)]
 #[diesel(belongs_to(Recipient, foreign_key = recipient_id))]
 #[diesel(primary_key(recipient_id, field))]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct RecipientField {
     pub recipient_id: i32,
     pub field: String,

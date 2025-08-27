@@ -1,13 +1,12 @@
 use diesel::prelude::*;
-use serde::Serialize;
 
 use crate::models::hub::Hub;
 use crate::models::recipient::Recipient;
 
-#[derive(Queryable, Selectable, Identifiable, Associations, Clone, Serialize)]
+#[derive(Queryable, Selectable, Identifiable, Associations, Clone, QueryableByName)]
 #[diesel(table_name = crate::schema::groups)]
 #[diesel(belongs_to(Hub, foreign_key = hub_id))]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[diesel(foreign_derive)]
 pub struct Group {
     pub id: i32,
     pub name: String,
@@ -18,7 +17,6 @@ pub struct Group {
 
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::groups)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewGroup<'a> {
     pub name: &'a str,
     pub hub_id: i32,
@@ -29,7 +27,6 @@ pub struct NewGroup<'a> {
 #[diesel(belongs_to(Recipient, foreign_key = recipient_id))]
 #[diesel(belongs_to(Group, foreign_key = group_id))]
 #[diesel(primary_key(group_id, recipient_id))]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct GroupRecipient {
     pub group_id: i32,
     pub recipient_id: i32,

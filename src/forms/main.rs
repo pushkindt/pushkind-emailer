@@ -5,7 +5,10 @@ use pushkind_common::{
 };
 use serde::Deserialize;
 
-use crate::{repository::RecipientReader, utils::read_attachment_file};
+use crate::{
+    repository::{RecipientListQuery, RecipientReader},
+    utils::read_attachment_file,
+};
 
 /// Form data for sending a new email with optional attachment.
 #[derive(MultipartForm)]
@@ -60,25 +63,25 @@ impl SendEmailForm {
 
         let mut recipients: Vec<NewEmailRecipient> = vec![];
 
-        let group_recipients: Vec<NewEmailRecipient> =
-            match repo.list_recipients_by_groups(&groups, hub_id) {
-                Ok(groups) => groups
-                    .into_iter()
-                    .map(|recipient| NewEmailRecipient {
-                        address: recipient.email,
-                        name: Some(recipient.name),
-                    })
-                    .collect(),
-                Err(e) => return Err(e),
-            };
+        let query = RecipientListQuery::new(hub_id).group_ids(groups);
+
+        let group_recipients: Vec<NewEmailRecipient> = match repo.list_recipients(query) {
+            Ok((_total, groups)) => groups
+                .into_iter()
+                .map(|recipient| NewEmailRecipient {
+                    address: recipient.email,
+                    name: Some(recipient.name),
+                })
+                .collect(),
+            Err(e) => return Err(e),
+        };
 
         recipients.extend(group_recipients);
 
-        let individual_recipients: Vec<NewEmailRecipient> = match repo.list_recipients_by_emails(
-            &emails.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),
-            hub_id,
-        ) {
-            Ok(recipients) => recipients
+        let query = RecipientListQuery::new(hub_id).emails(emails);
+
+        let individual_recipients: Vec<NewEmailRecipient> = match repo.list_recipients(query) {
+            Ok((_total, recipients)) => recipients
                 .into_iter()
                 .map(|recipient| NewEmailRecipient {
                     address: recipient.email,

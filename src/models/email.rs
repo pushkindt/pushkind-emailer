@@ -5,10 +5,10 @@ use serde::Serialize;
 
 use crate::models::hub::Hub;
 
-#[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
+#[derive(Queryable, Selectable, Serialize, Identifiable, Associations, QueryableByName)]
 #[diesel(belongs_to(Hub, foreign_key = hub_id))]
 #[diesel(table_name = crate::schema::emails)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[diesel(foreign_derive)]
 pub struct Email {
     pub id: i32,
     pub message: String,
@@ -26,7 +26,6 @@ pub struct Email {
 
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::emails)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewEmail<'a> {
     pub message: &'a str,
     pub created_at: NaiveDateTime,
@@ -41,7 +40,6 @@ pub struct NewEmail<'a> {
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations)]
 #[diesel(belongs_to(Email, foreign_key = email_id))]
 #[diesel(table_name = crate::schema::email_recipients)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct EmailRecipient {
     pub id: i32,
     pub email_id: i32,
@@ -55,7 +53,6 @@ pub struct EmailRecipient {
 
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::email_recipients)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewEmailRecipient<'a> {
     pub email_id: i32,
     pub address: &'a str,

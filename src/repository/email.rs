@@ -6,6 +6,7 @@ use pushkind_common::domain::email::{
 };
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
+use crate::repository::EmailListQuery;
 use crate::{
     models::email::{
         Email as DbEmail, EmailRecipient as DbEmailRecipient, NewEmail as DbNewEmail,
@@ -15,7 +16,7 @@ use crate::{
 };
 
 impl EmailReader for DieselRepository {
-    fn list_emails_not_replied_recipients(
+    fn list_not_replied_email_recipients(
         &self,
         hub_id: i32,
     ) -> RepositoryResult<Vec<DomainEmailRecipient>> {
@@ -32,7 +33,7 @@ impl EmailReader for DieselRepository {
         Ok(recipients.into_iter().map(Into::into).collect())
     }
 
-    fn get_recipient(
+    fn get_email_recipient(
         &self,
         id: i32,
         hub_id: i32,
@@ -81,18 +82,37 @@ impl EmailReader for DieselRepository {
         }
     }
 
-    fn list_emails(&self, hub_id: i32) -> RepositoryResult<Vec<DomainEmailWithRecipients>> {
+    fn list_emails(
+        &self,
+        query: EmailListQuery,
+    ) -> RepositoryResult<(usize, Vec<DomainEmailWithRecipients>)> {
         use crate::schema::emails;
         let mut conn = self.conn()?;
 
-        let db_emails: Vec<DbEmail> = emails::table
-            .filter(emails::hub_id.eq(hub_id))
+        let query_builder = || {
+            emails::table
+                .filter(emails::hub_id.eq(query.hub_id))
+                .select(DbEmail::as_select())
+                .into_boxed::<diesel::sqlite::Sqlite>()
+        };
+
+        let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
+
+        let mut items = query_builder();
+
+        // Apply pagination if requested
+        if let Some(pagination) = &query.pagination {
+            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
+            let limit = pagination.per_page as i64;
+            items = items.offset(offset).limit(limit);
+        }
+
+        let db_emails = items
             .order(emails::created_at.desc())
-            .select(DbEmail::as_select())
-            .load(&mut conn)?;
+            .load::<DbEmail>(&mut conn)?;
 
         if db_emails.is_empty() {
-            return Ok(Vec::new());
+            return Ok((total, vec![]));
         }
 
         let db_recipients: Vec<DbEmailRecipient> = DbEmailRecipient::belonging_to(&db_emails)
@@ -101,14 +121,16 @@ impl EmailReader for DieselRepository {
 
         let grouped = db_recipients.grouped_by(&db_emails);
 
-        Ok(db_emails
+        let result: Vec<DomainEmailWithRecipients> = db_emails
             .into_iter()
             .zip(grouped)
             .map(|(email, recipients)| DomainEmailWithRecipients {
                 email: email.into(),
                 recipients: recipients.into_iter().map(Into::into).collect(),
             })
-            .collect())
+            .collect();
+
+        Ok((total, result))
     }
 }
 

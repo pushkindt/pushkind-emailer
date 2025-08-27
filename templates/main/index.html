@@ -18,13 +18,16 @@
     <div class="container">
         <div class="accordion" id="email-accordion">
 
-            {% for email_recipients in emails %}
+            {% for email_recipients in emails.items %}
                 {% set email = email_recipients.email %}
                 {% set recipients = email_recipients.recipients %}
                 {% include 'main/email.html' %}
             {% endfor %}
 
         </div>
+
+        {% set items = emails %}
+        {% include 'components/pagination.html' %}
     </div>
 
 

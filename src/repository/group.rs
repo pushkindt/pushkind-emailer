@@ -7,7 +7,7 @@ use crate::domain::group::{Group as DomainGroup, GroupWithRecipients, NewGroup a
 use crate::domain::recipient::Recipient as DomainRecipient;
 use crate::models::group::{Group as DbGroup, GroupRecipient, NewGroup as DbNewGroup};
 use crate::models::recipient::{Recipient as DbRecipient, RecipientField};
-use crate::repository::{DieselRepository, GroupReader, GroupWriter};
+use crate::repository::{DieselRepository, GroupListQuery, GroupReader, GroupWriter};
 
 impl GroupReader for DieselRepository {
     fn get_group_by_id(
@@ -90,17 +90,37 @@ impl GroupReader for DieselRepository {
         }))
     }
 
-    fn list_groups(&self, hub_id: i32) -> RepositoryResult<Vec<DomainGroup>> {
+    fn list_groups(&self, query: GroupListQuery) -> RepositoryResult<(usize, Vec<DomainGroup>)> {
         use crate::schema::groups;
         let mut conn = self.conn()?;
 
-        // Fetch groups for hub
-        let db_groups: Vec<DbGroup> = groups::table
-            .filter(groups::hub_id.eq(hub_id))
-            .select(DbGroup::as_select())
-            .load(&mut conn)?;
+        let query_builder = || {
+            groups::table
+                .filter(groups::hub_id.eq(query.hub_id))
+                .select(DbGroup::as_select())
+                .into_boxed::<diesel::sqlite::Sqlite>()
+        };
 
-        Ok(db_groups.into_iter().map(|g| g.into()).collect())
+        let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
+
+        let mut items = query_builder();
+
+        // Apply pagination if requested
+        if let Some(pagination) = &query.pagination {
+            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
+            let limit = pagination.per_page as i64;
+            items = items.offset(offset).limit(limit);
+        }
+
+        // Final load
+        let items = items
+            .order(groups::name.asc())
+            .load::<DbGroup>(&mut conn)?
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<DomainGroup>>();
+
+        Ok((total, items))
     }
 }
 

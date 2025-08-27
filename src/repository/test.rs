@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::recipient::{Recipient, RecipientWithGroups};
-use crate::repository::{RecipientReader, TestRepository};
+use crate::repository::{RecipientListQuery, RecipientReader};
+
+#[derive(Clone)]
+pub struct TestRepository;
 
 impl RecipientReader for TestRepository {
     fn get_recipient_by_id(
@@ -29,21 +32,10 @@ impl RecipientReader for TestRepository {
     fn list_custom_fields(&self, _hub_id: i32) -> RepositoryResult<Vec<String>> {
         Ok(vec![])
     }
-    fn list_recipients(&self, _hub_id: i32) -> RepositoryResult<Vec<Recipient>> {
-        Ok(vec![])
-    }
-    fn list_recipients_by_groups(
+    fn list_recipients(
         &self,
-        _group_ids: &[i32],
-        _hub_id: i32,
-    ) -> RepositoryResult<Vec<Recipient>> {
-        Ok(vec![])
-    }
-    fn list_recipients_by_emails(
-        &self,
-        _emails: &[&str],
-        _hub_id: i32,
-    ) -> RepositoryResult<Vec<Recipient>> {
-        Ok(vec![])
+        _query: RecipientListQuery,
+    ) -> RepositoryResult<(usize, Vec<Recipient>)> {
+        Ok((0, vec![]))
     }
 }

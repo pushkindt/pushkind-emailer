@@ -2,6 +2,7 @@ use pushkind_common::db::{DbConnection, DbPool};
 use pushkind_common::domain::email::{
     EmailRecipient, EmailWithRecipients, NewEmail, UpdateEmail, UpdateEmailRecipient,
 };
+use pushkind_common::pagination::Pagination;
 use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
@@ -29,8 +30,110 @@ impl DieselRepository {
     }
 }
 
-#[derive(Clone)]
-pub struct TestRepository;
+/// Query parameters used when listing or searching emails.
+#[derive(Debug, Clone)]
+pub struct EmailListQuery {
+    /// Filter by hub identifier.
+    pub hub_id: i32,
+    /// Full-text search string.
+    pub search: Option<String>,
+    /// Pagination parameters.
+    pub pagination: Option<Pagination>,
+}
+
+impl EmailListQuery {
+    pub fn new(hub_id: i32) -> Self {
+        Self {
+            hub_id,
+            search: None,
+            pagination: None,
+        }
+    }
+
+    pub fn search(mut self, search: impl Into<String>) -> Self {
+        self.search = Some(search.into());
+        self
+    }
+    pub fn paginate(mut self, page: usize, per_page: usize) -> Self {
+        self.pagination = Some(Pagination { page, per_page });
+        self
+    }
+}
+
+/// Query parameters used when listing or searching recipients.
+#[derive(Debug, Clone)]
+pub struct RecipientListQuery {
+    /// Filter by hub identifier.
+    pub hub_id: i32,
+    /// Filter by group identifier.
+    pub group_ids: Option<Vec<i32>>,
+    /// Filter by email address.
+    pub emails: Option<Vec<String>>,
+    /// Full-text search string.
+    pub search: Option<String>,
+    /// Pagination parameters.
+    pub pagination: Option<Pagination>,
+}
+
+impl RecipientListQuery {
+    pub fn new(hub_id: i32) -> Self {
+        Self {
+            hub_id,
+            group_ids: None,
+            emails: None,
+            search: None,
+            pagination: None,
+        }
+    }
+
+    pub fn group_ids(mut self, group_ids: Vec<i32>) -> Self {
+        self.group_ids = Some(group_ids);
+        self
+    }
+
+    pub fn emails(mut self, emails: Vec<String>) -> Self {
+        self.emails = Some(emails);
+        self
+    }
+
+    pub fn search(mut self, search: impl Into<String>) -> Self {
+        self.search = Some(search.into());
+        self
+    }
+    pub fn paginate(mut self, page: usize, per_page: usize) -> Self {
+        self.pagination = Some(Pagination { page, per_page });
+        self
+    }
+}
+
+/// Query parameters used when listing or searching groups.
+#[derive(Debug, Clone)]
+pub struct GroupListQuery {
+    /// Filter by hub identifier.
+    pub hub_id: i32,
+    /// Full-text search string.
+    pub search: Option<String>,
+    /// Pagination parameters.
+    pub pagination: Option<Pagination>,
+}
+
+impl GroupListQuery {
+    pub fn new(hub_id: i32) -> Self {
+        Self {
+            hub_id,
+            search: None,
+            pagination: None,
+        }
+    }
+    pub fn search(mut self, search: impl Into<String>) -> Self {
+        self.search = Some(search.into());
+        self
+    }
+    pub fn paginate(mut self, page: usize, per_page: usize) -> Self {
+        self.pagination = Some(Pagination { page, per_page });
+        self
+    }
+}
 
 pub trait EmailReader {
     fn get_email_by_id(
@@ -38,12 +141,16 @@ pub trait EmailReader {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<EmailWithRecipients>>;
-    fn list_emails(&self, hub_id: i32) -> RepositoryResult<Vec<EmailWithRecipients>>;
-    fn list_emails_not_replied_recipients(
+    fn list_emails(
+        &self,
+        query: EmailListQuery,
+    ) -> RepositoryResult<(usize, Vec<EmailWithRecipients>)>;
+    fn list_not_replied_email_recipients(
         &self,
         hub_id: i32,
     ) -> RepositoryResult<Vec<EmailRecipient>>;
-    fn get_recipient(&self, id: i32, hub_id: i32) -> RepositoryResult<Option<EmailRecipient>>;
+    fn get_email_recipient(&self, id: i32, hub_id: i32)
+    -> RepositoryResult<Option<EmailRecipient>>;
 }
 pub trait EmailWriter {
     fn create_email(&self, email: &NewEmail) -> RepositoryResult<EmailWithRecipients>;
@@ -76,17 +183,10 @@ pub trait RecipientReader {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<RecipientWithGroups>>;
-    fn list_recipients(&self, hub_id: i32) -> RepositoryResult<Vec<Recipient>>;
-    fn list_recipients_by_groups(
+    fn list_recipients(
         &self,
-        group_ids: &[i32],
-        hub_id: i32,
-    ) -> RepositoryResult<Vec<Recipient>>;
-    fn list_recipients_by_emails(
-        &self,
-        emails: &[&str],
-        hub_id: i32,
-    ) -> RepositoryResult<Vec<Recipient>>;
+        query: RecipientListQuery,
+    ) -> RepositoryResult<(usize, Vec<Recipient>)>;
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>>;
 }
 pub trait RecipientWriter {
@@ -98,7 +198,7 @@ pub trait RecipientWriter {
 }
 
 pub trait GroupReader {
-    fn list_groups(&self, hub_id: i32) -> RepositoryResult<Vec<Group>>;
+    fn list_groups(&self, query: GroupListQuery) -> RepositoryResult<(usize, Vec<Group>)>;
     fn get_group_by_id(
         &self,
         id: i32,
