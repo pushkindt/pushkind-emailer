@@ -15,7 +15,10 @@ use serde::Deserialize;
 use tera::Tera;
 
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
-use crate::repository::{DieselRepository, EmailReader, EmailWriter, GroupReader, RecipientReader};
+use crate::repository::{
+    DieselRepository, EmailListQuery, EmailReader, EmailWriter, GroupListQuery, GroupReader,
+    RecipientListQuery, RecipientReader,
+};
 
 #[derive(Deserialize)]
 struct IndexQueryParams {
@@ -48,24 +51,28 @@ pub async fn index(
     );
     context.insert("retry", &retry);
 
-    let recipients = match repo.list_recipients(user.hub_id) {
-        Ok(recipients) => recipients,
+    let query = RecipientListQuery::new(user.hub_id);
+
+    let recipients = match repo.list_recipients(query) {
+        Ok((_total, recipients)) => recipients,
         Err(e) => {
             log::error!("Failed to list recipients: {e}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    let groups = match repo.list_groups(user.hub_id) {
-        Ok(groups) => groups,
+    let query = GroupListQuery::new(user.hub_id);
+    let groups = match repo.list_groups(query) {
+        Ok((_total, groups)) => groups,
         Err(e) => {
             log::error!("Failed to list groups: {e}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    let emails = match repo.list_emails(user.hub_id) {
-        Ok(emails) => emails,
+    let query = EmailListQuery::new(user.hub_id);
+    let emails = match repo.list_emails(query) {
+        Ok((_total, emails)) => emails,
         Err(e) => {
             log::error!("Failed to list emails: {e}");
             return HttpResponse::InternalServerError().finish();

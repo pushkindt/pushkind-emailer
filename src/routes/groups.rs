@@ -9,7 +9,9 @@ use validator::Validate;
 
 use crate::domain::group::NewGroup;
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
-use crate::repository::{DieselRepository, GroupReader, GroupWriter, RecipientReader};
+use crate::repository::{
+    DieselRepository, GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
+};
 
 #[get("/groups")]
 pub async fn groups_show(
@@ -23,15 +25,20 @@ pub async fn groups_show(
         return response;
     };
 
-    let recipients = match repo.list_recipients(user.hub_id) {
-        Ok(recipients) => recipients,
+    let query = RecipientListQuery::new(user.hub_id);
+
+    let recipients = match repo.list_recipients(query) {
+        Ok((_total, recipients)) => recipients,
         Err(err) => {
             log::error!("Error while listing recipients: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
-    let groups = match repo.list_groups(user.hub_id) {
-        Ok(groups) => groups,
+
+    let query = GroupListQuery::new(user.hub_id);
+
+    let groups = match repo.list_groups(query) {
+        Ok((_total, groups)) => groups,
         Err(err) => {
             log::error!("Error while listing groups: {err}");
             return HttpResponse::InternalServerError().finish();

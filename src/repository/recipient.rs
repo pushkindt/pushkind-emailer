@@ -9,7 +9,7 @@ use crate::domain::recipient::{
 };
 use crate::models::group::{Group, GroupRecipient};
 use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
-use crate::repository::{DieselRepository, RecipientReader, RecipientWriter};
+use crate::repository::{DieselRepository, RecipientListQuery, RecipientReader, RecipientWriter};
 
 impl RecipientReader for DieselRepository {
     fn get_recipient_by_id(
@@ -58,19 +58,25 @@ impl RecipientReader for DieselRepository {
         }))
     }
 
-    fn list_recipients(&self, hub_id: i32) -> RepositoryResult<Vec<DomainRecipient>> {
+    fn list_recipients(
+        &self,
+        query: RecipientListQuery,
+    ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
         use crate::schema::recipients;
         let mut conn = self.conn()?;
 
         // Load recipients for the hub
         let db_recipients: Vec<Recipient> = recipients::table
-            .filter(recipients::hub_id.eq(hub_id))
+            .filter(recipients::hub_id.eq(query.hub_id))
+            // .filter(recipients::email.eq_any(emails))
+            // .inner_join(groups_recipients::table)
+            // .filter(groups_recipients::group_id.eq_any(group_ids))
             .select(Recipient::as_select())
             .order(recipients::name.desc())
             .load(&mut conn)?;
 
         if db_recipients.is_empty() {
-            return Ok(Vec::new());
+            return Ok((0, Vec::new()));
         }
 
         // Load recipient fields, grouped by recipient
@@ -94,7 +100,7 @@ impl RecipientReader for DieselRepository {
         }
 
         // Compose DomainRecipient
-        let recipients = db_recipients
+        let recipients: Vec<DomainRecipient> = db_recipients
             .into_iter()
             .zip(db_fields)
             .map(|(r, fields)| DomainRecipient {
@@ -113,134 +119,7 @@ impl RecipientReader for DieselRepository {
             })
             .collect();
 
-        Ok(recipients)
-    }
-
-    fn list_recipients_by_groups(
-        &self,
-        group_ids: &[i32],
-        hub_id: i32,
-    ) -> RepositoryResult<Vec<DomainRecipient>> {
-        use crate::schema::{groups_recipients, recipients};
-        let mut conn = self.conn()?;
-
-        // Load recipients for the hub
-        let db_recipients: Vec<Recipient> = recipients::table
-            .filter(recipients::hub_id.eq(hub_id))
-            .inner_join(groups_recipients::table)
-            .filter(groups_recipients::group_id.eq_any(group_ids))
-            .select(Recipient::as_select())
-            .order(recipients::name.desc())
-            .load(&mut conn)?;
-
-        if db_recipients.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Load recipient fields, grouped by recipient
-        let db_fields = RecipientField::belonging_to(&db_recipients)
-            .select(RecipientField::as_select())
-            .load::<RecipientField>(&mut conn)?
-            .grouped_by(&db_recipients);
-
-        // Load group-recipient relations
-        let db_group_recipients = GroupRecipient::belonging_to(&db_recipients)
-            .select(GroupRecipient::as_select())
-            .load::<GroupRecipient>(&mut conn)?;
-
-        // Build a map from recipient_id to group IDs
-        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
-        for relation in db_group_recipients {
-            recipient_id_to_group_ids
-                .entry(relation.recipient_id)
-                .or_default()
-                .push(relation.group_id);
-        }
-
-        // Compose DomainRecipient
-        let recipients = db_recipients
-            .into_iter()
-            .zip(db_fields)
-            .map(|(r, fields)| DomainRecipient {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                unsubscribed_at: r.unsubscribed_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
-                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
-            })
-            .collect();
-
-        Ok(recipients)
-    }
-
-    fn list_recipients_by_emails(
-        &self,
-        emails: &[&str],
-        hub_id: i32,
-    ) -> RepositoryResult<Vec<DomainRecipient>> {
-        use crate::schema::recipients;
-        let mut conn = self.conn()?;
-
-        // Load recipients for the hub
-        let db_recipients: Vec<Recipient> = recipients::table
-            .filter(recipients::hub_id.eq(hub_id))
-            .filter(recipients::email.eq_any(emails))
-            .select(Recipient::as_select())
-            .order(recipients::name.desc())
-            .load(&mut conn)?;
-
-        if db_recipients.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Load recipient fields, grouped by recipient
-        let db_fields = RecipientField::belonging_to(&db_recipients)
-            .select(RecipientField::as_select())
-            .load::<RecipientField>(&mut conn)?
-            .grouped_by(&db_recipients);
-
-        // Load group-recipient relations
-        let db_group_recipients = GroupRecipient::belonging_to(&db_recipients)
-            .select(GroupRecipient::as_select())
-            .load::<GroupRecipient>(&mut conn)?;
-
-        // Build a map from recipient_id to group IDs
-        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
-        for relation in db_group_recipients {
-            recipient_id_to_group_ids
-                .entry(relation.recipient_id)
-                .or_default()
-                .push(relation.group_id);
-        }
-
-        // Compose DomainRecipient
-        let recipients = db_recipients
-            .into_iter()
-            .zip(db_fields)
-            .map(|(r, fields)| DomainRecipient {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                unsubscribed_at: r.unsubscribed_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
-                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
-            })
-            .collect();
-
-        Ok(recipients)
+        Ok((recipients.len(), recipients))
     }
 
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {

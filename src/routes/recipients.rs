@@ -15,7 +15,8 @@ use crate::forms::recipients::{
 };
 use crate::models::config::ServerConfig;
 use crate::repository::{
-    DieselRepository, GroupReader, GroupWriter, RecipientReader, RecipientWriter,
+    DieselRepository, GroupListQuery, GroupReader, GroupWriter, RecipientListQuery,
+    RecipientReader, RecipientWriter,
 };
 
 #[get("/recipients")]
@@ -39,8 +40,10 @@ pub async fn recipients_show(
     );
     context.insert("crm_service_url", &server_config.crm_service_url);
 
-    let recipients = match repo.list_recipients(user.hub_id) {
-        Ok(recipients) => recipients,
+    let query = RecipientListQuery::new(user.hub_id);
+
+    let recipients = match repo.list_recipients(query) {
+        Ok((_total, recipients)) => recipients,
         Err(err) => {
             log::error!("Failed to get recipients: {err}");
             return HttpResponse::InternalServerError().finish();
@@ -207,8 +210,10 @@ pub async fn recipients_modal(
         }
     };
 
-    let groups = match repo.list_groups(user.hub_id) {
-        Ok(groups) => groups,
+    let query = GroupListQuery::new(user.hub_id);
+
+    let groups = match repo.list_groups(query) {
+        Ok((_total, groups)) => groups,
         Err(e) => {
             log::error!("Error retrieving groups: {e}");
             return HttpResponse::InternalServerError().finish();

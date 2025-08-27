@@ -7,7 +7,7 @@ use crate::domain::group::{Group as DomainGroup, GroupWithRecipients, NewGroup a
 use crate::domain::recipient::Recipient as DomainRecipient;
 use crate::models::group::{Group as DbGroup, GroupRecipient, NewGroup as DbNewGroup};
 use crate::models::recipient::{Recipient as DbRecipient, RecipientField};
-use crate::repository::{DieselRepository, GroupReader, GroupWriter};
+use crate::repository::{DieselRepository, GroupListQuery, GroupReader, GroupWriter};
 
 impl GroupReader for DieselRepository {
     fn get_group_by_id(
@@ -90,17 +90,19 @@ impl GroupReader for DieselRepository {
         }))
     }
 
-    fn list_groups(&self, hub_id: i32) -> RepositoryResult<Vec<DomainGroup>> {
+    fn list_groups(&self, query: GroupListQuery) -> RepositoryResult<(usize, Vec<DomainGroup>)> {
         use crate::schema::groups;
         let mut conn = self.conn()?;
 
         // Fetch groups for hub
         let db_groups: Vec<DbGroup> = groups::table
-            .filter(groups::hub_id.eq(hub_id))
+            .filter(groups::hub_id.eq(query.hub_id))
             .select(DbGroup::as_select())
             .load(&mut conn)?;
 
-        Ok(db_groups.into_iter().map(|g| g.into()).collect())
+        let result: Vec<DomainGroup> = db_groups.into_iter().map(|g| g.into()).collect();
+
+        Ok((result.len(), result))
     }
 }
 

@@ -8,7 +8,7 @@ use pushkind_emailer::domain::hub::Hub;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 
 pub fn check_hub_email_replied(repo: DieselRepository, hub: &Hub, domain: &str) {
-    let recipients = match repo.list_emails_not_replied_recipients(hub.id) {
+    let recipients = match repo.list_not_replied_email_recipients(hub.id) {
         Ok(recipients) => recipients,
         Err(e) => {
             log::error!("Cannot get recipients: {e}");
