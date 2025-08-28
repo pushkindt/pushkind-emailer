@@ -102,7 +102,7 @@ async fn send_email(
                 }
             }
         }
-        ZMQSendEmailMessage::NewEmail(new_email) => repo.create_email(&new_email)?,
+        ZMQSendEmailMessage::NewEmail((_user, new_email)) => repo.create_email(&new_email)?,
     };
 
     let hub = match repo.get_hub_by_id(email.email.hub_id)? {
