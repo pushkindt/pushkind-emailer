@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use diesel::prelude::*;
+use diesel::upsert::excluded;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use crate::domain::recipient::{
@@ -200,9 +201,17 @@ impl RecipientWriter for DieselRepository {
                         })
                         .collect();
                     if !new_fields.is_empty() {
-                        diesel::insert_into(recipient_fields::table)
-                            .values(&new_fields)
-                            .execute(conn)?;
+                        for field in new_fields {
+                            diesel::insert_into(recipient_fields::table)
+                                .values(&field)
+                                .on_conflict((
+                                    recipient_fields::recipient_id,
+                                    recipient_fields::field,
+                                ))
+                                .do_update()
+                                .set(recipient_fields::value.eq(excluded(recipient_fields::value)))
+                                .execute(conn)?;
+                        }
                     }
                 }
 
