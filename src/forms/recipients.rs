@@ -130,8 +130,8 @@ impl UploadRecipientsForm {
 
             for (i, field) in record.iter().enumerate() {
                 match headers.get(i) {
-                    Some("name") => name = field.to_string(),
-                    Some("email") => email = field.to_string(),
+                    Some("name") => name = field.trim().to_string(),
+                    Some("email") => email = field.trim().to_lowercase(),
                     Some("groups") => {
                         groups = field
                             .split(',')
@@ -149,7 +149,7 @@ impl UploadRecipientsForm {
                 }
             }
 
-            if name.trim().is_empty() || email.trim().is_empty() {
+            if name.is_empty() || email.is_empty() {
                 // Skip records missing required fields.
                 continue;
             }
