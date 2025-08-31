@@ -207,7 +207,7 @@ impl SourceRecipientForm {
             #[derive(Deserialize)]
             struct SourceRecipient {
                 name: String,
-                email: String,
+                email: Option<String>,
                 hub_id: i32,
                 fields: Option<HashMap<String, String>>,
                 groups: Option<Vec<String>>,
@@ -216,7 +216,9 @@ impl SourceRecipientForm {
             let recipients: Vec<SourceRecipient> = response.json().await?;
             let recipients = recipients
                 .into_iter()
-                .map(|r| NewRecipient::new(r.name, r.email, r.hub_id, r.fields, r.groups))
+                .filter(|r| r.email.is_some())
+                .filter(|r| !r.email.as_ref().unwrap().trim().is_empty())
+                .map(|r| NewRecipient::new(r.name, r.email.unwrap(), r.hub_id, r.fields, r.groups))
                 .collect();
             Ok(recipients)
         } else {
