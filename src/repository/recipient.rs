@@ -176,12 +176,7 @@ impl RecipientWriter for DieselRepository {
             let mut count_inserted: usize = 0;
 
             for new in recipient {
-                let email = new.email.to_lowercase();
-                let db_new = NewRecipient {
-                    name: &new.name,
-                    email: email.as_str(),
-                    hub_id: new.hub_id,
-                };
+                let db_new: NewRecipient = new.into();
 
                 let inserted = diesel::insert_into(recipients::table)
                     .values(&db_new)

@@ -128,10 +128,7 @@ impl GroupWriter for DieselRepository {
     fn create_group(&self, group: &DomainNewGroup) -> RepositoryResult<DomainGroup> {
         use crate::schema::groups;
         let mut conn = self.conn()?;
-        let db_new = DbNewGroup {
-            name: group.name,
-            hub_id: group.hub_id,
-        };
+        let db_new: DbNewGroup = group.into();
         let inserted = diesel::insert_into(groups::table)
             .values(&db_new)
             .get_result::<DbGroup>(&mut conn)?;

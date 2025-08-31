@@ -7,7 +7,6 @@ use pushkind_common::routes::{ensure_role, redirect};
 use tera::{Context, Tera};
 use validator::Validate;
 
-use crate::domain::group::NewGroup;
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
 use crate::repository::{
     DieselRepository, GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
@@ -80,10 +79,7 @@ pub async fn groups_add(
         return redirect("/groups");
     }
 
-    let new_group = NewGroup {
-        hub_id: user.hub_id,
-        name: &form.name,
-    };
+    let new_group = form.to_new_group(user.hub_id);
 
     match repo.create_group(&new_group) {
         Ok(_) => {

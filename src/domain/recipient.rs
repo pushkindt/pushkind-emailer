@@ -52,6 +52,33 @@ pub struct NewRecipient {
     pub groups: Option<Vec<String>>,
 }
 
+impl NewRecipient {
+    /// Creates a new [`NewRecipient`] ensuring that the email is stored in lowercase.
+    ///
+    /// # Parameters
+    /// - `name`: Name of the recipient.
+    /// - `email`: Email address which will be normalized to lowercase.
+    /// - `hub_id`: Hub to associate with the recipient.
+    /// - `fields`: Optional set of custom fields.
+    /// - `groups`: Optional list of group names to subscribe the recipient to.
+    #[must_use]
+    pub fn new(
+        name: String,
+        email: String,
+        hub_id: i32,
+        fields: Option<HashMap<String, String>>,
+        groups: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            name,
+            email: email.to_lowercase(),
+            hub_id,
+            fields,
+            groups,
+        }
+    }
+}
+
 /// Fields that can be modified for an existing [`Recipient`].
 pub struct UpdateRecipient {
     /// Updated name.

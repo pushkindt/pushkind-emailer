@@ -1,5 +1,6 @@
 use diesel::prelude::*;
 
+use crate::domain::group::{Group as DomainGroup, NewGroup as DomainNewGroup};
 use crate::models::hub::Hub;
 use crate::models::recipient::Recipient;
 
@@ -32,9 +33,7 @@ pub struct GroupRecipient {
     pub recipient_id: i32,
 }
 
-use crate::domain::group as domain;
-
-impl From<Group> for domain::Group {
+impl From<Group> for DomainGroup {
     fn from(value: Group) -> Self {
         Self {
             id: value.id,
@@ -42,6 +41,15 @@ impl From<Group> for domain::Group {
             hub_id: value.hub_id,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        }
+    }
+}
+
+impl<'a> From<&'a DomainNewGroup> for NewGroup<'a> {
+    fn from(value: &'a DomainNewGroup) -> Self {
+        Self {
+            name: value.name.as_str(),
+            hub_id: value.hub_id,
         }
     }
 }
