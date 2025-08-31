@@ -204,7 +204,20 @@ impl SourceRecipientForm {
             .await?;
 
         if response.status().is_success() {
-            let recipients: Vec<NewRecipient> = response.json().await?;
+            #[derive(Deserialize)]
+            struct SourceRecipient {
+                name: String,
+                email: String,
+                hub_id: i32,
+                fields: Option<HashMap<String, String>>,
+                groups: Option<Vec<String>>,
+            }
+
+            let recipients: Vec<SourceRecipient> = response.json().await?;
+            let recipients = recipients
+                .into_iter()
+                .map(|r| NewRecipient::new(r.name, r.email, r.hub_id, r.fields, r.groups))
+                .collect();
             Ok(recipients)
         } else {
             Err(SourceRecipientFormError::RequestError)
