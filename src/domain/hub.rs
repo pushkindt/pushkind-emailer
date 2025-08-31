@@ -29,17 +29,17 @@ pub struct Hub {
 }
 
 /// Data required to create a new [`Hub`].
-pub struct NewHub<'a> {
+pub struct NewHub {
     /// Identifier of the hub to be created.
     pub id: i32,
     /// Login used for SMTP authentication.
-    pub login: Option<&'a str>,
+    pub login: Option<String>,
     /// Password for the SMTP login.
-    pub password: Option<&'a str>,
+    pub password: Option<String>,
     /// Sender address used in outgoing emails.
-    pub sender: Option<&'a str>,
+    pub sender: Option<String>,
     /// SMTP server hostname.
-    pub smtp_server: Option<&'a str>,
+    pub smtp_server: Option<String>,
     /// SMTP server port.
     pub smtp_port: Option<i32>,
     /// Creation timestamp.
@@ -47,23 +47,23 @@ pub struct NewHub<'a> {
     /// Last update timestamp.
     pub updated_at: Option<NaiveDateTime>,
     /// IMAP server hostname.
-    pub imap_server: Option<&'a str>,
+    pub imap_server: Option<String>,
     /// IMAP server port.
     pub imap_port: Option<i32>,
     /// Template applied to outgoing emails.
-    pub email_template: Option<&'a str>,
+    pub email_template: Option<String>,
 }
 
 /// Fields that can be updated for an existing [`Hub`].
-pub struct UpdateHub<'a> {
+pub struct UpdateHub {
     /// New login for SMTP authentication.
-    pub login: Option<&'a str>,
+    pub login: Option<String>,
     /// New password for the login.
-    pub password: Option<&'a str>,
+    pub password: Option<String>,
     /// Updated sender address.
-    pub sender: Option<&'a str>,
+    pub sender: Option<String>,
     /// Updated SMTP server hostname.
-    pub smtp_server: Option<&'a str>,
+    pub smtp_server: Option<String>,
     /// Updated SMTP port.
     pub smtp_port: Option<i32>,
     /// Updated creation timestamp.
@@ -71,11 +71,11 @@ pub struct UpdateHub<'a> {
     /// Updated modification timestamp.
     pub updated_at: Option<NaiveDateTime>,
     /// Updated IMAP server hostname.
-    pub imap_server: Option<&'a str>,
+    pub imap_server: Option<String>,
     /// Updated IMAP port.
     pub imap_port: Option<i32>,
     /// Updated email template.
-    pub email_template: Option<&'a str>,
+    pub email_template: Option<String>,
 }
 
 impl Hub {
@@ -92,7 +92,7 @@ impl Hub {
     }
 }
 
-impl<'a> NewHub<'a> {
+impl NewHub {
     pub fn new(id: i32) -> Self {
         Self {
             id,

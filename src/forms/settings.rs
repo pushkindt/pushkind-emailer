@@ -23,19 +23,19 @@ pub struct SaveHubForm {
     pub message: Option<String>,
 }
 
-impl<'a> From<&'a SaveHubForm> for UpdateHub<'a> {
-    fn from(val: &'a SaveHubForm) -> Self {
+impl From<SaveHubForm> for UpdateHub {
+    fn from(val: SaveHubForm) -> Self {
         Self {
-            login: val.login.as_deref(),
-            password: val.password.as_deref(),
-            sender: val.sender.as_deref(),
-            smtp_server: val.smtp_server.as_deref(),
+            login: val.login,
+            password: val.password,
+            sender: val.sender,
+            smtp_server: val.smtp_server,
             smtp_port: val.smtp_port,
-            imap_server: val.imap_server.as_deref(),
+            imap_server: val.imap_server,
             imap_port: val.imap_port,
             created_at: val.created_at,
             updated_at: Some(chrono::Utc::now().naive_utc()),
-            email_template: val.message.as_deref(),
+            email_template: val.message,
         }
     }
 }

@@ -1,6 +1,7 @@
 use diesel::prelude::*;
 use serde::Serialize;
 
+use crate::domain::recipient::NewRecipient as DomainNewRecipient;
 use crate::models::hub::Hub;
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations, QueryableByName)]
@@ -33,4 +34,14 @@ pub struct RecipientField {
     pub recipient_id: i32,
     pub field: String,
     pub value: String,
+}
+
+impl<'a> From<&'a DomainNewRecipient> for NewRecipient<'a> {
+    fn from(value: &'a DomainNewRecipient) -> Self {
+        Self {
+            name: &value.name,
+            email: &value.email,
+            hub_id: value.hub_id,
+        }
+    }
 }

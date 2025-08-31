@@ -28,9 +28,9 @@ pub struct GroupWithRecipients {
 }
 
 /// Parameters to create a new [`Group`].
-pub struct NewGroup<'a> {
+pub struct NewGroup {
     /// Name of the group.
-    pub name: &'a str,
+    pub name: String,
     /// Hub that will own the group.
     pub hub_id: i32,
 }

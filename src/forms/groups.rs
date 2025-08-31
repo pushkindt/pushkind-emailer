@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use validator::Validate;
 
+use crate::domain::group::NewGroup;
+
 /// Form data for creating a new recipient group.
 #[derive(Deserialize, Validate)]
 pub struct AddGroupForm {
@@ -19,4 +21,13 @@ pub struct DeleteGroupForm {
 pub struct AssignGroupRecipientForm {
     pub recipient_id: i32,
     pub group_id: i32,
+}
+
+impl AddGroupForm {
+    pub fn to_new_group(&self, hub_id: i32) -> NewGroup {
+        NewGroup {
+            name: self.name.clone(),
+            hub_id,
+        }
+    }
 }

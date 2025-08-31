@@ -74,7 +74,7 @@ pub async fn settings_save(
         }
     };
 
-    match repo.update_hub(hub.id, &(&form).into()) {
+    match repo.update_hub(hub.id, &form.into()) {
         Ok(_) => {
             FlashMessage::success("Хаб сохранён.").send();
         }

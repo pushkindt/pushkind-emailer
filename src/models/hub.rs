@@ -69,37 +69,37 @@ impl From<Hub> for DomainHub {
     }
 }
 
-impl<'a> From<&DomainNewHub<'a>> for NewHub<'a> {
-    fn from(value: &DomainNewHub<'a>) -> Self {
+impl<'a> From<&'a DomainNewHub> for NewHub<'a> {
+    fn from(value: &'a DomainNewHub) -> Self {
         Self {
             id: value.id,
-            login: value.login,
-            password: value.password,
-            sender: value.sender,
-            smtp_server: value.smtp_server,
+            login: value.login.as_deref(),
+            password: value.password.as_deref(),
+            sender: value.sender.as_deref(),
+            smtp_server: value.smtp_server.as_deref(),
             smtp_port: value.smtp_port,
             created_at: value.created_at,
             updated_at: value.updated_at,
-            imap_server: value.imap_server,
+            imap_server: value.imap_server.as_deref(),
             imap_port: value.imap_port,
-            email_template: value.email_template,
+            email_template: value.email_template.as_deref(),
         }
     }
 }
 
-impl<'a> From<&DomainUpdateHub<'a>> for UpdateHub<'a> {
-    fn from(value: &DomainUpdateHub<'a>) -> Self {
+impl<'a> From<&'a DomainUpdateHub> for UpdateHub<'a> {
+    fn from(value: &'a DomainUpdateHub) -> Self {
         Self {
-            login: value.login,
-            password: value.password,
-            sender: value.sender,
-            smtp_server: value.smtp_server,
+            login: value.login.as_deref(),
+            password: value.password.as_deref(),
+            sender: value.sender.as_deref(),
+            smtp_server: value.smtp_server.as_deref(),
             smtp_port: value.smtp_port,
             created_at: value.created_at,
             updated_at: value.updated_at,
-            imap_server: value.imap_server,
+            imap_server: value.imap_server.as_deref(),
             imap_port: value.imap_port,
-            email_template: value.email_template,
+            email_template: value.email_template.as_deref(),
         }
     }
 }
