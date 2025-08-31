@@ -131,7 +131,7 @@ impl UploadRecipientsForm {
             for (i, field) in record.iter().enumerate() {
                 match headers.get(i) {
                     Some("name") => name = field.trim().to_string(),
-                    Some("email") => email = field.trim().to_lowercase(),
+                    Some("email") => email = field.trim().to_string(),
                     Some("groups") => {
                         groups = field
                             .split(',')
@@ -154,13 +154,13 @@ impl UploadRecipientsForm {
                 continue;
             }
 
-            recipients.push(NewRecipient {
+            recipients.push(NewRecipient::new(
                 name,
                 email,
                 hub_id,
-                groups: Some(groups),
-                fields: Some(optional_fields),
-            });
+                Some(optional_fields),
+                Some(groups),
+            ));
         }
 
         Ok(recipients)
@@ -169,13 +169,7 @@ impl UploadRecipientsForm {
 
 impl From<AddRecipientForm> for NewRecipient {
     fn from(form: AddRecipientForm) -> Self {
-        Self {
-            name: form.name,
-            email: form.email,
-            hub_id: 0,
-            groups: None,
-            fields: None,
-        }
+        NewRecipient::new(form.name, form.email, 0, None, None)
     }
 }
 
