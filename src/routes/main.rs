@@ -124,7 +124,7 @@ pub async fn send_email(
     };
     new_email.hub_id = user.hub_id;
 
-    let zmq_message = ZMQSendEmailMessage::NewEmail((user, new_email));
+    let zmq_message = ZMQSendEmailMessage::NewEmail(Box::new((user, new_email)));
 
     match zmq_sender.send_json(&zmq_message).await {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь."),
