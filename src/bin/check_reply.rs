@@ -80,7 +80,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
                 (server, port as u16, username, password)
             }
             _ => {
-                log::error!("Cannot get imap server and port for the hub");
+                log::error!("Cannot get imap server and port for the hub#{}", hub.id);
                 return;
             }
         };
@@ -88,14 +88,14 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
     let tls = match native_tls::TlsConnector::builder().build() {
         Ok(tls) => tls,
         Err(e) => {
-            log::error!("Cannot build tls connector: {e}");
+            log::error!("Cannot build tls connector for hub#{}: {e}", hub.id);
             return;
         }
     };
     let client = match imap::connect((imap_server.as_str(), imap_port), imap_server, &tls) {
         Ok(client) => client,
         Err(e) => {
-            log::error!("Cannot connect to imap server: {e}");
+            log::error!("Cannot connect to imap server in hub#{}: {e}", hub.id);
             return;
         }
     };
@@ -103,31 +103,36 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
     let mut session = match client.login(username, password).map_err(|e| e.0) {
         Ok(session) => session,
         Err(e) => {
-            log::error!("Cannot login to imap server: {e}");
+            log::error!("Cannot login to imap server in hub#{}: {e}", hub.id);
             return;
         }
     };
 
     if let Err(e) = session.select("INBOX") {
-        log::error!("Cannot select INBOX: {e}");
+        log::error!("Cannot select INBOX in hub#{}: {e}", hub.id);
         return;
     }
 
     let recipients = match repo.list_not_replied_email_recipients(hub.id) {
         Ok(r) => r,
         Err(e) => {
-            log::error!("Cannot get recipients: {e}");
+            log::error!("Cannot get recipients in hub#{}: {e}", hub.id);
             Vec::new()
         }
     };
 
+    log::info!(
+        "Found {} recipients for the startup check in hub#{}",
+        recipients.len(),
+        hub.id,
+    );
     for recipient in recipients {
         let in_reply_to_id = format!("<{}@{}>", recipient.id, domain);
         let query = format!("HEADER In-Reply-To {in_reply_to_id}");
         let search_result = match session.search(&query) {
             Ok(res) => res,
             Err(e) => {
-                log::error!("Cannot search for emails: {e}");
+                log::error!("Cannot search for emails in hub#{}: {e}", hub.id);
                 continue;
             }
         };
@@ -143,7 +148,11 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
             ) {
                 log::error!("Cannot set email recipient replied status: {e}");
             } else {
-                log::info!("Email recipient replied status set");
+                log::info!(
+                    "Email recipient replied status set for {}, email id: {}",
+                    &recipient.address,
+                    recipient.email_id
+                );
             }
         }
     }
@@ -154,9 +163,10 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
         .and_then(|uids| uids.into_iter().max())
         .unwrap_or(0);
 
+    log::info!("Starting a monitoring loop for hub#{}", hub.id);
     loop {
         if let Err(e) = session.idle().and_then(|idle| idle.wait_keepalive()) {
-            log::error!("Idle error: {e}");
+            log::error!("Idle error in hub#{}: {e}", hub.id);
             break;
         }
 
@@ -164,7 +174,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
         let new_uids = match session.uid_search(&search_query) {
             Ok(uids) => uids,
             Err(e) => {
-                log::error!("Cannot search new emails: {e}");
+                log::error!("Cannot search new emails in hub#{}: {e}", hub.id);
                 continue;
             }
         };
@@ -179,7 +189,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
     }
 
     if let Err(e) = session.logout() {
-        log::error!("Cannot logout: {e}");
+        log::error!("Cannot logout from hub#{}: {e}", hub.id);
     }
 }
 
@@ -209,13 +219,19 @@ async fn main() {
         }
     };
 
+    let mut handles = vec![];
     for hub in hubs {
         let repo = repo.clone();
         let domain = Arc::clone(&domain);
-        task::spawn_blocking(move || monitor_hub(repo, hub, domain.to_string()));
+        handles.push(task::spawn_blocking(move || {
+            monitor_hub(repo, hub, domain.to_string())
+        }));
     }
 
-    if let Err(e) = tokio::signal::ctrl_c().await {
-        log::error!("Failed to listen for ctrl_c: {e}");
+    for handle in handles {
+        match handle.await {
+            Ok(_) => (), // task finished fine
+            Err(e) => log::error!("Task panicked: {e:?}"),
+        }
     }
 }

@@ -44,11 +44,16 @@ jobs:
           if_key_exists: fail # replace / ignore / fail; optional (defaults to fail)
       - name: Deploy
         run: |
-          ssh cicd@mail.pushkind.com "supervisorctl stop emailer_dev && supervisorctl stop emailer_sender_dev"
+          ssh cicd@mail.pushkind.com "supervisorctl stop emailer"
+          ssh cicd@mail.pushkind.com "supervisorctl stop emailer_send_email"
+          ssh cicd@mail.pushkind.com "supervisorctl stop emailer_check_reply"
           scp ./target/release/pushkind-emailer cicd@mail.pushkind.com:/var/www5/html/
           scp ./target/release/send_email cicd@mail.pushkind.com:/var/www5/html/
           scp ./target/release/check_reply cicd@mail.pushkind.com:/var/www5/html/
           scp -r ./assets/ cicd@mail.pushkind.com:/var/www5/html/
           scp -r ./templates/ cicd@mail.pushkind.com:/var/www5/html/
           scp -r ./migrations/ cicd@mail.pushkind.com:/var/www5/html/
-          ssh cicd@mail.pushkind.com "cd /var/www5/html/ && /home/cicd/.cargo/bin/diesel migration run && supervisorctl start emailer_dev && supervisorctl start emailer_sender_dev"
+          ssh cicd@mail.pushkind.com "cd /var/www5/html/ && /home/cicd/.cargo/bin/diesel migration run"
+          ssh cicd@mail.pushkind.com "supervisorctl start emailer"
+          ssh cicd@mail.pushkind.com "supervisorctl start emailer_send_email"
+          ssh cicd@mail.pushkind.com "supervisorctl start emailer_check_reply"
