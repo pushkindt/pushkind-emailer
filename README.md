@@ -4,8 +4,9 @@
 the Pushkind ecosystem. Built with Rust, Actix Web and Diesel, it handles
 creation of arbitrary email recipients as well as loading them from
 pushkind-auth and pushkind-crm, and creating email messages.
-Additional binaries send_email and check_reply handle sending emails over SMTP
-and checking if there's been a reply over IMAP.
+Additional binaries `send_email` and `check_reply` handle sending emails over SMTP
+and checking for replies over IMAP. The `check_reply` binary establishes a
+persistent connection to each hub and updates recipients as new replies arrive.
 
 ## Features
 
