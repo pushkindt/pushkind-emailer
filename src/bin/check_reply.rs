@@ -1,4 +1,5 @@
 use std::env;
+use std::sync::Arc;
 
 use dotenvy::dotenv;
 use pushkind_common::db::establish_connection_pool;
@@ -6,6 +7,10 @@ use pushkind_common::domain::email::UpdateEmailRecipient;
 
 use pushkind_emailer::domain::hub::Hub;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
+use tokio::{
+    task,
+    time::{Duration, sleep},
+};
 
 pub fn check_hub_email_replied(repo: DieselRepository, hub: &Hub, domain: &str) {
     let recipients = match repo.list_not_replied_email_recipients(hub.id) {
@@ -102,12 +107,13 @@ pub fn check_hub_email_replied(repo: DieselRepository, hub: &Hub, domain: &str) 
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     dotenv().ok(); // Load .env file
 
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
-    let domain = env::var("DOMAIN").unwrap_or_default();
+    let domain = Arc::new(env::var("DOMAIN").unwrap_or_default());
 
     let db_pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
@@ -119,16 +125,37 @@ fn main() {
 
     let repo = DieselRepository::new(db_pool);
 
-    let hubs = match repo.list_hubs() {
-        Ok(hub) => hub,
-        Err(e) => {
-            log::error!("Cannot get hubs: {e}");
-            return;
-        }
-    };
+    let interval_secs = env::var("CHECK_REPLY_INTERVAL_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(60);
 
-    for hub in hubs {
-        log::info!("Checking hub: {}", hub.id);
-        check_hub_email_replied(repo.clone(), &hub, &domain);
+    loop {
+        let hubs = match repo.list_hubs() {
+            Ok(hub) => hub,
+            Err(e) => {
+                log::error!("Cannot get hubs: {e}");
+                sleep(Duration::from_secs(interval_secs)).await;
+                continue;
+            }
+        };
+
+        let mut handles = Vec::new();
+        for hub in hubs {
+            let repo = repo.clone();
+            let domain = Arc::clone(&domain);
+            handles.push(task::spawn_blocking(move || {
+                log::info!("Checking hub: {}", hub.id);
+                check_hub_email_replied(repo, &hub, domain.as_str());
+            }));
+        }
+
+        for handle in handles {
+            if let Err(e) = handle.await {
+                log::error!("Failed to join hub check task: {e}");
+            }
+        }
+
+        sleep(Duration::from_secs(interval_secs)).await;
     }
 }

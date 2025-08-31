@@ -4,8 +4,9 @@
 the Pushkind ecosystem. Built with Rust, Actix Web and Diesel, it handles
 creation of arbitrary email recipients as well as loading them from
 pushkind-auth and pushkind-crm, and creating email messages.
-Additional binaries send_email and check_reply handle sending emails over SMTP
-and checking if there's been a reply over IMAP.
+Additional binaries `send_email` and `check_reply` handle sending emails over SMTP
+and checking for replies over IMAP. The `check_reply` binary runs continuously,
+periodically polling hubs for new replies.
 
 ## Features
 
@@ -24,7 +25,7 @@ by pushkind-auth
    - `AUTH_SERVICE_URL` for redirects to the auth service
    - `CRM_SERVICE_URL` for the crm service to load client emails from
    - `ZMQ_ADDRESS` for the send_email binary to send emails to
-   - Optional: `PORT`, `ADDRESS`, `DOMAIN`
+   - Optional: `PORT`, `ADDRESS`, `DOMAIN`, `CHECK_REPLY_INTERVAL_SECS` (interval in seconds for the check_reply service; defaults to 60)
 3. Run database migrations with `diesel migration run` (requires `diesel-cli`).
 4. Start the server:
 
