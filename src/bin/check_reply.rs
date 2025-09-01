@@ -13,6 +13,87 @@ use pushkind_emailer::domain::hub::Hub;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 use tokio::task;
 
+fn strip_html_tags(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut in_tag = false;
+    for c in input.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn extract_plain_reply(input: &str) -> String {
+    // 1) Strip HTML tags if present
+    let without_html = strip_html_tags(input);
+    // 2) Normalize newlines
+    let normalized = without_html.replace('\r', "");
+    // 3) Remove quoted lines and cut off at common quote separators
+    let mut result_lines = Vec::new();
+    for line in normalized.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            // Keep single blank lines, but avoid leading whitespace-only content
+            if !result_lines.is_empty() {
+                result_lines.push(String::new());
+            }
+            continue;
+        }
+
+        // Stop at typical reply separators
+        let lower = trimmed.to_lowercase();
+        let is_gmail_sep = lower.starts_with("on ") && lower.ends_with(" wrote:");
+        let is_original_msg = lower.contains("original message")
+            || lower.contains("пересылаемое сообщение")
+            || lower.contains("исходное сообщение");
+        let is_header_block = lower.starts_with("from:")
+            || lower.starts_with("от кого:")
+            || lower.starts_with("subject:")
+            || lower.starts_with("тема:")
+            || lower.starts_with("to:")
+            || lower.starts_with("кому:")
+            || lower.starts_with("date:")
+            || lower.starts_with("дата:");
+
+        if is_gmail_sep || is_original_msg {
+            break;
+        }
+        if is_header_block && !result_lines.is_empty() {
+            // If we already captured something, hitting a header likely indicates quoted section
+            break;
+        }
+        // Skip quoted lines that begin with '>'
+        if trimmed.starts_with('>') {
+            continue;
+        }
+        result_lines.push(trimmed.to_string());
+    }
+
+    let mut reply = result_lines.join("\n");
+    reply = reply.trim().to_string();
+
+    if reply.is_empty() {
+        // Fallback: take the first non-empty, non-quote paragraph
+        for para in normalized.split("\n\n") {
+            let p = para
+                .lines()
+                .filter(|l| !l.trim().starts_with('>'))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let p = p.trim();
+            if !p.is_empty() {
+                reply = p.to_string();
+                break;
+            }
+        }
+    }
+    reply
+}
+
 fn extract_recipient_id(header: &str, domain: &str) -> Option<i32> {
     header
         .lines()
@@ -119,7 +200,7 @@ fn process_new_message(
     };
 
     if let Some(recipient_id) = extract_recipient_id(header_str, domain) {
-        let reply = fetch_message_body(session, uid);
+        let reply = fetch_message_body(session, uid).map(|b| extract_plain_reply(&b));
         match repo.get_email_recipient(recipient_id, hub_id) {
             Ok(Some(recipient)) => process_reply(repo, hub_id, &recipient, reply, zmq_sender),
             Ok(None) => log::warn!(
@@ -202,7 +283,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String, zmq_sender: &Zm
         };
 
         if let Some(uid) = search_result.iter().max() {
-            let reply = fetch_message_body(&mut session, *uid);
+            let reply = fetch_message_body(&mut session, *uid).map(|b| extract_plain_reply(&b));
             process_reply(&repo, hub.id, &recipient, reply, zmq_sender);
         }
     }
