@@ -49,6 +49,7 @@ pub struct EmailRecipient {
     pub is_sent: bool,
     pub replied: bool,
     pub name: Option<String>,
+    pub reply: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -105,6 +106,7 @@ impl From<EmailRecipient> for domain::EmailRecipient {
             is_sent: value.is_sent,
             replied: value.replied,
             name: value.name,
+            reply: value.reply,
         }
     }
 }

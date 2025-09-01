@@ -4,11 +4,95 @@ use std::sync::Arc;
 
 use dotenvy::dotenv;
 use pushkind_common::db::establish_connection_pool;
+use pushkind_common::domain::email::EmailRecipient;
 use pushkind_common::domain::email::UpdateEmailRecipient;
+use pushkind_common::models::zmq::emailer::ZMQReplyMessage;
+use pushkind_common::zmq::{ZmqSender, ZmqSenderOptions};
 
 use pushkind_emailer::domain::hub::Hub;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
 use tokio::task;
+
+fn strip_html_tags(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut in_tag = false;
+    for c in input.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn extract_plain_reply(input: &str) -> String {
+    // 1) Strip HTML tags if present
+    let without_html = strip_html_tags(input);
+    // 2) Normalize newlines
+    let normalized = without_html.replace('\r', "");
+    // 3) Remove quoted lines and cut off at common quote separators
+    let mut result_lines = Vec::new();
+    for line in normalized.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            // Keep single blank lines, but avoid leading whitespace-only content
+            if !result_lines.is_empty() {
+                result_lines.push(String::new());
+            }
+            continue;
+        }
+
+        // Stop at typical reply separators
+        let lower = trimmed.to_lowercase();
+        let is_gmail_sep = lower.starts_with("on ") && lower.ends_with(" wrote:");
+        let is_original_msg = lower.contains("original message")
+            || lower.contains("пересылаемое сообщение")
+            || lower.contains("исходное сообщение");
+        let is_header_block = lower.starts_with("from:")
+            || lower.starts_with("от кого:")
+            || lower.starts_with("subject:")
+            || lower.starts_with("тема:")
+            || lower.starts_with("to:")
+            || lower.starts_with("кому:")
+            || lower.starts_with("date:")
+            || lower.starts_with("дата:");
+
+        if is_gmail_sep || is_original_msg {
+            break;
+        }
+        if is_header_block && !result_lines.is_empty() {
+            // If we already captured something, hitting a header likely indicates quoted section
+            break;
+        }
+        // Skip quoted lines that begin with '>'
+        if trimmed.starts_with('>') {
+            continue;
+        }
+        result_lines.push(trimmed.to_string());
+    }
+
+    let mut reply = result_lines.join("\n");
+    reply = reply.trim().to_string();
+
+    if reply.is_empty() {
+        // Fallback: take the first non-empty, non-quote paragraph
+        for para in normalized.split("\n\n") {
+            let p = para
+                .lines()
+                .filter(|l| !l.trim().starts_with('>'))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let p = p.trim();
+            if !p.is_empty() {
+                reply = p.to_string();
+                break;
+            }
+        }
+    }
+    reply
+}
 
 fn extract_recipient_id(header: &str, domain: &str) -> Option<i32> {
     header
@@ -25,11 +109,69 @@ fn extract_recipient_id(header: &str, domain: &str) -> Option<i32> {
         })
 }
 
+fn fetch_message_body(
+    session: &mut imap::Session<impl std::io::Read + std::io::Write>,
+    uid: u32,
+) -> Option<String> {
+    let fetches = match session.uid_fetch(uid.to_string(), "RFC822.TEXT") {
+        Ok(f) => f,
+        Err(e) => {
+            log::error!("Cannot fetch body for UID {uid}: {e}");
+            return None;
+        }
+    };
+
+    let fetch = fetches.iter().next()?;
+    let body = fetch.text().or_else(|| fetch.body())?;
+
+    match str::from_utf8(body) {
+        Ok(s) => Some(s.to_string()),
+        Err(e) => {
+            log::error!("Cannot parse body utf8 for UID {uid}: {e}");
+            None
+        }
+    }
+}
+
+fn process_reply(
+    repo: &DieselRepository,
+    hub_id: i32,
+    recipient: &EmailRecipient,
+    reply: Option<String>,
+    zmq_sender: &ZmqSender,
+) {
+    let msg = ZMQReplyMessage {
+        hub_id,
+        email: recipient.address.clone(),
+        message: reply.clone().unwrap_or_default(),
+    };
+    if let Err(e) = tokio::runtime::Handle::current().block_on(zmq_sender.send_json(&msg)) {
+        log::error!("Cannot send ZMQ message: {e}");
+    } else {
+        log::info!("ZMQ message sent for email id: {}", recipient.email_id);
+    }
+    if let Err(e) = repo.update_recipient(
+        recipient.id,
+        &UpdateEmailRecipient {
+            is_sent: Some(true),
+            replied: Some(true),
+            opened: Some(true),
+            reply,
+        },
+    ) {
+        log::error!("Cannot set email recipient replied status: {e}");
+    } else {
+        log::info!("Email recipient replied status set for {}", recipient.id);
+    }
+}
+
 fn process_new_message(
     repo: &DieselRepository,
     session: &mut imap::Session<impl std::io::Read + std::io::Write>,
     uid: u32,
     domain: &str,
+    hub_id: i32,
+    zmq_sender: &ZmqSender,
 ) {
     let fetches = match session.uid_fetch(uid.to_string(), "RFC822.HEADER") {
         Ok(f) => f,
@@ -58,22 +200,25 @@ fn process_new_message(
     };
 
     if let Some(recipient_id) = extract_recipient_id(header_str, domain) {
-        if let Err(e) = repo.update_recipient(
-            recipient_id,
-            &UpdateEmailRecipient {
-                is_sent: Some(true),
-                replied: Some(true),
-                opened: Some(true),
-            },
-        ) {
-            log::error!("Cannot set email recipient replied status: {e}");
-        } else {
-            log::info!("Email recipient replied status set for {recipient_id}");
+        let reply = fetch_message_body(session, uid).map(|b| extract_plain_reply(&b));
+        match repo.get_email_recipient(recipient_id, hub_id) {
+            Ok(Some(recipient)) => process_reply(repo, hub_id, &recipient, reply, zmq_sender),
+            Ok(None) => log::warn!(
+                "Recipient not found for id {} in hub#{}",
+                recipient_id,
+                hub_id,
+            ),
+            Err(e) => log::error!(
+                "Failed to load recipient id {} in hub#{}: {}",
+                recipient_id,
+                hub_id,
+                e,
+            ),
         }
     }
 }
 
-fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
+fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String, zmq_sender: &ZmqSender) {
     let (imap_server, imap_port, username, password) =
         match (&hub.imap_server, hub.imap_port, &hub.login, &hub.password) {
             (Some(server), Some(port), Some(username), Some(password)) => {
@@ -129,7 +274,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
     for recipient in recipients {
         let in_reply_to_id = format!("<{}@{}>", recipient.id, domain);
         let query = format!("HEADER In-Reply-To {in_reply_to_id}");
-        let search_result = match session.search(&query) {
+        let search_result = match session.uid_search(&query) {
             Ok(res) => res,
             Err(e) => {
                 log::error!("Cannot search for emails in hub#{}: {e}", hub.id);
@@ -137,23 +282,9 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
             }
         };
 
-        if !search_result.is_empty() {
-            if let Err(e) = repo.update_recipient(
-                recipient.id,
-                &UpdateEmailRecipient {
-                    is_sent: Some(true),
-                    replied: Some(true),
-                    opened: Some(true),
-                },
-            ) {
-                log::error!("Cannot set email recipient replied status: {e}");
-            } else {
-                log::info!(
-                    "Email recipient replied status set for {}, email id: {}",
-                    &recipient.address,
-                    recipient.email_id
-                );
-            }
+        if let Some(uid) = search_result.iter().max() {
+            let reply = fetch_message_body(&mut session, *uid).map(|b| extract_plain_reply(&b));
+            process_reply(&repo, hub.id, &recipient, reply, zmq_sender);
         }
     }
 
@@ -180,7 +311,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
         };
 
         for uid in &new_uids {
-            process_new_message(&repo, &mut session, *uid, &domain);
+            process_new_message(&repo, &mut session, *uid, &domain, hub.id, zmq_sender);
         }
 
         if let Some(max_uid) = new_uids.iter().max() {
@@ -200,6 +331,7 @@ async fn main() {
 
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
     let domain = Arc::new(env::var("DOMAIN").unwrap_or_default());
+    let zmq_address = env::var("ZMQ_REPLIER_PUB").unwrap_or("tcp://127.0.0.1:5559".to_string());
 
     let db_pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
@@ -210,6 +342,10 @@ async fn main() {
     };
 
     let repo = DieselRepository::new(db_pool);
+
+    let zmq_sender = Arc::new(ZmqSender::start(ZmqSenderOptions::pub_default(
+        &zmq_address,
+    )));
 
     let hubs = match repo.list_hubs() {
         Ok(h) => h,
@@ -223,8 +359,9 @@ async fn main() {
     for hub in hubs {
         let repo = repo.clone();
         let domain = Arc::clone(&domain);
+        let zmq_sender = zmq_sender.clone();
         handles.push(task::spawn_blocking(move || {
-            monitor_hub(repo, hub, domain.to_string())
+            monitor_hub(repo, hub, domain.to_string(), &zmq_sender)
         }));
     }
 

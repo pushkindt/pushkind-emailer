@@ -141,6 +141,7 @@ async fn send_email(
                 is_sent: Some(true),
                 replied: None,
                 opened: None,
+                reply: None,
             },
         ) {
             log::error!(

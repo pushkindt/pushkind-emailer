@@ -241,6 +241,14 @@ impl EmailWriter for DieselRepository {
                 ))
                 .execute(&mut conn)?;
         }
+        if let Some(ref reply_text) = updates.reply {
+            diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
+                .set((
+                    email_recipients::reply.eq(Some(reply_text.as_str())),
+                    email_recipients::updated_at.eq(chrono::Utc::now().naive_utc()),
+                ))
+                .execute(&mut conn)?;
+        }
 
         // Recalculate num_opened, num_sent, num_replied for emails::table
         let num_sent = email_recipients::table
