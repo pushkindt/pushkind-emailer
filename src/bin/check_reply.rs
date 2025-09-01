@@ -4,7 +4,10 @@ use std::sync::Arc;
 
 use dotenvy::dotenv;
 use pushkind_common::db::establish_connection_pool;
+use pushkind_common::domain::email::EmailRecipient;
 use pushkind_common::domain::email::UpdateEmailRecipient;
+use pushkind_common::models::zmq::emailer::ZMQReplyMessage;
+use pushkind_common::zmq::{ZmqSender, ZmqSenderOptions};
 
 use pushkind_emailer::domain::hub::Hub;
 use pushkind_emailer::repository::{DieselRepository, EmailReader, EmailWriter, HubReader};
@@ -49,11 +52,45 @@ fn fetch_message_body(
     }
 }
 
+fn process_reply(
+    repo: &DieselRepository,
+    hub_id: i32,
+    recipient: &EmailRecipient,
+    reply: Option<String>,
+    zmq_sender: &ZmqSender,
+) {
+    let msg = ZMQReplyMessage {
+        hub_id,
+        email: recipient.address.clone(),
+        message: reply.clone().unwrap_or_default(),
+    };
+    if let Err(e) = tokio::runtime::Handle::current().block_on(zmq_sender.send_json(&msg)) {
+        log::error!("Cannot send ZMQ message: {e}");
+    } else {
+        log::info!("ZMQ message sent for email id: {}", recipient.email_id);
+    }
+    if let Err(e) = repo.update_recipient(
+        recipient.id,
+        &UpdateEmailRecipient {
+            is_sent: Some(true),
+            replied: Some(true),
+            opened: Some(true),
+            reply,
+        },
+    ) {
+        log::error!("Cannot set email recipient replied status: {e}");
+    } else {
+        log::info!("Email recipient replied status set for {}", recipient.id);
+    }
+}
+
 fn process_new_message(
     repo: &DieselRepository,
     session: &mut imap::Session<impl std::io::Read + std::io::Write>,
     uid: u32,
     domain: &str,
+    hub_id: i32,
+    zmq_sender: &ZmqSender,
 ) {
     let fetches = match session.uid_fetch(uid.to_string(), "RFC822.HEADER") {
         Ok(f) => f,
@@ -82,25 +119,25 @@ fn process_new_message(
     };
 
     if let Some(recipient_id) = extract_recipient_id(header_str, domain) {
-        if let Some(body) = fetch_message_body(session, uid) {
-            log::info!("Reply body for recipient {recipient_id}:\n{body}");
-        }
-        if let Err(e) = repo.update_recipient(
-            recipient_id,
-            &UpdateEmailRecipient {
-                is_sent: Some(true),
-                replied: Some(true),
-                opened: Some(true),
-            },
-        ) {
-            log::error!("Cannot set email recipient replied status: {e}");
-        } else {
-            log::info!("Email recipient replied status set for {recipient_id}");
+        let reply = fetch_message_body(session, uid);
+        match repo.get_email_recipient(recipient_id, hub_id) {
+            Ok(Some(recipient)) => process_reply(repo, hub_id, &recipient, reply, zmq_sender),
+            Ok(None) => log::warn!(
+                "Recipient not found for id {} in hub#{}",
+                recipient_id,
+                hub_id,
+            ),
+            Err(e) => log::error!(
+                "Failed to load recipient id {} in hub#{}: {}",
+                recipient_id,
+                hub_id,
+                e,
+            ),
         }
     }
 }
 
-fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
+fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String, zmq_sender: &ZmqSender) {
     let (imap_server, imap_port, username, password) =
         match (&hub.imap_server, hub.imap_port, &hub.login, &hub.password) {
             (Some(server), Some(port), Some(username), Some(password)) => {
@@ -156,7 +193,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
     for recipient in recipients {
         let in_reply_to_id = format!("<{}@{}>", recipient.id, domain);
         let query = format!("HEADER In-Reply-To {in_reply_to_id}");
-        let search_result = match session.search(&query) {
+        let search_result = match session.uid_search(&query) {
             Ok(res) => res,
             Err(e) => {
                 log::error!("Cannot search for emails in hub#{}: {e}", hub.id);
@@ -164,33 +201,9 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
             }
         };
 
-        if !search_result.is_empty() {
-            for uid in search_result.iter() {
-                if let Some(body) = fetch_message_body(&mut session, *uid) {
-                    log::info!(
-                        "Reply body for {} (email id {}):\n{}",
-                        &recipient.address,
-                        recipient.email_id,
-                        body
-                    );
-                }
-            }
-            if let Err(e) = repo.update_recipient(
-                recipient.id,
-                &UpdateEmailRecipient {
-                    is_sent: Some(true),
-                    replied: Some(true),
-                    opened: Some(true),
-                },
-            ) {
-                log::error!("Cannot set email recipient replied status: {e}");
-            } else {
-                log::info!(
-                    "Email recipient replied status set for {}, email id: {}",
-                    &recipient.address,
-                    recipient.email_id
-                );
-            }
+        if let Some(uid) = search_result.iter().max() {
+            let reply = fetch_message_body(&mut session, *uid);
+            process_reply(&repo, hub.id, &recipient, reply, zmq_sender);
         }
     }
 
@@ -217,7 +230,7 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
         };
 
         for uid in &new_uids {
-            process_new_message(&repo, &mut session, *uid, &domain);
+            process_new_message(&repo, &mut session, *uid, &domain, hub.id, zmq_sender);
         }
 
         if let Some(max_uid) = new_uids.iter().max() {
@@ -237,6 +250,7 @@ async fn main() {
 
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "app.db".to_string());
     let domain = Arc::new(env::var("DOMAIN").unwrap_or_default());
+    let zmq_address = env::var("ZMQ_REPLIER_PUB").unwrap_or("tcp://127.0.0.1:5559".to_string());
 
     let db_pool = match establish_connection_pool(&database_url) {
         Ok(pool) => pool,
@@ -247,6 +261,10 @@ async fn main() {
     };
 
     let repo = DieselRepository::new(db_pool);
+
+    let zmq_sender = Arc::new(ZmqSender::start(ZmqSenderOptions::pub_default(
+        &zmq_address,
+    )));
 
     let hubs = match repo.list_hubs() {
         Ok(h) => h,
@@ -260,8 +278,9 @@ async fn main() {
     for hub in hubs {
         let repo = repo.clone();
         let domain = Arc::clone(&domain);
+        let zmq_sender = zmq_sender.clone();
         handles.push(task::spawn_blocking(move || {
-            monitor_hub(repo, hub, domain.to_string())
+            monitor_hub(repo, hub, domain.to_string(), &zmq_sender)
         }));
     }
 

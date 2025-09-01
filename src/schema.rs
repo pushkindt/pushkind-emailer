@@ -10,6 +10,7 @@ diesel::table! {
         is_sent -> Bool,
         replied -> Bool,
         name -> Nullable<Text>,
+        reply -> Nullable<Text>,
     }
 }
 

@@ -210,6 +210,7 @@ pub async fn track_email(
                 opened: Some(true),
                 is_sent: Some(true),
                 replied: None,
+                reply: None,
             },
         )
         .is_err()
