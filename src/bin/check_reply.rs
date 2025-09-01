@@ -25,6 +25,30 @@ fn extract_recipient_id(header: &str, domain: &str) -> Option<i32> {
         })
 }
 
+fn fetch_message_body(
+    session: &mut imap::Session<impl std::io::Read + std::io::Write>,
+    uid: u32,
+) -> Option<String> {
+    let fetches = match session.uid_fetch(uid.to_string(), "RFC822.TEXT") {
+        Ok(f) => f,
+        Err(e) => {
+            log::error!("Cannot fetch body for UID {uid}: {e}");
+            return None;
+        }
+    };
+
+    let fetch = fetches.iter().next()?;
+    let body = fetch.text().or_else(|| fetch.body())?;
+
+    match str::from_utf8(body) {
+        Ok(s) => Some(s.to_string()),
+        Err(e) => {
+            log::error!("Cannot parse body utf8 for UID {uid}: {e}");
+            None
+        }
+    }
+}
+
 fn process_new_message(
     repo: &DieselRepository,
     session: &mut imap::Session<impl std::io::Read + std::io::Write>,
@@ -58,6 +82,9 @@ fn process_new_message(
     };
 
     if let Some(recipient_id) = extract_recipient_id(header_str, domain) {
+        if let Some(body) = fetch_message_body(session, uid) {
+            log::info!("Reply body for recipient {recipient_id}:\n{body}");
+        }
         if let Err(e) = repo.update_recipient(
             recipient_id,
             &UpdateEmailRecipient {
@@ -138,6 +165,16 @@ fn monitor_hub(repo: DieselRepository, hub: Hub, domain: String) {
         };
 
         if !search_result.is_empty() {
+            for uid in search_result.iter() {
+                if let Some(body) = fetch_message_body(&mut session, *uid) {
+                    log::info!(
+                        "Reply body for {} (email id {}):\n{}",
+                        &recipient.address,
+                        recipient.email_id,
+                        body
+                    );
+                }
+            }
             if let Err(e) = repo.update_recipient(
                 recipient.id,
                 &UpdateEmailRecipient {
