@@ -18,7 +18,7 @@ impl RecipientReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<RecipientWithGroups>> {
-        use crate::schema::{groups, recipients};
+        use pushkind_common::schema::emailer::{groups, recipients};
 
         let mut conn = self.conn()?;
 
@@ -63,7 +63,7 @@ impl RecipientReader for DieselRepository {
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
-        use crate::schema::{groups_recipients, recipients};
+        use pushkind_common::schema::emailer::{groups_recipients, recipients};
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -150,7 +150,7 @@ impl RecipientReader for DieselRepository {
     }
 
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {
-        use crate::schema::{recipient_fields, recipients};
+        use pushkind_common::schema::emailer::{recipient_fields, recipients};
 
         let mut conn = self.conn()?;
 
@@ -168,7 +168,9 @@ impl RecipientReader for DieselRepository {
 
 impl RecipientWriter for DieselRepository {
     fn create_recipients(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<usize> {
-        use crate::schema::{groups, groups_recipients, recipient_fields, recipients};
+        use pushkind_common::schema::emailer::{
+            groups, groups_recipients, recipient_fields, recipients,
+        };
 
         let mut conn = self.conn()?;
 
@@ -256,7 +258,7 @@ impl RecipientWriter for DieselRepository {
         id: i32,
         recipient: &DomainUpdateRecipient,
     ) -> RepositoryResult<DomainRecipient> {
-        use crate::schema::{groups_recipients, recipient_fields, recipients};
+        use pushkind_common::schema::emailer::{groups_recipients, recipient_fields, recipients};
         let mut conn = self.conn()?;
 
         // Update basic recipient info
@@ -332,7 +334,7 @@ impl RecipientWriter for DieselRepository {
     }
 
     fn delete_recipient(&self, id: i32) -> RepositoryResult<()> {
-        use crate::schema::{groups_recipients, recipient_fields, recipients};
+        use pushkind_common::schema::emailer::{groups_recipients, recipient_fields, recipients};
         let mut conn = self.conn()?;
         diesel::delete(groups_recipients::table.filter(groups_recipients::recipient_id.eq(id)))
             .execute(&mut conn)?;
@@ -343,7 +345,7 @@ impl RecipientWriter for DieselRepository {
     }
 
     fn delete_all_recipients(&self, hub_id: i32) -> RepositoryResult<()> {
-        use crate::schema::{groups_recipients, recipient_fields, recipients};
+        use pushkind_common::schema::emailer::{groups_recipients, recipient_fields, recipients};
         let mut conn = self.conn()?;
 
         // Step 1: Find recipient IDs for the given hub

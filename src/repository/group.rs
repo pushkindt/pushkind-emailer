@@ -15,7 +15,7 @@ impl GroupReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<GroupWithRecipients>> {
-        use crate::schema::{groups, groups_recipients, recipients};
+        use pushkind_common::schema::emailer::{groups, groups_recipients, recipients};
         let mut conn = self.conn()?;
 
         // Load group by id
@@ -91,7 +91,7 @@ impl GroupReader for DieselRepository {
     }
 
     fn list_groups(&self, query: GroupListQuery) -> RepositoryResult<(usize, Vec<DomainGroup>)> {
-        use crate::schema::groups;
+        use pushkind_common::schema::emailer::groups;
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -126,7 +126,7 @@ impl GroupReader for DieselRepository {
 
 impl GroupWriter for DieselRepository {
     fn create_group(&self, group: &DomainNewGroup) -> RepositoryResult<DomainGroup> {
-        use crate::schema::groups;
+        use pushkind_common::schema::emailer::groups;
         let mut conn = self.conn()?;
         let db_new: DbNewGroup = group.into();
         let inserted = diesel::insert_into(groups::table)
@@ -136,7 +136,7 @@ impl GroupWriter for DieselRepository {
     }
 
     fn delete_group(&self, id: i32) -> RepositoryResult<()> {
-        use crate::schema::{groups, groups_recipients};
+        use pushkind_common::schema::emailer::{groups, groups_recipients};
         let mut conn = self.conn()?;
         diesel::delete(groups_recipients::table.filter(groups_recipients::group_id.eq(id)))
             .execute(&mut conn)?;
@@ -145,7 +145,7 @@ impl GroupWriter for DieselRepository {
     }
 
     fn delete_all_groups(&self, hub_id: i32) -> RepositoryResult<()> {
-        use crate::schema::{groups, groups_recipients};
+        use pushkind_common::schema::emailer::{groups, groups_recipients};
         let mut conn = self.conn()?;
 
         // Step 1: Get IDs of groups belonging to this hub
@@ -167,7 +167,7 @@ impl GroupWriter for DieselRepository {
     }
 
     fn assign_recipient_to_group(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
-        use crate::schema::groups_recipients;
+        use pushkind_common::schema::emailer::groups_recipients;
         let mut conn = self.conn()?;
         let new = GroupRecipient {
             group_id,
@@ -184,7 +184,7 @@ impl GroupWriter for DieselRepository {
         group_id: i32,
         recipient_id: i32,
     ) -> RepositoryResult<()> {
-        use crate::schema::groups_recipients;
+        use pushkind_common::schema::emailer::groups_recipients;
 
         let mut conn = self.conn()?;
 

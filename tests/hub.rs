@@ -1,4 +1,4 @@
-use pushkind_emailer::domain::hub::Hub;
+use pushkind_common::domain::emailer::hub::Hub;
 
 #[test]
 fn unsubscribe_url_with_login() {

@@ -1,13 +1,17 @@
 use diesel::prelude::*;
+use pushkind_common::domain::emailer::hub::{
+    Hub as DomainHub, NewHub as DomainNewHub, UpdateHub as DomainUpdateHub,
+};
+use pushkind_common::models::emailer::hub::{
+    Hub as DbHub, NewHub as DbNewHub, UpdateHub as DbUpdateHub,
+};
 use pushkind_common::repository::errors::RepositoryResult;
 
-use crate::domain::hub::{Hub as DomainHub, NewHub as DomainNewHub, UpdateHub as DomainUpdateHub};
-use crate::models::hub::{Hub as DbHub, NewHub as DbNewHub, UpdateHub as DbUpdateHub};
 use crate::repository::{DieselRepository, HubReader, HubWriter};
 
 impl HubReader for DieselRepository {
     fn get_hub_by_id(&self, id: i32) -> RepositoryResult<Option<DomainHub>> {
-        use crate::schema::hubs;
+        use pushkind_common::schema::emailer::hubs;
         let mut conn = self.conn()?;
         let result = hubs::table
             .filter(hubs::id.eq(id))
@@ -15,18 +19,11 @@ impl HubReader for DieselRepository {
             .optional()?;
         Ok(result.map(Into::into))
     }
-
-    fn list_hubs(&self) -> RepositoryResult<Vec<DomainHub>> {
-        use crate::schema::hubs;
-        let mut conn = self.conn()?;
-        let result = hubs::table.load::<DbHub>(&mut conn)?;
-        Ok(result.into_iter().map(Into::into).collect())
-    }
 }
 
 impl HubWriter for DieselRepository {
     fn create_hub(&self, hub: &DomainNewHub) -> RepositoryResult<DomainHub> {
-        use crate::schema::hubs;
+        use pushkind_common::schema::emailer::hubs;
         let mut conn = self.conn()?;
         let result = diesel::insert_into(hubs::table)
             .values(DbNewHub::from(hub))
@@ -35,7 +32,7 @@ impl HubWriter for DieselRepository {
     }
 
     fn update_hub(&self, id: i32, hub: &DomainUpdateHub) -> RepositoryResult<DomainHub> {
-        use crate::schema::hubs;
+        use pushkind_common::schema::emailer::hubs;
         let mut conn = self.conn()?;
         let result = diesel::update(hubs::table.filter(hubs::id.eq(id)))
             .set(DbUpdateHub::from(hub))
