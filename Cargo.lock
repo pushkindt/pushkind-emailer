@@ -2217,7 +2217,7 @@ dependencies = [
 [[package]]
 name = "pushkind-common"
 version = "0.1.0"
-source = "git+https://github.com/pushkindt/pushkind-common.git?branch=main#9c741335d876baa0dee1416e31887588df050b2a"
+source = "git+https://github.com/pushkindt/pushkind-common.git?branch=main#a3f2e41fd09fa805bfa76af568bbb5d00f1dc814"
 dependencies = [
  "actix-identity",
  "actix-web",
