@@ -1,11 +1,11 @@
 use diesel::prelude::*;
+use pushkind_common::models::emailer::hub::Hub;
 use serde::Serialize;
 
 use crate::domain::recipient::NewRecipient as DomainNewRecipient;
-use crate::models::hub::Hub;
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations, QueryableByName)]
-#[diesel(table_name = crate::schema::recipients)]
+#[diesel(table_name = pushkind_common::schema::emailer::recipients)]
 #[diesel(belongs_to(Hub, foreign_key = hub_id))]
 #[diesel(foreign_derive)]
 pub struct Recipient {
@@ -19,7 +19,7 @@ pub struct Recipient {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = crate::schema::recipients)]
+#[diesel(table_name = pushkind_common::schema::emailer::recipients)]
 pub struct NewRecipient<'a> {
     pub name: &'a str,
     pub email: &'a str,
@@ -27,7 +27,7 @@ pub struct NewRecipient<'a> {
 }
 
 #[derive(Identifiable, Queryable, Selectable, Associations, Insertable, Serialize)]
-#[diesel(table_name = crate::schema::recipient_fields)]
+#[diesel(table_name = pushkind_common::schema::emailer::recipient_fields)]
 #[diesel(belongs_to(Recipient, foreign_key = recipient_id))]
 #[diesel(primary_key(recipient_id, field))]
 pub struct RecipientField {

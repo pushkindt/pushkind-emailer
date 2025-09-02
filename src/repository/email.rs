@@ -1,63 +1,23 @@
 use diesel::prelude::*;
-use pushkind_common::domain::email::{
-    EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
-    NewEmail as DomainNewEmail, UpdateEmail as DomainUpdateEmail,
+use pushkind_common::domain::emailer::email::{
+    EmailWithRecipients as DomainEmailWithRecipients,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
-use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
+use pushkind_common::models::emailer::email::{
+    Email as DbEmail, EmailRecipient as DbEmailRecipient,
+};
+use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::repository::EmailListQuery;
-use crate::{
-    models::email::{
-        Email as DbEmail, EmailRecipient as DbEmailRecipient, NewEmail as DbNewEmail,
-        NewEmailRecipient as DbNewEmailRecipient,
-    },
-    repository::{DieselRepository, EmailReader, EmailWriter},
-};
+use crate::repository::{DieselRepository, EmailReader, EmailWriter};
 
 impl EmailReader for DieselRepository {
-    fn list_not_replied_email_recipients(
-        &self,
-        hub_id: i32,
-    ) -> RepositoryResult<Vec<DomainEmailRecipient>> {
-        use crate::schema::{email_recipients, emails};
-        let mut conn = self.conn()?;
-
-        let recipients = email_recipients::table
-            .filter(email_recipients::replied.eq(false))
-            .inner_join(emails::table)
-            .filter(emails::hub_id.eq(hub_id))
-            .select(DbEmailRecipient::as_select())
-            .load::<DbEmailRecipient>(&mut conn)?;
-
-        Ok(recipients.into_iter().map(Into::into).collect())
-    }
-
-    fn get_email_recipient(
-        &self,
-        id: i32,
-        hub_id: i32,
-    ) -> RepositoryResult<Option<DomainEmailRecipient>> {
-        use crate::schema::{email_recipients, emails};
-        let mut conn = self.conn()?;
-
-        let recipient = email_recipients::table
-            .filter(email_recipients::id.eq(id))
-            .inner_join(emails::table)
-            .filter(emails::hub_id.eq(hub_id))
-            .select(DbEmailRecipient::as_select())
-            .first::<DbEmailRecipient>(&mut conn)
-            .optional()?;
-
-        Ok(recipient.map(Into::into))
-    }
-
     fn get_email_by_id(
         &self,
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
-        use crate::schema::{email_recipients, emails};
+        use pushkind_common::schema::emailer::{email_recipients, emails};
         let mut conn = self.conn()?;
 
         let email = emails::table
@@ -86,7 +46,7 @@ impl EmailReader for DieselRepository {
         &self,
         query: EmailListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainEmailWithRecipients>)> {
-        use crate::schema::emails;
+        use pushkind_common::schema::emailer::emails;
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -135,81 +95,12 @@ impl EmailReader for DieselRepository {
 }
 
 impl EmailWriter for DieselRepository {
-    fn create_email(&self, email: &DomainNewEmail) -> RepositoryResult<DomainEmailWithRecipients> {
-        use crate::schema::{email_recipients, emails};
-        let mut conn = self.conn()?;
-
-        conn.transaction::<_, RepositoryError, _>(|conn| {
-            let created_at = chrono::Utc::now().naive_utc();
-            let new_email: DbNewEmail = email.into();
-
-            let inserted: DbEmail = diesel::insert_into(emails::table)
-                .values(&new_email)
-                .get_result(conn)?;
-
-            for item in &email.recipients {
-                let new_rec = DbNewEmailRecipient {
-                    email_id: inserted.id,
-                    address: &item.address,
-                    opened: false,
-                    updated_at: created_at,
-                    is_sent: false,
-                    replied: false,
-                    name: item.name.as_deref(),
-                };
-                diesel::insert_into(email_recipients::table)
-                    .values(&new_rec)
-                    .execute(conn)?;
-            }
-
-            let recipients = email_recipients::table
-                .filter(email_recipients::email_id.eq(inserted.id))
-                .select(DbEmailRecipient::as_select())
-                .load::<DbEmailRecipient>(conn)?;
-
-            Ok(DomainEmailWithRecipients {
-                email: inserted.into(),
-                recipients: recipients.into_iter().map(Into::into).collect(),
-            })
-        })
-    }
-
-    fn update_email(
-        &self,
-        email_id: i32,
-        updates: &DomainUpdateEmail,
-    ) -> RepositoryResult<DomainEmailWithRecipients> {
-        use crate::schema::emails;
-        let mut conn = self.conn()?;
-        diesel::update(emails::table.filter(emails::id.eq(email_id)))
-            .set((
-                emails::num_sent.eq(updates.num_sent),
-                emails::num_opened.eq(updates.num_opened),
-                emails::num_replied.eq(updates.num_replied),
-            ))
-            .execute(&mut conn)?;
-
-        let email = emails::table
-            .filter(emails::id.eq(email_id))
-            .select(DbEmail::as_select())
-            .first::<DbEmail>(&mut conn)?;
-
-        let recipients = DbEmailRecipient::belonging_to(&email)
-            .select(DbEmailRecipient::as_select())
-            .load::<DbEmailRecipient>(&mut conn)?;
-
-        Ok(DomainEmailWithRecipients {
-            email: email.into(),
-            recipients: recipients.into_iter().map(Into::into).collect(),
-        })
-    }
-
     fn update_recipient(
         &self,
         recipient_id: i32,
         updates: &DomainUpdateEmailRecipient,
     ) -> RepositoryResult<DomainEmailWithRecipients> {
-        use crate::schema::{email_recipients, emails};
+        use pushkind_common::schema::emailer::{email_recipients, emails};
 
         let mut conn = self.conn()?;
         let email_id: i32 = email_recipients::table
@@ -293,7 +184,7 @@ impl EmailWriter for DieselRepository {
     }
 
     fn delete_email(&self, id: i32) -> RepositoryResult<()> {
-        use crate::schema::{email_recipients, emails};
+        use pushkind_common::schema::emailer::{email_recipients, emails};
         let mut conn = self.conn()?;
         diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
             .execute(&mut conn)?;

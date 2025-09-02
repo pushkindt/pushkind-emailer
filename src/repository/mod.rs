@@ -1,12 +1,10 @@
 use pushkind_common::db::{DbConnection, DbPool};
-use pushkind_common::domain::email::{
-    EmailRecipient, EmailWithRecipients, NewEmail, UpdateEmail, UpdateEmailRecipient,
-};
+use pushkind_common::domain::emailer::email::{EmailWithRecipients, UpdateEmailRecipient};
+use pushkind_common::domain::emailer::hub::{Hub, NewHub, UpdateHub};
 use pushkind_common::pagination::Pagination;
 use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
-use crate::domain::hub::{Hub, NewHub, UpdateHub};
 use crate::domain::recipient::{NewRecipient, Recipient, RecipientWithGroups, UpdateRecipient};
 
 pub mod email;
@@ -145,20 +143,8 @@ pub trait EmailReader {
         &self,
         query: EmailListQuery,
     ) -> RepositoryResult<(usize, Vec<EmailWithRecipients>)>;
-    fn list_not_replied_email_recipients(
-        &self,
-        hub_id: i32,
-    ) -> RepositoryResult<Vec<EmailRecipient>>;
-    fn get_email_recipient(&self, id: i32, hub_id: i32)
-    -> RepositoryResult<Option<EmailRecipient>>;
 }
 pub trait EmailWriter {
-    fn create_email(&self, email: &NewEmail) -> RepositoryResult<EmailWithRecipients>;
-    fn update_email(
-        &self,
-        email_id: i32,
-        updates: &UpdateEmail,
-    ) -> RepositoryResult<EmailWithRecipients>;
     fn update_recipient(
         &self,
         recipient_id: i32,
@@ -169,7 +155,6 @@ pub trait EmailWriter {
 
 pub trait HubReader {
     fn get_hub_by_id(&self, id: i32) -> RepositoryResult<Option<Hub>>;
-    fn list_hubs(&self) -> RepositoryResult<Vec<Hub>>;
 }
 
 pub trait HubWriter {

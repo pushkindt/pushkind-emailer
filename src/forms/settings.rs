@@ -1,6 +1,5 @@
+use pushkind_common::domain::emailer::hub::UpdateHub;
 use serde::Deserialize;
-
-use crate::domain::hub::UpdateHub;
 
 /// Form to create a new hub configuration.
 #[derive(Deserialize)]
