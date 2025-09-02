@@ -68,9 +68,15 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let zmq_sender = Arc::new(ZmqSender::start(ZmqSenderOptions::pub_default(
-        &zmq_address,
-    )));
+    let zmq_sender = match ZmqSender::start(ZmqSenderOptions::pub_default(&zmq_address)) {
+        Ok(zmq_sender) => zmq_sender,
+        Err(e) => {
+            error!("Failed to start ZMQ sender: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let zmq_sender = Arc::new(zmq_sender);
 
     let server_config = ServerConfig { crm_service_url };
     let common_config = CommonServerConfig {
