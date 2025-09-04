@@ -106,7 +106,6 @@ impl SendEmailForm {
             attachment_mime,
             attachment_name,
             recipients,
-            email_template: None,
         })
     }
 }
