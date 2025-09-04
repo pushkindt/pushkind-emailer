@@ -70,7 +70,8 @@ impl SendEmailForm {
                 .into_iter()
                 .map(|recipient| NewEmailRecipient {
                     address: recipient.email,
-                    name: Some(recipient.name),
+                    name: recipient.name,
+                    fields: recipient.fields,
                 })
                 .collect(),
             Err(e) => return Err(e),
@@ -85,7 +86,8 @@ impl SendEmailForm {
                 .into_iter()
                 .map(|recipient| NewEmailRecipient {
                     address: recipient.email,
-                    name: Some(recipient.name),
+                    name: recipient.name,
+                    fields: recipient.fields,
                 })
                 .collect(),
             Err(e) => return Err(e),
@@ -104,6 +106,7 @@ impl SendEmailForm {
             attachment_mime,
             attachment_name,
             recipients,
+            email_template: None,
         })
     }
 }
