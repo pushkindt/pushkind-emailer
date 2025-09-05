@@ -19,7 +19,8 @@ pub struct DeleteGroupForm {
 /// Assigns a recipient to a group.
 #[derive(Deserialize)]
 pub struct AssignGroupRecipientForm {
-    pub recipient_id: i32,
+    #[serde(default)]
+    pub recipient_id: Vec<i32>,
     pub group_id: i32,
 }
 

@@ -1,18 +1,20 @@
 <div class="modal-body">
-    <ul class="list-group">
-        {% for recipient in group.recipients %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{recipient.name}} ({{recipient.email}})
-                <form method="POST" action="/groups/unassign" style="display:inline;">
-                    <input type="hidden" name="group_id" value="{{group.group.id}}">
-                    <input type="hidden" name="recipient_id" value="{{recipient.id}}">
-                    <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Убрать?')">
-                        <i class="bi bi-slash-circle"></i>
-                    </button>
-                </form>
-            </li>
-        {% endfor %}
-    </ul>
+
+    <form method="POST" action="/groups/assign" id="recipients-assign-form">
+        <div class="row mb-3">
+            <div class="col-lg">
+                <input type="hidden" name="group_id" value="{{group.group.id}}">
+                <select class="form-select my-1" name="recipient_id" id="recipients-assign-form-recipient-id" multiple>
+                    {% for recipient in group.recipients %}
+                        <option selected value="{{recipient.id}}">{{recipient.name}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto text-end">
+                <button class="btn btn-primary my-1" type="submit">Назначить</button>
+            </div>
+        </div>
+    </form>
 </div>
 
 <form action="/groups/delete" method="POST">
