@@ -21,7 +21,7 @@ use tera::Tera;
 use pushkind_emailer::models::config::ServerConfig;
 use pushkind_emailer::repository::DieselRepository;
 use pushkind_emailer::routes::groups::{
-    groups_add, groups_assign, groups_delete, groups_modal, groups_show, groups_unassign,
+    groups_add, groups_assign, groups_delete, groups_modal, groups_show,
 };
 use pushkind_emailer::routes::main::{
     delete_email, export_email_recipients, index, resend_email, send_email, track_email,
@@ -135,8 +135,7 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_add)
                     .service(groups_delete)
                     .service(groups_assign)
-                    .service(groups_modal)
-                    .service(groups_unassign),
+                    .service(groups_modal),
             )
             .app_data(web::Data::new(tera.clone()))
             .app_data(web::Data::new(repo.clone()))

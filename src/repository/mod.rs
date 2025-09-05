@@ -194,7 +194,9 @@ pub trait GroupWriter {
     fn create_group(&self, group: &NewGroup) -> RepositoryResult<Group>;
     fn delete_group(&self, id: i32) -> RepositoryResult<()>;
     fn delete_all_groups(&self, hub_id: i32) -> RepositoryResult<()>;
-    fn assign_recipient_to_group(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()>;
-    fn unassign_recipient_to_group(&self, group_id: i32, recipient_id: i32)
-    -> RepositoryResult<()>;
+    fn assign_recipients_to_group(
+        &self,
+        group_id: i32,
+        recipients: Vec<i32>,
+    ) -> RepositoryResult<()>;
 }

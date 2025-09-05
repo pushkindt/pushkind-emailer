@@ -166,37 +166,35 @@ impl GroupWriter for DieselRepository {
         Ok(())
     }
 
-    fn assign_recipient_to_group(&self, group_id: i32, recipient_id: i32) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::groups_recipients;
-        let mut conn = self.conn()?;
-        let new = GroupRecipient {
-            group_id,
-            recipient_id,
-        };
-        diesel::insert_into(groups_recipients::table)
-            .values(&new)
-            .execute(&mut conn)?;
-        Ok(())
-    }
-
-    fn unassign_recipient_to_group(
+    fn assign_recipients_to_group(
         &self,
         group_id: i32,
-        recipient_id: i32,
+        recipients: Vec<i32>,
     ) -> RepositoryResult<()> {
         use pushkind_common::schema::emailer::groups_recipients;
-
         let mut conn = self.conn()?;
+        let new: Vec<GroupRecipient> = recipients
+            .iter()
+            .map(|recipient_id| GroupRecipient {
+                group_id,
+                recipient_id: *recipient_id,
+            })
+            .collect();
 
-        diesel::delete(
-            groups_recipients::table.filter(
-                groups_recipients::recipient_id
-                    .eq(recipient_id)
-                    .and(groups_recipients::group_id.eq(group_id)),
-            ),
-        )
-        .execute(&mut conn)?;
+        conn.transaction(|connection| {
+            // Step 1: Delete group_recipients entries for the group_id
+            diesel::delete(
+                groups_recipients::table.filter(groups_recipients::group_id.eq(group_id)),
+            )
+            .execute(connection)?;
 
+            // Step 2: Assign new group_recipients entries for the group_id
+            diesel::insert_into(groups_recipients::table)
+                .values(&new)
+                .execute(connection)?;
+
+            diesel::result::QueryResult::Ok(())
+        })?;
         Ok(())
     }
 }

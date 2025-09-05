@@ -132,10 +132,19 @@ pub async fn groups_delete(
 pub async fn groups_assign(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<AssignGroupRecipientForm>,
+    form: web::Bytes,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
+    };
+
+    let form: AssignGroupRecipientForm = match serde_html_form::from_bytes(&form) {
+        Ok(form) => form,
+        Err(err) => {
+            log::error!("Error parsing form: {err}");
+            FlashMessage::error("Ошибка при обработке формы.").send();
+            return redirect("/groups");
+        }
     };
 
     let group = match repo.get_group_by_id(form.group_id, user.hub_id) {
@@ -149,47 +158,13 @@ pub async fn groups_assign(
         }
     };
 
-    match repo.assign_recipient_to_group(group.group.id, form.recipient_id) {
+    match repo.assign_recipients_to_group(group.group.id, form.recipient_id) {
         Ok(_) => {
             FlashMessage::success("Группа назначена получателю.").send();
         }
         Err(err) => {
             log::error!("Error while assigning group: {err}");
             FlashMessage::error("Ошибка при назначении группы.").send();
-        }
-    }
-
-    redirect("/groups")
-}
-
-#[post("/groups/unassign")]
-pub async fn groups_unassign(
-    user: AuthenticatedUser,
-    repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<AssignGroupRecipientForm>,
-) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let group = match repo.get_group_by_id(form.group_id, user.hub_id) {
-        Ok(Some(group)) => group,
-        Ok(None) => {
-            return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving group: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    match repo.unassign_recipient_to_group(group.group.id, form.recipient_id) {
-        Ok(_) => {
-            FlashMessage::success("Назначение группы удалено.").send();
-        }
-        Err(err) => {
-            log::error!("Error while unassigning group: {err}");
-            FlashMessage::error("Ошибка при удалении назначения группы.").send();
         }
     }
 

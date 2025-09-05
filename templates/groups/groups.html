@@ -1,12 +1,7 @@
 {% extends 'base.html' %}
 
 {% block styles %}
-    <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/css/selectize.bootstrap4.min.css"
-        integrity="sha512-MMojOrCQrqLg4Iarid2YMYyZ7pzjPeXKRvhW9nZqLo6kPBBTuvNET9DBVWptAo/Q20Fy11EIHM5ig4WlIrJfQw=="
-        crossorigin="anonymous"
-        referrerpolicy="no-referrer"
-    />
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.css" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -14,38 +9,14 @@
 
     <div class="container my-2">
         <div class="row">
-            <div class="col-lg-6">
-                <h5>Группы</h5>
+            <div class="col">
                 <form method="POST" action="/groups/add">
                     <div class="row">
-                        <div class="col-lg">
+                        <div class="col">
                             <input class="form-control my-1" type="text" name="name" placeholder="Название" required>
                         </div>
-                        <div class="col-lg-3 text-end">
+                        <div class="col-auto text-end">
                             <button class="btn btn-primary my-1" type="submit">Добавить</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="col-lg-6">
-                <h5>Назначить группу</h5>
-                <form method="POST" action="/groups/assign" id="recipients-assign-form">
-                    <div class="row mb-3">
-                        <div class="col-lg">
-                            <select class="form-control my-1" name="group_id" required id="recipients-assign-form-group-id">
-                                <option disabled selected value="">Выбор группы</option>
-                                    {% for group in groups %}
-                                        <option value="{{group.id}}">{{group.name}}</option>
-                                    {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-lg">
-                            <select class="form-control my-1" name="recipient_id" required id="recipients-assign-form-recipient-id">
-                                <option disabled selected value="">Выбор получателя</option>
-                            </select>
-                        </div>
-                        <div class="col-lg-3 text-end">
-                            <button class="btn btn-primary my-1" type="submit">Назначить</button>
                         </div>
                     </div>
                 </form>
@@ -93,64 +64,64 @@
 {% endblock %}
 
 {% block scripts %}
-    <script
-        src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
-        crossorigin="anonymous">
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/js/standalone/selectize.min.js"
-        integrity="sha512-pF+DNRwavWMukUv/LyzDyDMn8U2uvqYQdJN0Zvilr6DDo/56xPDZdDoyPDYZRSL4aOKO/FGKXTpzDyQJ8je8Qw=="
-        crossorigin="anonymous" referrerpolicy="no-referrer">
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
 
-            let recipient_select = $("#recipients-assign-form-recipient-id");
-            recipient_select.selectize({
-                valueField: "id",
-                labelField: "name",
-                searchField: ["name", "email",
-                    {% for field in custom_fields %}
-                        "{{field}}",
-                    {% endfor %}
-                ],
-                render: {
-                    option: function(item, escape) {
-                        let result = `<div class="border-bottom"><strong>${escape(item.name)} (${escape(item.email)})</strong>`;
-                        result += '<br><small>';
-                        for (const field in item) {
-                            if (["id", "name", "email", "$order"].includes(field)) {
-                                continue;
-                            }
-                            result += escape(field) + ': ' + escape(item[field]) + ' ';
-                        }
-                        result += '</small>';
-                        result += '</div>';
-                        return result
-                    }
-                },
-                options: [
+            let groupModalBody = document.getElementById("groupModalBody");
+            let tomSelectInstance = null;
 
-
-                    {% for recipient in recipients %}
-                        {% set fields = recipient.fields %}
-                        {
-                            ...{
-                                "id": "{{recipient.id}}",
-                                "name": "{{recipient.name}}",
-                                "email": "{{recipient.email}}",
-                            },
-                            ...{{fields | json_encode() | safe}}
-                        },
-                    {% endfor %}
-
-                ]
+            groupModalBody.addEventListener("htmx:beforeSwap", function () {
+                if (tomSelectInstance) {
+                    tomSelectInstance.destroy();
+                    tomSelectInstance = null;
+                }
             });
-            let group_select = $("#recipients-assign-form-group-id");
-            group_select.selectize({});
+            groupModalBody.addEventListener("htmx:afterSettle", function () {
+                var settings = {
+                    plugins: {
+                        'checkbox_options': {}
+                    },
+                    valueField: "id",
+                    labelField: "name",
+                    searchField: ["name", "email",
+                        {% for field in custom_fields %}
+                            "{{field}}",
+                        {% endfor %}
+                    ],
+                    options: [
+                        {% for recipient in recipients %}
+                            {% set fields = recipient.fields %}
+                            {
+                                ...{
+                                    "id": "{{recipient.id}}",
+                                    "name": "{{recipient.name}}",
+                                    "email": "{{recipient.email}}",
+                                },
+                                ...{{fields | json_encode() | safe}}
+                            },
+                        {% endfor %}
+                    ],
+                    render: {
+                        option: function(item, escape) {
+                            let result = `<div class="border-bottom"><strong>${escape(item.name)} (${escape(item.email)})</strong>`;
+                            result += '<br><small>';
+                            for (const field in item) {
+                                if (["id", "name", "email", "$order"].includes(field)) {
+                                    continue;
+                                }
+                                result += escape(field) + ': ' + escape(item[field]) + ' ';
+                            }
+                            result += '</small>';
+                            result += '</div>';
+                            return result
+                        }
+                    },
+                };
+                tomSelectInstance = new TomSelect('#recipients-assign-form-recipient-id',settings);
+            });
 
             createFilter("filter", "items", ".selectable");
-
 
         });
     </script>
