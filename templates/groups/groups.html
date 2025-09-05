@@ -87,7 +87,13 @@
             groupModalBody.addEventListener("htmx:afterSettle", function () {
                 var settings = {
                     plugins: {
-                        'checkbox_options': {}
+                        checkbox_options: {},
+                        clear_button: {
+                            title: "Убрать всех",
+                        },
+                        remove_button: {
+                            title: "Убрать",
+                        }
                     },
                     valueField: "id",
                     labelField: "name",
