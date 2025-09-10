@@ -187,6 +187,12 @@ impl RecipientWriter for DieselRepository {
                     .set((recipients::name.eq(&new.name),))
                     .get_result::<Recipient>(conn)?;
 
+                // Update fields (delete all → insert new)
+                diesel::delete(
+                    recipient_fields::table.filter(recipient_fields::recipient_id.eq(inserted.id)),
+                )
+                .execute(conn)?;
+
                 // Insert optional fields
                 if let Some(fields) = &new.fields {
                     let new_fields: Vec<RecipientField> = fields
@@ -211,6 +217,13 @@ impl RecipientWriter for DieselRepository {
                         }
                     }
                 }
+
+                // Update group associations (delete all → insert new)
+                diesel::delete(
+                    groups_recipients::table
+                        .filter(groups_recipients::recipient_id.eq(inserted.id)),
+                )
+                .execute(conn)?;
 
                 // Create and assign groups
                 if let Some(names) = &new.groups {
