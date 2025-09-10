@@ -187,12 +187,6 @@ impl RecipientWriter for DieselRepository {
                     .set((recipients::name.eq(&new.name),))
                     .get_result::<Recipient>(conn)?;
 
-                // Update fields (delete all → insert new)
-                diesel::delete(
-                    recipient_fields::table.filter(recipient_fields::recipient_id.eq(inserted.id)),
-                )
-                .execute(conn)?;
-
                 // Insert optional fields
                 if let Some(fields) = &new.fields {
                     let new_fields: Vec<RecipientField> = fields
@@ -204,6 +198,13 @@ impl RecipientWriter for DieselRepository {
                         })
                         .collect();
                     if !new_fields.is_empty() {
+                        // Update fields (delete all → insert new)
+                        diesel::delete(
+                            recipient_fields::table
+                                .filter(recipient_fields::recipient_id.eq(inserted.id)),
+                        )
+                        .execute(conn)?;
+
                         for field in new_fields {
                             diesel::insert_into(recipient_fields::table)
                                 .values(&field)
@@ -218,15 +219,15 @@ impl RecipientWriter for DieselRepository {
                     }
                 }
 
-                // Update group associations (delete all → insert new)
-                diesel::delete(
-                    groups_recipients::table
-                        .filter(groups_recipients::recipient_id.eq(inserted.id)),
-                )
-                .execute(conn)?;
-
                 // Create and assign groups
                 if let Some(names) = &new.groups {
+                    // Update group associations (delete all → insert new)
+                    diesel::delete(
+                        groups_recipients::table
+                            .filter(groups_recipients::recipient_id.eq(inserted.id)),
+                    )
+                    .execute(conn)?;
+
                     for group_name in names {
                         // Check if group already exists
                         let existing = groups::table
