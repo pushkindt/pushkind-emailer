@@ -1,6 +1,8 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
-        <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false" aria-controls="email-collapse{{email.id}}">
+        <button class="accordion-button collapsed {% if email.is_sent %}text-success{% endif %}" type="button"
+            data-bs-toggle="collapse" data-bs-target="#email-collapse{{email.id}}" aria-expanded="false"
+            aria-controls="email-collapse{{email.id}}">
             <span>{{email.created_at | date(format="%Y-%m-%d %H:%M")}}</span>
             &nbsp;
             <span>
@@ -31,7 +33,8 @@
                 <div class="col-auto">
                     <form method="POST" action="/resend_email" class="d-inline">
                         <input type="hidden" value="{{email.id}}" name="id">
-                        <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Отправить неотправленные?')">
+                        <button class="btn btn-danger btn-sm" type="submit"
+                            onclick="return confirm('Отправить неотправленные?')">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                     </form>
@@ -49,20 +52,32 @@
                 <div class="col">
                     <ol class="list-group list-group-numbered">
                         {% for recipient in recipients %}
-                            <li class="list-group-item d-flex justify-content-between align-items-start {% if recipient.is_sent %}text-success{% endif %}">
-                                <div class="ms-2 me-auto">
-                                    <div class="fw-bold">{{ recipient.address }}</div>
-                                    <div>{{recipient.reply | default(value="") | truncate(length=100) }}</div>
-                                </div>
-                                <span class="badge text-bg-primary rounded-pill">
-                                    {% if recipient.opened %}
-                                        <i class="bi bi-envelope-check-fill" title="Сообщение просмотрено"></i>
-                                    {% endif %}
-                                    {% if recipient.replied %}
-                                        <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
-                                    {% endif %}
-                                </span>
-                            </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-start
+                             {% if recipient.replied %}
+                                text-success
+                            {% elif recipient.opened %}
+                                text-warning
+                            {% elif not recipient.is_sent %}
+                                text-secondary
+                            {% endif %}">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold">{{ recipient.address }}</div>
+                                <div>{{recipient.reply | default(value="") | truncate(length=100) }}</div>
+                            </div>
+                            {% if recipient.is_sent or recipient.opened or recipient.replied %}
+                            <span class="badge text-bg-primary rounded-pill">
+                                {% if recipient.is_sent %}
+                                <i class="bi bi-envelope-check-fill" title="Сообщение отправлено"></i>
+                                {% endif %}
+                                {% if recipient.opened %}
+                                <i class="bi bi-envelope-open-fill" title="Сообщение просмотрено"></i>
+                                {% endif %}
+                                {% if recipient.replied %}
+                                <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
+                                {% endif %}
+                            </span>
+                            {%endif%}
+                        </li>
                         {% endfor %}
                     </ol>
                 </div>
