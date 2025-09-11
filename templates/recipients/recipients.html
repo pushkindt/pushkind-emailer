@@ -1,12 +1,10 @@
 {% extends 'base.html' %}
 
 {% block styles %}
-    <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/css/selectize.bootstrap4.min.css"
-        integrity="sha512-MMojOrCQrqLg4Iarid2YMYyZ7pzjPeXKRvhW9nZqLo6kPBBTuvNET9DBVWptAo/Q20Fy11EIHM5ig4WlIrJfQw=="
-        crossorigin="anonymous"
-        referrerpolicy="no-referrer"
-    />
+<link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/css/selectize.bootstrap4.min.css"
+    integrity="sha512-MMojOrCQrqLg4Iarid2YMYyZ7pzjPeXKRvhW9nZqLo6kPBBTuvNET9DBVWptAo/Q20Fy11EIHM5ig4WlIrJfQw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
 {% endblock %}
 
 {% block content %}
@@ -62,7 +60,8 @@
                         <small class="text-muted">"name","email","group1,group2","произвольные","поля"</small>
                     </div>
                     <div class="col-lg-3 text-end">
-                        <button class="btn btn-danger my-1" type="submit" onclick="return confirm('Удалить всё?')">Очистить</button>
+                        <button class="btn btn-danger my-1" type="submit"
+                            onclick="return confirm('Удалить всё?')">Очистить</button>
                     </div>
                 </div>
             </form>
@@ -71,40 +70,41 @@
 </div>
 
 {% if recipients %}
-    <div class="container mb-1">
-        <div class="row">
-            <div class="col">
-                <input type="text" class="form-control" placeholder="Фильтр" id="filter">
-            </div>
+<div class="container mb-1">
+    <div class="row">
+        <div class="col">
+            <input type="text" class="form-control" placeholder="Фильтр" id="filter">
         </div>
     </div>
-    <div class="container border bg-white">
-        <div class="row mb-3 fw-bold">
-            <div class="col overflow-hidden">
-                Имя
+</div>
+<div class="container border bg-white">
+    <div class="row mb-3 fw-bold">
+        <div class="col overflow-hidden">
+            Имя
+        </div>
+        <div class="col overflow-hidden">
+            Email
+        </div>
+        <div class="col overflow-hidden">
+            Теги
+        </div>
+    </div>
+    <div id="items">
+        {% for recipient in recipients.items %}
+        <div class="row mb-3 border-bottom selectable" data-bs-toggle="modal" data-bs-target="#recipientModal"
+            hx-post="/recipients/modal/{{recipient.id}}" hx-swap="innerHTML" hx-target="#recipientModalBody">
+            <div class="col overflow-hidden {% if recipient.unsubscribed_at %}text-decoration-line-through{%endif%}">
+                {{recipient.name}}
             </div>
             <div class="col overflow-hidden">
-                Email
+                {{recipient.email}}
             </div>
             <div class="col overflow-hidden">
-                Теги
+                {% for key, value in recipient.fields %}
+                <span class="badge rounded-pill text-bg-light">{{key}}: {{value | truncate(length=5)}}</span>
+                {% endfor %}
             </div>
         </div>
-        <div id="items">
-        {% for recipient in recipients.items %}
-            <div class="row mb-3 border-bottom selectable" data-bs-toggle="modal" data-bs-target="#recipientModal" hx-post="/recipients/modal/{{recipient.id}}" hx-swap="innerHTML" hx-target="#recipientModalBody">
-                <div class="col overflow-hidden {% if recipient.unsubscribed_at %}text-decoration-line-through{%endif%}">
-                    {{recipient.name}}
-                </div>
-                <div class="col overflow-hidden">
-                    {{recipient.email}}
-                </div>
-                <div class="col overflow-hidden">
-                    {% for key, value in recipient.fields %}
-                        <span class="badge rounded-pill text-bg-light">{{key}}: {{value}}</span>
-                    {% endfor %}
-                </div>
-            </div>
         {% endfor %}
         {% set items = recipients %}
         {% include 'components/pagination.html' %}
@@ -123,20 +123,18 @@
         </div>
     </div>
 
-{% endif %}
+    {% endif %}
 
-{% endblock %}
+    {% endblock %}
 
-{% block scripts %}
-    <script
-        src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
-        crossorigin="anonymous">
-    </script>
+    {% block scripts %}
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous">
+        </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/js/standalone/selectize.min.js"
         integrity="sha512-pF+DNRwavWMukUv/LyzDyDMn8U2uvqYQdJN0Zvilr6DDo/56xPDZdDoyPDYZRSL4aOKO/FGKXTpzDyQJ8je8Qw=="
         crossorigin="anonymous" referrerpolicy="no-referrer">
-    </script>
+        </script>
     <script>
         function removeCustomField(button) {
             const row = button.closest("div.row");
@@ -194,7 +192,7 @@
             const filter = document.getElementById("filter");
             const items = document.getElementById("items");
 
-            if (filter && items){
+            if (filter && items) {
                 filter.addEventListener("keyup", () => {
                     const filterValue = filter.value.toLowerCase();
                     const itemRows = items.querySelectorAll(".selectable");
@@ -211,4 +209,4 @@
             }
         });
     </script>
-{% endblock %}
+    {% endblock %}
