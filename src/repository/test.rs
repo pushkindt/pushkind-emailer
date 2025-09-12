@@ -38,4 +38,10 @@ impl RecipientReader for TestRepository {
     ) -> RepositoryResult<(usize, Vec<Recipient>)> {
         Ok((0, vec![]))
     }
+    fn search_recipients(
+        &self,
+        _query: RecipientListQuery,
+    ) -> RepositoryResult<(usize, Vec<Recipient>)> {
+        Ok((0, vec![]))
+    }
 }
