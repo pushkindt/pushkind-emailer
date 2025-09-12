@@ -23,6 +23,7 @@ use crate::repository::{
 
 #[derive(Deserialize)]
 struct RecipientsQueryParams {
+    q: Option<String>,
     page: Option<usize>,
 }
 
@@ -49,9 +50,17 @@ pub async fn recipients_show(
     context.insert("crm_service_url", &server_config.crm_service_url);
 
     let page = params.page.unwrap_or(1);
+    let q = params.q.as_deref().unwrap_or("").trim();
     let query = RecipientListQuery::new(user.hub_id).paginate(page, DEFAULT_ITEMS_PER_PAGE);
 
-    let recipients = match repo.list_recipients(query) {
+    let recipients_result = if !q.is_empty() {
+        context.insert("search_query", q);
+        repo.search_recipients(query.search(q))
+    } else {
+        repo.list_recipients(query)
+    };
+
+    let recipients = match recipients_result {
         Ok((total, recipients)) => {
             Paginated::new(recipients, page, total.div_ceil(DEFAULT_ITEMS_PER_PAGE))
         }
@@ -187,7 +196,7 @@ pub async fn recipients_upload(
             FlashMessage::success("Получатели добавлены.").send();
         }
         Err(err) => {
-            log::error!("Failed to add clients: {err}");
+            log::error!("Failed to add recipients: {err}");
             FlashMessage::error("Ошибка при добавлении получателей.").send();
         }
     }

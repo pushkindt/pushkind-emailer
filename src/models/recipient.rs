@@ -16,6 +16,7 @@ pub struct Recipient {
     pub created_at: Option<chrono::NaiveDateTime>,
     pub updated_at: Option<chrono::NaiveDateTime>,
     pub unsubscribed_at: Option<chrono::NaiveDateTime>,
+    pub fields: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -34,6 +35,12 @@ pub struct RecipientField {
     pub recipient_id: i32,
     pub field: String,
     pub value: String,
+}
+
+#[derive(QueryableByName)]
+pub struct RecipientCount {
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub count: i64,
 }
 
 impl<'a> From<&'a DomainNewRecipient> for NewRecipient<'a> {

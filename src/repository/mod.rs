@@ -172,6 +172,10 @@ pub trait RecipientReader {
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<Recipient>)>;
+    fn search_recipients(
+        &self,
+        query: RecipientListQuery,
+    ) -> RepositoryResult<(usize, Vec<Recipient>)>;
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>>;
 }
 pub trait RecipientWriter {

@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Integer, Nullable, Text};
 use diesel::upsert::excluded;
+use pushkind_common::repository::build_fts_match_query;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use crate::domain::recipient::{
@@ -149,6 +151,111 @@ impl RecipientReader for DieselRepository {
         Ok((total, recipients))
     }
 
+    fn search_recipients(
+        &self,
+        query: RecipientListQuery,
+    ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
+        use crate::models::recipient::RecipientCount;
+
+        let mut conn = self.conn()?;
+
+        // Prepare a safe FTS5 MATCH query using helper
+        let match_query = match &query.search {
+            None => return Ok((0, vec![])),
+            Some(raw) => match build_fts_match_query(raw) {
+                Some(mq) => mq,
+                None => return Ok((0, vec![])),
+            },
+        };
+
+        // Build base SQL
+        let mut sql = String::from(
+            r#"
+            SELECT recipients.*
+            FROM recipients
+            JOIN recipient_fts ON recipients.id = recipient_fts.rowid
+            WHERE recipient_fts MATCH ?
+            AND recipients.hub_id = ?
+            "#,
+        );
+
+        let total_sql = format!("SELECT COUNT(*) as count FROM ({sql})");
+
+        // Now add pagination to SQL (but not count)
+        if query.pagination.is_some() {
+            sql.push_str(" LIMIT ? OFFSET ? ");
+        }
+
+        // Build final data query
+        let mut data_query = diesel::sql_query(&sql)
+            .into_boxed()
+            .bind::<Text, _>(&match_query)
+            .bind::<Integer, _>(query.hub_id);
+
+        let total_query = diesel::sql_query(&total_sql)
+            .into_boxed()
+            .bind::<Text, _>(&match_query)
+            .bind::<Integer, _>(query.hub_id);
+
+        if let Some(pagination) = &query.pagination {
+            let limit = pagination.per_page as i64;
+            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
+            data_query = data_query
+                .bind::<BigInt, _>(limit)
+                .bind::<BigInt, _>(offset);
+        }
+
+        let db_recipients = data_query.load::<Recipient>(&mut conn)?;
+
+        let total = total_query.get_result::<RecipientCount>(&mut conn)?.count as usize;
+
+        if db_recipients.is_empty() {
+            return Ok((total, Vec::new()));
+        }
+
+        // Load recipient fields, grouped by recipient
+        let db_fields = RecipientField::belonging_to(&db_recipients)
+            .select(RecipientField::as_select())
+            .load::<RecipientField>(&mut conn)?
+            .grouped_by(&db_recipients);
+
+        // Load group-recipient relations
+        let db_group_recipients = GroupRecipient::belonging_to(&db_recipients)
+            .select(GroupRecipient::as_select())
+            .load::<GroupRecipient>(&mut conn)?;
+
+        // Build a map from recipient_id to group IDs
+        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
+        for relation in db_group_recipients {
+            recipient_id_to_group_ids
+                .entry(relation.recipient_id)
+                .or_default()
+                .push(relation.group_id);
+        }
+
+        // Compose DomainRecipient
+        let recipients: Vec<DomainRecipient> = db_recipients
+            .into_iter()
+            .zip(db_fields)
+            .map(|(r, fields)| DomainRecipient {
+                id: r.id,
+                name: r.name,
+                email: r.email,
+                hub_id: r.hub_id,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+                unsubscribed_at: r.unsubscribed_at,
+                fields: fields
+                    .into_iter()
+                    .map(|f| (f.field, f.value))
+                    .collect::<HashMap<_, _>>(),
+                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
+            })
+            .collect();
+
+        Ok((total, recipients))
+    }
+
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {
         use pushkind_common::schema::emailer::{recipient_fields, recipients};
 
@@ -187,6 +294,12 @@ impl RecipientWriter for DieselRepository {
                     .set((recipients::name.eq(&new.name),))
                     .get_result::<Recipient>(conn)?;
 
+                // Update fields (delete all → insert new)
+                diesel::delete(
+                    recipient_fields::table.filter(recipient_fields::recipient_id.eq(inserted.id)),
+                )
+                .execute(conn)?;
+
                 // Insert optional fields
                 if let Some(fields) = &new.fields {
                     let new_fields: Vec<RecipientField> = fields
@@ -198,13 +311,6 @@ impl RecipientWriter for DieselRepository {
                         })
                         .collect();
                     if !new_fields.is_empty() {
-                        // Update fields (delete all → insert new)
-                        diesel::delete(
-                            recipient_fields::table
-                                .filter(recipient_fields::recipient_id.eq(inserted.id)),
-                        )
-                        .execute(conn)?;
-
                         for field in new_fields {
                             diesel::insert_into(recipient_fields::table)
                                 .values(&field)
@@ -219,15 +325,27 @@ impl RecipientWriter for DieselRepository {
                     }
                 }
 
-                // Create and assign groups
-                if let Some(names) = &new.groups {
-                    // Update group associations (delete all → insert new)
-                    diesel::delete(
-                        groups_recipients::table
-                            .filter(groups_recipients::recipient_id.eq(inserted.id)),
+                // Update denormalized `recipients.fields` using a Diesel subselect
+                diesel::update(recipients::table.find(inserted.id))
+                    .set(
+                        recipients::fields.eq(recipient_fields::table
+                            .filter(recipient_fields::recipient_id.eq(inserted.id))
+                            .select(diesel::dsl::sql::<Nullable<Text>>(
+                                "trim(COALESCE(group_concat(value, ' '), ''))",
+                            ))
+                            .single_value()),
                     )
                     .execute(conn)?;
 
+                // Update group associations (delete all → insert new)
+                diesel::delete(
+                    groups_recipients::table
+                        .filter(groups_recipients::recipient_id.eq(inserted.id)),
+                )
+                .execute(conn)?;
+
+                // Create and assign groups
+                if let Some(names) = &new.groups {
                     for group_name in names {
                         // Check if group already exists
                         let existing = groups::table
@@ -297,6 +415,18 @@ impl RecipientWriter for DieselRepository {
                 .values(&new_field)
                 .execute(&mut conn)?;
         }
+
+        // Update denormalized `recipients.fields` using a Diesel subselect
+        diesel::update(recipients::table.find(id))
+            .set(
+                recipients::fields.eq(recipient_fields::table
+                    .filter(recipient_fields::recipient_id.eq(id))
+                    .select(diesel::dsl::sql::<Nullable<Text>>(
+                        "trim(COALESCE(group_concat(value, ' '), ''))",
+                    ))
+                    .single_value()),
+            )
+            .execute(&mut conn)?;
 
         // Update group associations (delete all → insert new)
         diesel::delete(groups_recipients::table.filter(groups_recipients::recipient_id.eq(id)))
