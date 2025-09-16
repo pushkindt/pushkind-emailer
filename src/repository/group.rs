@@ -15,7 +15,9 @@ impl GroupReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<GroupWithRecipients>> {
-        use pushkind_common::schema::emailer::{groups, groups_recipients, recipients};
+        use pushkind_common::schema::emailer::{
+            groups, groups_recipients, recipients, unsubscribes,
+        };
         let mut conn = self.conn()?;
 
         // Load group by id
@@ -45,6 +47,23 @@ impl GroupReader for DieselRepository {
             }));
         }
 
+        let recipient_emails: Vec<String> = db_recipients
+            .iter()
+            .map(|recipient| recipient.email.clone())
+            .collect();
+
+        let unsubscribed_lookup = if recipient_emails.is_empty() {
+            HashMap::new()
+        } else {
+            unsubscribes::table
+                .filter(unsubscribes::hub_id.eq(hub_id))
+                .filter(unsubscribes::email.eq_any(&recipient_emails))
+                .select((unsubscribes::email, unsubscribes::created_at))
+                .load::<(String, chrono::NaiveDateTime)>(&mut conn)?
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        };
+
         // Load recipient fields grouped by recipient
         let db_fields = RecipientField::belonging_to(&db_recipients)
             .select(RecipientField::as_select())
@@ -69,13 +88,13 @@ impl GroupReader for DieselRepository {
             .into_iter()
             .zip(db_fields)
             .map(|(r, fields)| DomainRecipient {
+                unsubscribed_at: unsubscribed_lookup.get(&r.email).copied(),
                 id: r.id,
                 name: r.name,
                 email: r.email,
                 hub_id: r.hub_id,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
-                unsubscribed_at: r.unsubscribed_at,
                 fields: fields
                     .into_iter()
                     .map(|f| (f.field, f.value))

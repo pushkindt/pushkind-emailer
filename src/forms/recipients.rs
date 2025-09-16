@@ -63,17 +63,10 @@ impl From<SaveRecipientForm> for UpdateRecipient {
             .zip(form.value.iter().cloned())
             .collect();
 
-        let unsubscribed_at = if form.active {
-            None
-        } else {
-            Some(chrono::Utc::now().naive_utc())
-        };
-
         Self {
             name: form.name,
             email: form.email,
             fields,
-            unsubscribed_at,
             groups: form.groups,
         }
     }

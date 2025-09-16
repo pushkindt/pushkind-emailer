@@ -11,7 +11,7 @@ use crate::domain::recipient::{
     UpdateRecipient as DomainUpdateRecipient,
 };
 use crate::models::group::{Group, GroupRecipient};
-use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
+use crate::models::recipient::{NewRecipient, Recipient, RecipientField, Unsubscribe};
 use crate::repository::{DieselRepository, RecipientListQuery, RecipientReader, RecipientWriter};
 
 impl RecipientReader for DieselRepository {
@@ -20,7 +20,7 @@ impl RecipientReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<RecipientWithGroups>> {
-        use pushkind_common::schema::emailer::{groups, recipients};
+        use pushkind_common::schema::emailer::{groups, recipients, unsubscribes};
 
         let mut conn = self.conn()?;
 
@@ -45,6 +45,13 @@ impl RecipientReader for DieselRepository {
 
         let field_map = fields.into_iter().map(|f| (f.field, f.value)).collect();
 
+        let unsubscribed_at = unsubscribes::table
+            .filter(unsubscribes::email.eq(&recipient.email))
+            .filter(unsubscribes::hub_id.eq(recipient.hub_id))
+            .select(unsubscribes::created_at)
+            .first::<chrono::NaiveDateTime>(&mut conn)
+            .optional()?;
+
         Ok(Some(RecipientWithGroups {
             recipient: DomainRecipient {
                 id: recipient.id,
@@ -54,7 +61,7 @@ impl RecipientReader for DieselRepository {
                 fields: field_map,
                 created_at: recipient.created_at,
                 updated_at: recipient.updated_at,
-                unsubscribed_at: recipient.unsubscribed_at,
+                unsubscribed_at,
                 groups: groups.iter().map(|gr| gr.id).collect(),
             },
             groups: groups.into_iter().map(|gr| gr.into()).collect(),
@@ -65,7 +72,7 @@ impl RecipientReader for DieselRepository {
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
-        use pushkind_common::schema::emailer::{groups_recipients, recipients};
+        use pushkind_common::schema::emailer::{groups_recipients, recipients, unsubscribes};
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -108,6 +115,23 @@ impl RecipientReader for DieselRepository {
             return Ok((total, Vec::new()));
         }
 
+        let recipient_emails: Vec<String> = db_recipients
+            .iter()
+            .map(|recipient| recipient.email.clone())
+            .collect();
+
+        let unsubscribed_lookup = if recipient_emails.is_empty() {
+            HashMap::new()
+        } else {
+            unsubscribes::table
+                .filter(unsubscribes::hub_id.eq(query.hub_id))
+                .filter(unsubscribes::email.eq_any(&recipient_emails))
+                .select((unsubscribes::email, unsubscribes::created_at))
+                .load::<(String, chrono::NaiveDateTime)>(&mut conn)?
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        };
+
         // Load recipient fields, grouped by recipient
         let db_fields = RecipientField::belonging_to(&db_recipients)
             .select(RecipientField::as_select())
@@ -133,13 +157,13 @@ impl RecipientReader for DieselRepository {
             .into_iter()
             .zip(db_fields)
             .map(|(r, fields)| DomainRecipient {
+                unsubscribed_at: unsubscribed_lookup.get(&r.email).copied(),
                 id: r.id,
                 name: r.name,
                 email: r.email,
                 hub_id: r.hub_id,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
-                unsubscribed_at: r.unsubscribed_at,
                 fields: fields
                     .into_iter()
                     .map(|f| (f.field, f.value))
@@ -156,6 +180,7 @@ impl RecipientReader for DieselRepository {
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
         use crate::models::recipient::RecipientCount;
+        use pushkind_common::schema::emailer::unsubscribes;
 
         let mut conn = self.conn()?;
 
@@ -213,6 +238,23 @@ impl RecipientReader for DieselRepository {
             return Ok((total, Vec::new()));
         }
 
+        let recipient_emails: Vec<String> = db_recipients
+            .iter()
+            .map(|recipient| recipient.email.clone())
+            .collect();
+
+        let unsubscribed_lookup = if recipient_emails.is_empty() {
+            HashMap::new()
+        } else {
+            unsubscribes::table
+                .filter(unsubscribes::hub_id.eq(query.hub_id))
+                .filter(unsubscribes::email.eq_any(&recipient_emails))
+                .select((unsubscribes::email, unsubscribes::created_at))
+                .load::<(String, chrono::NaiveDateTime)>(&mut conn)?
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        };
+
         // Load recipient fields, grouped by recipient
         let db_fields = RecipientField::belonging_to(&db_recipients)
             .select(RecipientField::as_select())
@@ -238,13 +280,13 @@ impl RecipientReader for DieselRepository {
             .into_iter()
             .zip(db_fields)
             .map(|(r, fields)| DomainRecipient {
+                unsubscribed_at: unsubscribed_lookup.get(&r.email).copied(),
                 id: r.id,
                 name: r.name,
                 email: r.email,
                 hub_id: r.hub_id,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
-                unsubscribed_at: r.unsubscribed_at,
                 fields: fields
                     .into_iter()
                     .map(|f| (f.field, f.value))
@@ -390,7 +432,9 @@ impl RecipientWriter for DieselRepository {
         id: i32,
         recipient: &DomainUpdateRecipient,
     ) -> RepositoryResult<DomainRecipient> {
-        use pushkind_common::schema::emailer::{groups_recipients, recipient_fields, recipients};
+        use pushkind_common::schema::emailer::{
+            groups_recipients, recipient_fields, recipients, unsubscribes,
+        };
         let mut conn = self.conn()?;
 
         // Update basic recipient info
@@ -398,7 +442,6 @@ impl RecipientWriter for DieselRepository {
             .set((
                 recipients::name.eq(&recipient.name),
                 recipients::email.eq(&recipient.email),
-                recipients::unsubscribed_at.eq(recipient.unsubscribed_at),
             ))
             .execute(&mut conn)?;
 
@@ -447,6 +490,13 @@ impl RecipientWriter for DieselRepository {
             .select(Recipient::as_select())
             .first::<Recipient>(&mut conn)?;
 
+        let unsubscribed_at = unsubscribes::table
+            .filter(unsubscribes::hub_id.eq(rec.hub_id))
+            .filter(unsubscribes::email.eq(&rec.email))
+            .select(unsubscribes::created_at)
+            .first::<chrono::NaiveDateTime>(&mut conn)
+            .optional()?;
+
         // Reload fields
         let fields_vec = recipient_fields::table
             .filter(recipient_fields::recipient_id.eq(id))
@@ -472,7 +522,7 @@ impl RecipientWriter for DieselRepository {
             fields: fields_map,
             created_at: rec.created_at,
             updated_at: rec.updated_at,
-            unsubscribed_at: rec.unsubscribed_at,
+            unsubscribed_at,
             groups: group_ids,
         })
     }
@@ -512,6 +562,29 @@ impl RecipientWriter for DieselRepository {
 
         // Step 4: Delete the recipients themselves
         diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub_id)))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    fn unsubscribe_recipient(
+        &self,
+        email: &str,
+        hub_id: i32,
+        reason: Option<&str>,
+    ) -> RepositoryResult<()> {
+        use pushkind_common::schema::emailer::unsubscribes;
+
+        let mut conn = self.conn()?;
+
+        diesel::insert_into(unsubscribes::table)
+            .values(Unsubscribe {
+                email,
+                hub_id,
+                reason,
+            })
+            .on_conflict((unsubscribes::email, unsubscribes::hub_id))
+            .do_nothing()
             .execute(&mut conn)?;
 
         Ok(())

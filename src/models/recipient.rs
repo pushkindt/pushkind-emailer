@@ -15,7 +15,6 @@ pub struct Recipient {
     pub hub_id: i32,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub updated_at: Option<chrono::NaiveDateTime>,
-    pub unsubscribed_at: Option<chrono::NaiveDateTime>,
     pub fields: Option<String>,
 }
 
@@ -41,6 +40,14 @@ pub struct RecipientField {
 pub struct RecipientCount {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub count: i64,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = pushkind_common::schema::emailer::unsubscribes)]
+pub struct Unsubscribe<'a> {
+    pub email: &'a str,
+    pub hub_id: i32,
+    pub reason: Option<&'a str>,
 }
 
 impl<'a> From<&'a DomainNewRecipient> for NewRecipient<'a> {

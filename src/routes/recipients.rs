@@ -277,6 +277,18 @@ pub async fn recipients_save(
         }
     };
 
+    if !form.active {
+        match repo.unsubscribe_recipient(&recipient.email, recipient.hub_id, None) {
+            Ok(_) => {
+                FlashMessage::success("Получатель отписан.").send();
+            }
+            Err(err) => {
+                log::error!("Error saving recipient: {err}");
+                FlashMessage::error("Ошибка при сохранении получателя.").send();
+            }
+        }
+    }
+
     match repo.update_recipient(recipient.id, &form.into()) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();

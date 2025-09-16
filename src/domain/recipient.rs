@@ -87,8 +87,6 @@ pub struct UpdateRecipient {
     pub email: String,
     /// Updated map of custom fields.
     pub fields: HashMap<String, String>,
-    /// Timestamp when the recipient unsubscribed.
-    pub unsubscribed_at: Option<NaiveDateTime>,
     /// Groups the recipient should belong to.
     pub groups: Vec<i32>,
 }
