@@ -287,6 +287,11 @@ pub async fn recipients_save(
                 FlashMessage::error("Ошибка при сохранении получателя.").send();
             }
         }
+    } else if recipient.unsubscribed_at.is_some() {
+        FlashMessage::success(
+            "Отписавшийся пользователь может изменить своё решение только самостоятельно.",
+        )
+        .send();
     }
 
     match repo.update_recipient(recipient.id, &form.into()) {
