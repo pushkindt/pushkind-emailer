@@ -6,6 +6,7 @@ use diesel::upsert::excluded;
 use pushkind_common::repository::build_fts_match_query;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
+use super::helpers::{apply_pagination, hydrate_recipients};
 use crate::domain::recipient::{
     NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups,
     UpdateRecipient as DomainUpdateRecipient,
@@ -72,7 +73,7 @@ impl RecipientReader for DieselRepository {
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
-        use pushkind_common::schema::emailer::{groups_recipients, recipients, unsubscribes};
+        use pushkind_common::schema::emailer::{groups_recipients, recipients};
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -100,77 +101,11 @@ impl RecipientReader for DieselRepository {
         let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
 
         let mut items = query_builder();
-
-        // Apply pagination if requested
-        if let Some(pagination) = &query.pagination {
-            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
-            let limit = pagination.per_page as i64;
-            items = items.offset(offset).limit(limit);
-        }
+        items = apply_pagination(items, query.pagination.as_ref());
 
         // Load recipients for the hub
         let db_recipients: Vec<Recipient> = items.order(recipients::name.desc()).load(&mut conn)?;
-
-        if db_recipients.is_empty() {
-            return Ok((total, Vec::new()));
-        }
-
-        let recipient_emails: Vec<String> = db_recipients
-            .iter()
-            .map(|recipient| recipient.email.clone())
-            .collect();
-
-        let unsubscribed_lookup = if recipient_emails.is_empty() {
-            HashMap::new()
-        } else {
-            unsubscribes::table
-                .filter(unsubscribes::hub_id.eq(query.hub_id))
-                .filter(unsubscribes::email.eq_any(&recipient_emails))
-                .select((unsubscribes::email, unsubscribes::created_at))
-                .load::<(String, chrono::NaiveDateTime)>(&mut conn)?
-                .into_iter()
-                .collect::<HashMap<_, _>>()
-        };
-
-        // Load recipient fields, grouped by recipient
-        let db_fields = RecipientField::belonging_to(&db_recipients)
-            .select(RecipientField::as_select())
-            .load::<RecipientField>(&mut conn)?
-            .grouped_by(&db_recipients);
-
-        // Load group-recipient relations
-        let db_group_recipients = GroupRecipient::belonging_to(&db_recipients)
-            .select(GroupRecipient::as_select())
-            .load::<GroupRecipient>(&mut conn)?;
-
-        // Build a map from recipient_id to group IDs
-        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
-        for relation in db_group_recipients {
-            recipient_id_to_group_ids
-                .entry(relation.recipient_id)
-                .or_default()
-                .push(relation.group_id);
-        }
-
-        // Compose DomainRecipient
-        let recipients: Vec<DomainRecipient> = db_recipients
-            .into_iter()
-            .zip(db_fields)
-            .map(|(r, fields)| DomainRecipient {
-                unsubscribed_at: unsubscribed_lookup.get(&r.email).copied(),
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
-                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
-            })
-            .collect();
+        let recipients = hydrate_recipients(&mut conn, query.hub_id, db_recipients)?;
 
         Ok((total, recipients))
     }
@@ -180,7 +115,6 @@ impl RecipientReader for DieselRepository {
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
         use crate::models::recipient::RecipientCount;
-        use pushkind_common::schema::emailer::unsubscribes;
 
         let mut conn = self.conn()?;
 
@@ -233,67 +167,7 @@ impl RecipientReader for DieselRepository {
         let db_recipients = data_query.load::<Recipient>(&mut conn)?;
 
         let total = total_query.get_result::<RecipientCount>(&mut conn)?.count as usize;
-
-        if db_recipients.is_empty() {
-            return Ok((total, Vec::new()));
-        }
-
-        let recipient_emails: Vec<String> = db_recipients
-            .iter()
-            .map(|recipient| recipient.email.clone())
-            .collect();
-
-        let unsubscribed_lookup = if recipient_emails.is_empty() {
-            HashMap::new()
-        } else {
-            unsubscribes::table
-                .filter(unsubscribes::hub_id.eq(query.hub_id))
-                .filter(unsubscribes::email.eq_any(&recipient_emails))
-                .select((unsubscribes::email, unsubscribes::created_at))
-                .load::<(String, chrono::NaiveDateTime)>(&mut conn)?
-                .into_iter()
-                .collect::<HashMap<_, _>>()
-        };
-
-        // Load recipient fields, grouped by recipient
-        let db_fields = RecipientField::belonging_to(&db_recipients)
-            .select(RecipientField::as_select())
-            .load::<RecipientField>(&mut conn)?
-            .grouped_by(&db_recipients);
-
-        // Load group-recipient relations
-        let db_group_recipients = GroupRecipient::belonging_to(&db_recipients)
-            .select(GroupRecipient::as_select())
-            .load::<GroupRecipient>(&mut conn)?;
-
-        // Build a map from recipient_id to group IDs
-        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
-        for relation in db_group_recipients {
-            recipient_id_to_group_ids
-                .entry(relation.recipient_id)
-                .or_default()
-                .push(relation.group_id);
-        }
-
-        // Compose DomainRecipient
-        let recipients: Vec<DomainRecipient> = db_recipients
-            .into_iter()
-            .zip(db_fields)
-            .map(|(r, fields)| DomainRecipient {
-                unsubscribed_at: unsubscribed_lookup.get(&r.email).copied(),
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
-                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
-            })
-            .collect();
+        let recipients = hydrate_recipients(&mut conn, query.hub_id, db_recipients)?;
 
         Ok((total, recipients))
     }
