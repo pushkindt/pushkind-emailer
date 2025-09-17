@@ -6,12 +6,13 @@ use diesel::upsert::excluded;
 use pushkind_common::repository::build_fts_match_query;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
+use super::helpers::{apply_pagination, hydrate_recipients};
 use crate::domain::recipient::{
     NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups,
     UpdateRecipient as DomainUpdateRecipient,
 };
 use crate::models::group::{Group, GroupRecipient};
-use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
+use crate::models::recipient::{NewRecipient, Recipient, RecipientField, Unsubscribe};
 use crate::repository::{DieselRepository, RecipientListQuery, RecipientReader, RecipientWriter};
 
 impl RecipientReader for DieselRepository {
@@ -20,7 +21,7 @@ impl RecipientReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<RecipientWithGroups>> {
-        use pushkind_common::schema::emailer::{groups, recipients};
+        use pushkind_common::schema::emailer::{groups, recipients, unsubscribes};
 
         let mut conn = self.conn()?;
 
@@ -45,6 +46,13 @@ impl RecipientReader for DieselRepository {
 
         let field_map = fields.into_iter().map(|f| (f.field, f.value)).collect();
 
+        let unsubscribed_at = unsubscribes::table
+            .filter(unsubscribes::email.eq(&recipient.email))
+            .filter(unsubscribes::hub_id.eq(recipient.hub_id))
+            .select(unsubscribes::created_at)
+            .first::<chrono::NaiveDateTime>(&mut conn)
+            .optional()?;
+
         Ok(Some(RecipientWithGroups {
             recipient: DomainRecipient {
                 id: recipient.id,
@@ -54,7 +62,7 @@ impl RecipientReader for DieselRepository {
                 fields: field_map,
                 created_at: recipient.created_at,
                 updated_at: recipient.updated_at,
-                unsubscribed_at: recipient.unsubscribed_at,
+                unsubscribed_at,
                 groups: groups.iter().map(|gr| gr.id).collect(),
             },
             groups: groups.into_iter().map(|gr| gr.into()).collect(),
@@ -93,60 +101,11 @@ impl RecipientReader for DieselRepository {
         let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
 
         let mut items = query_builder();
-
-        // Apply pagination if requested
-        if let Some(pagination) = &query.pagination {
-            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
-            let limit = pagination.per_page as i64;
-            items = items.offset(offset).limit(limit);
-        }
+        items = apply_pagination(items, query.pagination.as_ref());
 
         // Load recipients for the hub
         let db_recipients: Vec<Recipient> = items.order(recipients::name.desc()).load(&mut conn)?;
-
-        if db_recipients.is_empty() {
-            return Ok((total, Vec::new()));
-        }
-
-        // Load recipient fields, grouped by recipient
-        let db_fields = RecipientField::belonging_to(&db_recipients)
-            .select(RecipientField::as_select())
-            .load::<RecipientField>(&mut conn)?
-            .grouped_by(&db_recipients);
-
-        // Load group-recipient relations
-        let db_group_recipients = GroupRecipient::belonging_to(&db_recipients)
-            .select(GroupRecipient::as_select())
-            .load::<GroupRecipient>(&mut conn)?;
-
-        // Build a map from recipient_id to group IDs
-        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
-        for relation in db_group_recipients {
-            recipient_id_to_group_ids
-                .entry(relation.recipient_id)
-                .or_default()
-                .push(relation.group_id);
-        }
-
-        // Compose DomainRecipient
-        let recipients: Vec<DomainRecipient> = db_recipients
-            .into_iter()
-            .zip(db_fields)
-            .map(|(r, fields)| DomainRecipient {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                unsubscribed_at: r.unsubscribed_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
-                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
-            })
-            .collect();
+        let recipients = hydrate_recipients(&mut conn, query.hub_id, db_recipients)?;
 
         Ok((total, recipients))
     }
@@ -208,50 +167,7 @@ impl RecipientReader for DieselRepository {
         let db_recipients = data_query.load::<Recipient>(&mut conn)?;
 
         let total = total_query.get_result::<RecipientCount>(&mut conn)?.count as usize;
-
-        if db_recipients.is_empty() {
-            return Ok((total, Vec::new()));
-        }
-
-        // Load recipient fields, grouped by recipient
-        let db_fields = RecipientField::belonging_to(&db_recipients)
-            .select(RecipientField::as_select())
-            .load::<RecipientField>(&mut conn)?
-            .grouped_by(&db_recipients);
-
-        // Load group-recipient relations
-        let db_group_recipients = GroupRecipient::belonging_to(&db_recipients)
-            .select(GroupRecipient::as_select())
-            .load::<GroupRecipient>(&mut conn)?;
-
-        // Build a map from recipient_id to group IDs
-        let mut recipient_id_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
-        for relation in db_group_recipients {
-            recipient_id_to_group_ids
-                .entry(relation.recipient_id)
-                .or_default()
-                .push(relation.group_id);
-        }
-
-        // Compose DomainRecipient
-        let recipients: Vec<DomainRecipient> = db_recipients
-            .into_iter()
-            .zip(db_fields)
-            .map(|(r, fields)| DomainRecipient {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                unsubscribed_at: r.unsubscribed_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
-                groups: recipient_id_to_group_ids.remove(&r.id).unwrap_or_default(),
-            })
-            .collect();
+        let recipients = hydrate_recipients(&mut conn, query.hub_id, db_recipients)?;
 
         Ok((total, recipients))
     }
@@ -390,7 +306,9 @@ impl RecipientWriter for DieselRepository {
         id: i32,
         recipient: &DomainUpdateRecipient,
     ) -> RepositoryResult<DomainRecipient> {
-        use pushkind_common::schema::emailer::{groups_recipients, recipient_fields, recipients};
+        use pushkind_common::schema::emailer::{
+            groups_recipients, recipient_fields, recipients, unsubscribes,
+        };
         let mut conn = self.conn()?;
 
         // Update basic recipient info
@@ -398,7 +316,6 @@ impl RecipientWriter for DieselRepository {
             .set((
                 recipients::name.eq(&recipient.name),
                 recipients::email.eq(&recipient.email),
-                recipients::unsubscribed_at.eq(recipient.unsubscribed_at),
             ))
             .execute(&mut conn)?;
 
@@ -447,6 +364,13 @@ impl RecipientWriter for DieselRepository {
             .select(Recipient::as_select())
             .first::<Recipient>(&mut conn)?;
 
+        let unsubscribed_at = unsubscribes::table
+            .filter(unsubscribes::hub_id.eq(rec.hub_id))
+            .filter(unsubscribes::email.eq(&rec.email))
+            .select(unsubscribes::created_at)
+            .first::<chrono::NaiveDateTime>(&mut conn)
+            .optional()?;
+
         // Reload fields
         let fields_vec = recipient_fields::table
             .filter(recipient_fields::recipient_id.eq(id))
@@ -472,7 +396,7 @@ impl RecipientWriter for DieselRepository {
             fields: fields_map,
             created_at: rec.created_at,
             updated_at: rec.updated_at,
-            unsubscribed_at: rec.unsubscribed_at,
+            unsubscribed_at,
             groups: group_ids,
         })
     }
@@ -512,6 +436,29 @@ impl RecipientWriter for DieselRepository {
 
         // Step 4: Delete the recipients themselves
         diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub_id)))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    fn unsubscribe_recipient(
+        &self,
+        email: &str,
+        hub_id: i32,
+        reason: Option<&str>,
+    ) -> RepositoryResult<()> {
+        use pushkind_common::schema::emailer::unsubscribes;
+
+        let mut conn = self.conn()?;
+
+        diesel::insert_into(unsubscribes::table)
+            .values(Unsubscribe {
+                email,
+                hub_id,
+                reason,
+            })
+            .on_conflict((unsubscribes::email, unsubscribes::hub_id))
+            .do_nothing()
             .execute(&mut conn)?;
 
         Ok(())
