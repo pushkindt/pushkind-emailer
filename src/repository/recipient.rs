@@ -12,7 +12,7 @@ use crate::domain::recipient::{
     UpdateRecipient as DomainUpdateRecipient,
 };
 use crate::models::group::{Group, GroupRecipient};
-use crate::models::recipient::{NewRecipient, Recipient, RecipientField, Unsubscribe};
+use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
 use crate::repository::{DieselRepository, RecipientListQuery, RecipientReader, RecipientWriter};
 
 impl RecipientReader for DieselRepository {
@@ -436,29 +436,6 @@ impl RecipientWriter for DieselRepository {
 
         // Step 4: Delete the recipients themselves
         diesel::delete(recipients::table.filter(recipients::hub_id.eq(hub_id)))
-            .execute(&mut conn)?;
-
-        Ok(())
-    }
-
-    fn unsubscribe_recipient(
-        &self,
-        email: &str,
-        hub_id: i32,
-        reason: Option<&str>,
-    ) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::unsubscribes;
-
-        let mut conn = self.conn()?;
-
-        diesel::insert_into(unsubscribes::table)
-            .values(Unsubscribe {
-                email,
-                hub_id,
-                reason,
-            })
-            .on_conflict((unsubscribes::email, unsubscribes::hub_id))
-            .do_nothing()
             .execute(&mut conn)?;
 
         Ok(())

@@ -186,12 +186,6 @@ pub trait RecipientWriter {
     -> RepositoryResult<Recipient>;
     fn delete_recipient(&self, id: i32) -> RepositoryResult<()>;
     fn delete_all_recipients(&self, hub_id: i32) -> RepositoryResult<()>;
-    fn unsubscribe_recipient(
-        &self,
-        email: &str,
-        hub_id: i32,
-        reason: Option<&str>,
-    ) -> RepositoryResult<()>;
 }
 
 pub trait GroupReader {
