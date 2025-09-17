@@ -7,6 +7,8 @@ use pushkind_common::repository::errors::RepositoryResult;
 use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
 use crate::domain::recipient::{NewRecipient, Recipient, RecipientWithGroups, UpdateRecipient};
 
+mod helpers;
+
 pub mod email;
 pub mod group;
 pub mod hub;

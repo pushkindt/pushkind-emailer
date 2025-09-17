@@ -9,6 +9,7 @@ use pushkind_common::models::emailer::email::{
 };
 use pushkind_common::repository::errors::RepositoryResult;
 
+use super::helpers::apply_pagination;
 use crate::repository::EmailListQuery;
 use crate::repository::{DieselRepository, EmailReader, EmailWriter};
 
@@ -60,13 +61,7 @@ impl EmailReader for DieselRepository {
         let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
 
         let mut items = query_builder();
-
-        // Apply pagination if requested
-        if let Some(pagination) = &query.pagination {
-            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
-            let limit = pagination.per_page as i64;
-            items = items.offset(offset).limit(limit);
-        }
+        items = apply_pagination(items, query.pagination.as_ref());
 
         let db_emails = items
             .order(emails::created_at.desc())

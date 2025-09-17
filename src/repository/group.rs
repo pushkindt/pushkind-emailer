@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use diesel::prelude::*;
 use pushkind_common::repository::errors::RepositoryResult;
 
+use super::helpers::{apply_pagination, hydrate_recipients};
 use crate::domain::group::{Group as DomainGroup, GroupWithRecipients, NewGroup as DomainNewGroup};
-use crate::domain::recipient::Recipient as DomainRecipient;
 use crate::models::group::{Group as DbGroup, GroupRecipient, NewGroup as DbNewGroup};
-use crate::models::recipient::{Recipient as DbRecipient, RecipientField};
+use crate::models::recipient::Recipient as DbRecipient;
 use crate::repository::{DieselRepository, GroupListQuery, GroupReader, GroupWriter};
 
 impl GroupReader for DieselRepository {
@@ -15,9 +13,7 @@ impl GroupReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<GroupWithRecipients>> {
-        use pushkind_common::schema::emailer::{
-            groups, groups_recipients, recipients, unsubscribes,
-        };
+        use pushkind_common::schema::emailer::{groups, groups_recipients, recipients};
         let mut conn = self.conn()?;
 
         // Load group by id
@@ -40,68 +36,7 @@ impl GroupReader for DieselRepository {
             .select(DbRecipient::as_select())
             .load(&mut conn)?;
 
-        if db_recipients.is_empty() {
-            return Ok(Some(GroupWithRecipients {
-                group: DomainGroup::from(db_group),
-                recipients: vec![],
-            }));
-        }
-
-        let recipient_emails: Vec<String> = db_recipients
-            .iter()
-            .map(|recipient| recipient.email.clone())
-            .collect();
-
-        let unsubscribed_lookup = if recipient_emails.is_empty() {
-            HashMap::new()
-        } else {
-            unsubscribes::table
-                .filter(unsubscribes::hub_id.eq(hub_id))
-                .filter(unsubscribes::email.eq_any(&recipient_emails))
-                .select((unsubscribes::email, unsubscribes::created_at))
-                .load::<(String, chrono::NaiveDateTime)>(&mut conn)?
-                .into_iter()
-                .collect::<HashMap<_, _>>()
-        };
-
-        // Load recipient fields grouped by recipient
-        let db_fields = RecipientField::belonging_to(&db_recipients)
-            .select(RecipientField::as_select())
-            .load::<RecipientField>(&mut conn)?
-            .grouped_by(&db_recipients);
-
-        // Load group memberships for each recipient
-        let db_group_links = GroupRecipient::belonging_to(&db_recipients)
-            .select(GroupRecipient::as_select())
-            .load::<GroupRecipient>(&mut conn)?;
-
-        let mut recipient_to_group_ids: HashMap<i32, Vec<i32>> = HashMap::new();
-        for link in db_group_links {
-            recipient_to_group_ids
-                .entry(link.recipient_id)
-                .or_default()
-                .push(link.group_id);
-        }
-
-        // Compose domain recipients
-        let recipients = db_recipients
-            .into_iter()
-            .zip(db_fields)
-            .map(|(r, fields)| DomainRecipient {
-                unsubscribed_at: unsubscribed_lookup.get(&r.email).copied(),
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
-                groups: recipient_to_group_ids.remove(&r.id).unwrap_or_default(),
-            })
-            .collect();
+        let recipients = hydrate_recipients(&mut conn, hub_id, db_recipients)?;
 
         Ok(Some(GroupWithRecipients {
             group: DomainGroup::from(db_group),
@@ -123,13 +58,7 @@ impl GroupReader for DieselRepository {
         let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
 
         let mut items = query_builder();
-
-        // Apply pagination if requested
-        if let Some(pagination) = &query.pagination {
-            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
-            let limit = pagination.per_page as i64;
-            items = items.offset(offset).limit(limit);
-        }
+        items = apply_pagination(items, query.pagination.as_ref());
 
         // Final load
         let items = items
