@@ -90,3 +90,11 @@ pub struct UpdateRecipient {
     /// Groups the recipient should belong to.
     pub groups: Vec<i32>,
 }
+
+#[derive(Serialize)]
+pub struct Unsubscribe {
+    pub email: String,
+    pub hub_id: i32,
+    pub reason: Option<String>,
+    pub unsubscribed_at: NaiveDateTime,
+}

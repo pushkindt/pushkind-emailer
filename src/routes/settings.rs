@@ -8,7 +8,7 @@ use pushkind_common::routes::{ensure_role, redirect};
 use tera::Tera;
 
 use crate::forms::settings::SaveHubForm;
-use crate::repository::{DieselRepository, HubReader, HubWriter};
+use crate::repository::{DieselRepository, HubReader, HubWriter, RecipientReader};
 
 #[get("/settings")]
 pub async fn settings_show(
@@ -47,6 +47,38 @@ pub async fn settings_show(
     context.insert("current_hub", &hub);
 
     render_template(&tera, "settings/settings.html", &context)
+}
+
+#[get("/unsubscribed")]
+pub async fn unsubscribed_show(
+    user: AuthenticatedUser,
+    flash_messages: IncomingFlashMessages,
+    repo: web::Data<DieselRepository>,
+    server_config: web::Data<CommonServerConfig>,
+    tera: web::Data<Tera>,
+) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "unsubscribed",
+        &server_config.auth_service_url,
+    );
+
+    let unsubscribed_list = match repo.list_unsubscribed_recipients(user.hub_id) {
+        Ok(unsubscribed) => unsubscribed,
+        Err(e) => {
+            log::error!("Error getting unsubscribed recipients: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    context.insert("unsubscribed_list", &unsubscribed_list);
+
+    render_template(&tera, "settings/unsubscribed.html", &context)
 }
 
 #[post("/settings/save")]

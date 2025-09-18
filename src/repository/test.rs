@@ -44,4 +44,10 @@ impl RecipientReader for TestRepository {
     ) -> RepositoryResult<(usize, Vec<Recipient>)> {
         Ok((0, vec![]))
     }
+    fn list_unsubscribed_recipients(
+        &self,
+        _hub_id: i32,
+    ) -> RepositoryResult<Vec<crate::domain::recipient::Unsubscribe>> {
+        Ok(vec![])
+    }
 }
