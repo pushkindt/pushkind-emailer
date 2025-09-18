@@ -14,6 +14,7 @@ fn unsubscribe_url_with_login() {
         imap_server: None,
         imap_port: None,
         email_template: None,
+        imap_last_uid: 0,
     };
     assert_eq!(
         hub.unsubscribe_url(),
@@ -35,6 +36,7 @@ fn unsubscribe_url_no_login() {
         imap_server: None,
         imap_port: None,
         email_template: None,
+        imap_last_uid: 0,
     };
     assert_eq!(hub.unsubscribe_url(), "");
 }
