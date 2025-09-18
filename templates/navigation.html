@@ -5,8 +5,9 @@
                 <img class="logo d-inline-block align-text-top" src="/assets/logo.png" alt="Logo">
                 Emailer
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
-                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false"
+                aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarSupportedContent">
@@ -15,7 +16,8 @@
                         <a class="nav-link {%if current_page == 'index'%}active{%endif%}" href="/">Сообщения</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {%if current_page == 'recipients'%}active{%endif%}" href="/recipients">Получатели</a>
+                        <a class="nav-link {%if current_page == 'recipients'%}active{%endif%}"
+                            href="/recipients">Получатели</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {%if current_page == 'groups'%}active{%endif%}" href="/groups">Группы</a>
@@ -23,20 +25,31 @@
                 </ul>
             </div>
             <div class="dropdown-center">
-                <button class="btn btn-link nav-link align-items-center text-muted dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <button class="btn btn-link nav-link align-items-center text-muted dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="bi bi-person-circle fs-4"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                    <li><h6 class="dropdown-header">{{current_user.email}}</h6></li>
-                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <h6 class="dropdown-header">{{current_user.email}}</h6>
+                    </li>
+                    <li>
+                        <hr class="dropdown-divider">
+                    </li>
                     {% if current_user.roles is containing("admin") %}
-                        <li>
-                            <a class="dropdown-item icon-link" href="/settings">
-                                <i class="bi bi-wrench-adjustable-circle mb-2"></i>
-                                Настройки
-                            </a>
-                        </li>
+                    <li>
+                        <a class="dropdown-item icon-link" href="/settings">
+                            <i class="bi bi-wrench-adjustable-circle mb-2"></i>
+                            Настройки
+                        </a>
+                    </li>
                     {% endif %}
+                    <li>
+                        <a class="dropdown-item icon-link" href="/unsubscribed">
+                            <i class="bi bi-person-x mb-2"></i>
+                            Отписавшиеся
+                        </a>
+                    </li>
                     <li>
                         <a class="dropdown-item icon-link" href="{{home_url}}">
                             <i class="bi bi-house mb-2"></i>

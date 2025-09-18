@@ -2,7 +2,9 @@ use diesel::prelude::*;
 use pushkind_common::models::emailer::hub::Hub;
 use serde::Serialize;
 
-use crate::domain::recipient::NewRecipient as DomainNewRecipient;
+use crate::domain::recipient::{
+    NewRecipient as DomainNewRecipient, Unsubscribe as DomainUnsubscribe,
+};
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations, QueryableByName)]
 #[diesel(table_name = pushkind_common::schema::emailer::recipients)]
@@ -42,12 +44,34 @@ pub struct RecipientCount {
     pub count: i64,
 }
 
+#[derive(Queryable, Selectable, Serialize, QueryableByName)]
+#[diesel(table_name = pushkind_common::schema::emailer::unsubscribes)]
+#[diesel(primary_key(email, hub_id))]
+pub struct Unsubscribe {
+    pub email: String,
+    pub hub_id: i32,
+    pub reason: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
 impl<'a> From<&'a DomainNewRecipient> for NewRecipient<'a> {
     fn from(value: &'a DomainNewRecipient) -> Self {
         Self {
             name: &value.name,
             email: &value.email,
             hub_id: value.hub_id,
+        }
+    }
+}
+
+impl From<Unsubscribe> for DomainUnsubscribe {
+    fn from(value: Unsubscribe) -> Self {
+        Self {
+            email: value.email,
+            hub_id: value.hub_id,
+            reason: value.reason,
+            unsubscribed_at: value.created_at,
         }
     }
 }

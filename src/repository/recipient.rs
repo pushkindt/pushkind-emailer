@@ -9,10 +9,10 @@ use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 use super::helpers::{apply_pagination, hydrate_recipients};
 use crate::domain::recipient::{
     NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups,
-    UpdateRecipient as DomainUpdateRecipient,
+    Unsubscribe as DomainUnsubscribe, UpdateRecipient as DomainUpdateRecipient,
 };
 use crate::models::group::{Group, GroupRecipient};
-use crate::models::recipient::{NewRecipient, Recipient, RecipientField};
+use crate::models::recipient::{NewRecipient, Recipient, RecipientField, Unsubscribe};
 use crate::repository::{DieselRepository, RecipientListQuery, RecipientReader, RecipientWriter};
 
 impl RecipientReader for DieselRepository {
@@ -186,6 +186,23 @@ impl RecipientReader for DieselRepository {
             .load(&mut conn)?;
 
         Ok(fields)
+    }
+
+    fn list_unsubscribed_recipients(
+        &self,
+        hub_id: i32,
+    ) -> RepositoryResult<Vec<DomainUnsubscribe>> {
+        use pushkind_common::schema::emailer::unsubscribes;
+
+        let mut conn = self.conn()?;
+
+        let results = unsubscribes::table
+            .filter(unsubscribes::hub_id.eq(hub_id))
+            .select(Unsubscribe::as_select())
+            .order(unsubscribes::created_at.desc())
+            .load::<Unsubscribe>(&mut conn)?;
+
+        Ok(results.into_iter().map(Into::into).collect())
     }
 }
 

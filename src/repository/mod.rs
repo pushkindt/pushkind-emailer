@@ -5,7 +5,9 @@ use pushkind_common::pagination::Pagination;
 use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
-use crate::domain::recipient::{NewRecipient, Recipient, RecipientWithGroups, UpdateRecipient};
+use crate::domain::recipient::{
+    NewRecipient, Recipient, RecipientWithGroups, Unsubscribe, UpdateRecipient,
+};
 
 mod helpers;
 
@@ -179,6 +181,7 @@ pub trait RecipientReader {
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<Recipient>)>;
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>>;
+    fn list_unsubscribed_recipients(&self, hub_id: i32) -> RepositoryResult<Vec<Unsubscribe>>;
 }
 pub trait RecipientWriter {
     fn create_recipients(&self, recipient: &[NewRecipient]) -> RepositoryResult<usize>;
