@@ -15,6 +15,7 @@ use pushkind_common::zmq::ZmqSender;
 use serde::Deserialize;
 use tera::Tera;
 
+use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::repository::{
     DieselRepository, EmailListQuery, EmailReader, EmailWriter, GroupListQuery, GroupReader,
@@ -244,6 +245,7 @@ pub async fn export_email_recipients(
 
     let mut writer = csv::Writer::from_writer(vec![]);
     for recipient in email.recipients {
+        let recipient = CSVExportRecipient::from(recipient);
         if let Err(err) = writer.serialize(recipient) {
             log::error!("Failed to write recipient to csv: {err}");
             return HttpResponse::InternalServerError().finish();
