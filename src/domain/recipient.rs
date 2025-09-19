@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
+use pushkind_common::domain::emailer::email::EmailRecipient;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::group::Group;
@@ -97,4 +98,25 @@ pub struct Unsubscribe {
     pub hub_id: i32,
     pub reason: Option<String>,
     pub unsubscribed_at: NaiveDateTime,
+}
+
+#[derive(Serialize)]
+pub struct CSVExportRecipient {
+    pub email: String,
+    pub name: String,
+    pub opened: bool,
+    pub sent: bool,
+    pub replied: bool,
+}
+
+impl From<EmailRecipient> for CSVExportRecipient {
+    fn from(value: EmailRecipient) -> Self {
+        Self {
+            email: value.address,
+            name: value.name,
+            opened: value.opened,
+            sent: value.is_sent,
+            replied: value.replied,
+        }
+    }
 }
