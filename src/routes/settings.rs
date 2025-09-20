@@ -8,7 +8,9 @@ use pushkind_common::routes::{ensure_role, redirect};
 use tera::Tera;
 
 use crate::forms::settings::SaveHubForm;
-use crate::repository::{DieselRepository, HubReader, HubWriter, RecipientReader};
+use crate::repository::{
+    DieselRepository, EmailRecipientReader, HubReader, HubWriter, RecipientReader,
+};
 
 #[get("/settings")]
 pub async fn settings_show(
@@ -79,6 +81,38 @@ pub async fn unsubscribed_show(
     context.insert("unsubscribed_list", &unsubscribed_list);
 
     render_template(&tera, "settings/unsubscribed.html", &context)
+}
+
+#[get("/history")]
+pub async fn history_show(
+    user: AuthenticatedUser,
+    flash_messages: IncomingFlashMessages,
+    repo: web::Data<DieselRepository>,
+    server_config: web::Data<CommonServerConfig>,
+    tera: web::Data<Tera>,
+) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "history",
+        &server_config.auth_service_url,
+    );
+
+    let history_list = match repo.list_recipients_grouped_by_address(user.hub_id) {
+        Ok(history_list) => history_list,
+        Err(e) => {
+            log::error!("Error getting history recipients: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    context.insert("history_list", &history_list);
+
+    render_template(&tera, "settings/history.html", &context)
 }
 
 #[post("/settings/save")]

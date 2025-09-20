@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use diesel::prelude::*;
 use pushkind_common::domain::emailer::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
@@ -100,32 +102,28 @@ impl EmailRecipientReader for DieselRepository {
 
         let mut conn = self.conn()?;
 
-        let rows: Vec<(i32, DbEmailRecipient)> = email_recipients::table
+        // Step 1: Load all rows sorted so newest per address comes first
+        let rows: Vec<DbEmailRecipient> = email_recipients::table
             .inner_join(emails::table)
             .filter(emails::hub_id.eq(hub_id))
-            .select((emails::hub_id, DbEmailRecipient::as_select()))
             .order((
-                emails::hub_id.asc(),
                 email_recipients::address.asc(),
                 email_recipients::updated_at.desc(),
-                email_recipients::id.desc(),
             ))
+            .select(DbEmailRecipient::as_select())
             .load(&mut conn)?;
 
-        let mut latest: Vec<DbEmailRecipient> = Vec::new();
-        let mut last_key: Option<(i32, String)> = None;
-
-        for (row_hub_id, recipient) in rows {
-            let is_same_group = last_key
-                .as_ref()
-                .map(|(hub, address)| *hub == row_hub_id && address == &recipient.address)
-                .unwrap_or(false);
-
-            if !is_same_group {
-                last_key = Some((row_hub_id, recipient.address.clone()));
-                latest.push(recipient);
+        // Step 2: Keep only the first row per address
+        let mut seen = HashSet::new();
+        let mut latest = Vec::with_capacity(rows.len());
+        for r in rows {
+            if seen.insert(r.address.clone()) {
+                latest.push(r);
             }
         }
+
+        // Step 3: Sort the final set by updated_at descending
+        latest.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
         Ok(latest.into_iter().map(Into::into).collect())
     }
