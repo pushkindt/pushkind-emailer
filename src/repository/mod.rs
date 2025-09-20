@@ -1,5 +1,7 @@
 use pushkind_common::db::{DbConnection, DbPool};
-use pushkind_common::domain::emailer::email::{EmailWithRecipients, UpdateEmailRecipient};
+use pushkind_common::domain::emailer::email::{
+    EmailRecipient, EmailWithRecipients, UpdateEmailRecipient,
+};
 use pushkind_common::domain::emailer::hub::{Hub, NewHub, UpdateHub};
 use pushkind_common::pagination::Pagination;
 use pushkind_common::repository::errors::RepositoryResult;
@@ -155,6 +157,18 @@ pub trait EmailWriter {
         updates: &UpdateEmailRecipient,
     ) -> RepositoryResult<EmailWithRecipients>;
     fn delete_email(&self, id: i32) -> RepositoryResult<()>;
+}
+
+pub trait EmailRecipientReader {
+    /// Return recipients grouped by email address for the provided hub.
+    ///
+    /// When the same email address received multiple emails within the hub,
+    /// the record with the most recent `updated_at` timestamp is returned so
+    /// that caller always gets the latest snapshot of the recipient data.
+    fn list_recipients_grouped_by_address(
+        &self,
+        hub_id: i32,
+    ) -> RepositoryResult<Vec<EmailRecipient>>;
 }
 
 pub trait HubReader {
