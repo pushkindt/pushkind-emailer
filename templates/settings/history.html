@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% include 'navigation.html' %}
+
+
+<div class="container py-4">
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 caption-top">
+                    <caption class="px-2">
+                        <div class="row">
+                            <div class="col">
+                                Отображается только дата последнего письма для каждого получателя
+                            </div>
+                            <div class="col-auto">
+                                <a href="/history/download">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </caption>
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col" style="width: 40%">Получатель</th>
+                            <th scope="col" style="width: 20%">Дата</th>
+                            <th scope="col" style="width: 20%">Просмотрено</th>
+                            <th scope="col" style="width: 20%">Отвечено</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for history in history_list %}
+                        <tr>
+                            <td>
+                                {% if history.name %}
+                                {{history.name}}<br>
+                                {% endif %}
+                                <i class="bi-envelope me-1" aria-hidden="true"></i>
+                                <a href="mailto:{{history.address}}">
+                                    {{history.address}}
+                                </a>
+                            </td>
+                            <td>
+                                <time datetime="{{history.updated_at}}">
+                                    {{history.updated_at | date(format="%Y-%m-%d %H:%M")}}
+                                </time>
+                            </td>
+                            <td>
+                                {% if history.opened %}
+                                <i class="bi bi-plus-circle"></i>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if history.replied %}
+                                <i class="bi bi-plus-circle"></i>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div class="text-muted small">
+                <i class="bi-info-circle me-1" aria-hidden="true"></i>
+                Всего {{history_list | length}} получателей.
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}

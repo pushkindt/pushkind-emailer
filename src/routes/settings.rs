@@ -7,8 +7,11 @@ use pushkind_common::routes::{base_context, render_template};
 use pushkind_common::routes::{ensure_role, redirect};
 use tera::Tera;
 
+use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::settings::SaveHubForm;
-use crate::repository::{DieselRepository, HubReader, HubWriter, RecipientReader};
+use crate::repository::{
+    DieselRepository, EmailRecipientReader, HubReader, HubWriter, RecipientReader,
+};
 
 #[get("/settings")]
 pub async fn settings_show(
@@ -79,6 +82,81 @@ pub async fn unsubscribed_show(
     context.insert("unsubscribed_list", &unsubscribed_list);
 
     render_template(&tera, "settings/unsubscribed.html", &context)
+}
+
+#[get("/history")]
+pub async fn history_show(
+    user: AuthenticatedUser,
+    flash_messages: IncomingFlashMessages,
+    repo: web::Data<DieselRepository>,
+    server_config: web::Data<CommonServerConfig>,
+    tera: web::Data<Tera>,
+) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "history",
+        &server_config.auth_service_url,
+    );
+
+    let history_list = match repo.list_recipients_grouped_by_address(user.hub_id) {
+        Ok(history_list) => history_list,
+        Err(e) => {
+            log::error!("Error getting history recipients: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    context.insert("history_list", &history_list);
+
+    render_template(&tera, "settings/history.html", &context)
+}
+
+#[get("/history/download")]
+pub async fn history_download(
+    user: AuthenticatedUser,
+    repo: web::Data<DieselRepository>,
+) -> impl Responder {
+    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
+        return response;
+    };
+
+    let history_list = match repo.list_recipients_grouped_by_address(user.hub_id) {
+        Ok(history_list) => history_list,
+        Err(e) => {
+            log::error!("Error getting history recipients: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    let mut writer = csv::Writer::from_writer(vec![]);
+    for recipient in history_list {
+        let recipient = CSVExportRecipient::from(recipient);
+        if let Err(err) = writer.serialize(recipient) {
+            log::error!("Failed to write recipient to csv: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    }
+
+    let data = match writer.into_inner() {
+        Ok(data) => data,
+        Err(err) => {
+            log::error!("Failed to finalize csv: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    HttpResponse::Ok()
+        .content_type("text/csv")
+        .append_header((
+            "Content-Disposition",
+            "attachment; filename=\"recipients_history.csv\"",
+        ))
+        .body(data)
 }
 
 #[post("/settings/save")]
