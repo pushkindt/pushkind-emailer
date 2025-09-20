@@ -154,7 +154,7 @@ pub async fn history_download(
         .content_type("text/csv")
         .append_header((
             "Content-Disposition",
-            format!("attachment; filename=\"recipients_history.csv\""),
+            "attachment; filename=\"recipients_history.csv\"",
         ))
         .body(data)
 }
