@@ -107,6 +107,7 @@ pub struct CSVExportRecipient {
     pub opened: bool,
     pub sent: bool,
     pub replied: bool,
+    pub updated_at: NaiveDateTime,
 }
 
 impl From<EmailRecipient> for CSVExportRecipient {
@@ -117,6 +118,7 @@ impl From<EmailRecipient> for CSVExportRecipient {
             opened: value.opened,
             sent: value.is_sent,
             replied: value.replied,
+            updated_at: value.updated_at,
         }
     }
 }

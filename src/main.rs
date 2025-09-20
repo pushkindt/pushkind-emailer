@@ -31,7 +31,7 @@ use pushkind_emailer::routes::recipients::{
     recipients_show, recipients_source, recipients_upload,
 };
 use pushkind_emailer::routes::settings::{
-    history_show, settings_save, settings_show, unsubscribed_show,
+    history_download, history_show, settings_save, settings_show, unsubscribed_show,
 };
 
 /// Application entry point launching the Actix Web server.
@@ -139,7 +139,8 @@ async fn main() -> std::io::Result<()> {
                     .service(groups_assign)
                     .service(groups_modal)
                     .service(unsubscribed_show)
-                    .service(history_show),
+                    .service(history_show)
+                    .service(history_download),
             )
             .app_data(web::Data::new(tera.clone()))
             .app_data(web::Data::new(repo.clone()))
