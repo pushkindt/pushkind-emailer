@@ -1,146 +1,142 @@
 {% extends 'base.html' %}
 
 {% block styles %}
-    <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/css/selectize.bootstrap4.min.css"
-        integrity="sha512-MMojOrCQrqLg4Iarid2YMYyZ7pzjPeXKRvhW9nZqLo6kPBBTuvNET9DBVWptAo/Q20Fy11EIHM5ig4WlIrJfQw=="
-        crossorigin="anonymous"
-        referrerpolicy="no-referrer"
-    />
+<link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/css/selectize.bootstrap4.min.css"
+    integrity="sha512-MMojOrCQrqLg4Iarid2YMYyZ7pzjPeXKRvhW9nZqLo6kPBBTuvNET9DBVWptAo/Q20Fy11EIHM5ig4WlIrJfQw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
 {% endblock %}
 
 {% block content %}
-    {% include 'navigation.html' %}
-    <div class="container my-2">
-        {% include 'main/send_email_form.html' %}
+{% include 'navigation.html' %}
+<div class="container border-bottom my-2">
+    {% include 'main/send_email_form.html' %}
+</div>
+
+<div class="container">
+    <div class="accordion" id="email-accordion">
+
+        {% for email_recipients in emails.items %}
+        {% set email = email_recipients.email %}
+        {% set recipients = email_recipients.recipients %}
+        {% include 'main/email.html' %}
+        {% endfor %}
+
     </div>
 
-    <div class="container">
-        <div class="accordion" id="email-accordion">
-
-            {% for email_recipients in emails.items %}
-                {% set email = email_recipients.email %}
-                {% set recipients = email_recipients.recipients %}
-                {% include 'main/email.html' %}
-            {% endfor %}
-
-        </div>
-
-        {% set items = emails %}
-        {% include 'components/pagination.html' %}
-    </div>
+    {% set items = emails %}
+    {% include 'components/pagination.html' %}
+</div>
 
 
 {% endblock %}
 {% block scripts %}
-    <script
-        src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
-        crossorigin="anonymous">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"
+    integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous">
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/js/standalone/selectize.min.js"
-        integrity="sha512-pF+DNRwavWMukUv/LyzDyDMn8U2uvqYQdJN0Zvilr6DDo/56xPDZdDoyPDYZRSL4aOKO/FGKXTpzDyQJ8je8Qw=="
-        crossorigin="anonymous" referrerpolicy="no-referrer">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.13.3/js/standalone/selectize.min.js"
+    integrity="sha512-pF+DNRwavWMukUv/LyzDyDMn8U2uvqYQdJN0Zvilr6DDo/56xPDZdDoyPDYZRSL4aOKO/FGKXTpzDyQJ8je8Qw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
     </script>
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
 
-            let recipients = $("#recipients-input");
-            recipients.selectize({
-                valueField: "id",
-                labelField: "text",
-                searchField: ["text",
-                    {% for field in custom_fields %}
+        let recipients = $("#recipients-input");
+        recipients.selectize({
+            valueField: "id",
+            labelField: "text",
+            searchField: ["text",
+                {% for field in custom_fields %}
                         "{{field}}",
-                    {% endfor %}
+            {% endfor %}
                 ],
-                render: {
-                    option: function(item, escape) {
-                        let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
-                        result += '<br><small>';
-                        for (const field in item) {
-                            if (["text", "id", "$order"].includes(field)) {
-                                continue;
-                            }
-                            result += escape(field) + ': ' + escape(item[field]) + ' ';
-                        }
-                        result += '</small>';
-                        result += '</div>';
-                        return result
-                    }
-                },
-                options: [
-                    {% for group in groups %}
-                        {
-                            "id": "{{group.id}}",
-                            "text": "Группа: {{group.name}}",
-                        },
-                    {% endfor %}
-                    {% for recipient in recipients %}
-                        {% if recipient.unsubscribed_at %}{% continue %}{% endif %}
-                        {
-                            ...{
-                                "id": "{{recipient.email}}",
-                                "text": "{{recipient.name}} ({{recipient.email}})",
-                            },
-                            ...{{recipient.fields | json_encode() | safe}}
-                        },
-                    {% endfor %}
-                ],
-            });
-            let recipientsSelectize = recipients[0].selectize;
-
-            $(".recipientsDropDown").click(function(e) {
-                recipientsSelectize.focus();
-            });
-
-            $("#recipientsNone").click(function() {
-                recipientsSelectize.clear(false);
-            });
-
-            const form = document.getElementById('send-email-form');
-
-            const storageKey = 'savedMessageInput';
-            const saved = localStorage.getItem(storageKey);
-            const edit_message = document.getElementById('message-input');
-            if (saved !== null) {
-                edit_message.value = saved;
-                UpdateRenderedMessage();
+        render: {
+        option: function (item, escape) {
+            let result = '<div class="border-bottom"><strong>' + escape(item.text) + '</strong>';
+            result += '<br><small>';
+            for (const field in item) {
+                if (["text", "id", "$order"].includes(field)) {
+                    continue;
+                }
+                result += escape(field) + ': ' + escape(item[field]) + ' ';
             }
-            edit_message.addEventListener("input", function () {
-                localStorage.setItem(storageKey, edit_message.value);
+            result += '</small>';
+            result += '</div>';
+            return result
+        }
+    },
+        options: [
+        {% for group in groups %}
+    {
+        "id": "{{group.id}}",
+            "text": "Группа: {{group.name}}",
+                        },
+    {% endfor %}
+    {% for recipient in recipients %}
+    {% if recipient.unsubscribed_at %} {% continue %} {% endif %}
+    {
+                            ...{
+            "id": "{{recipient.email}}",
+                "text": "{{recipient.name}} ({{recipient.email}})",
+                            },
+                            ...{{ recipient.fields | json_encode() | safe }}
+    },
+    {% endfor %}
+                ],
             });
+    let recipientsSelectize = recipients[0].selectize;
 
-            form.addEventListener("submit", function (e) {
-                e.preventDefault();
-                const formData = new FormData(form);
-                formData.append('recipients', new Blob(
-                    [JSON.stringify(recipientsSelectize.items)],
-                    { type: 'application/json' }
-                ));
-                fetch(form.action, {
-                    method: form.method,
-                    body: formData,
-                    credentials: 'include'
-                })
-                .then(response => {
-                    return response.text();
-                })
-                .then(text => {
-                    const render_message = document.getElementById('message-rendered');
-                    form.reset();
-                    recipientsSelectize.clear(false);
-                    render_message.innerHTML = "";
-                    localStorage.removeItem(storageKey);
-                    showFlashMessage(text);
-                    setTimeout(() => {window.location.reload()}, 2000);
-                })
-                .catch(error => {
-                    console.error('Request error:', error);
-                    alert('An error occurred while sending the form: ' + error.message);
-                });
+    $(".recipientsDropDown").click(function (e) {
+        recipientsSelectize.focus();
+    });
+
+    $("#recipientsNone").click(function () {
+        recipientsSelectize.clear(false);
+    });
+
+    const form = document.getElementById('send-email-form');
+
+    const storageKey = 'savedMessageInput';
+    const saved = localStorage.getItem(storageKey);
+    const edit_message = document.getElementById('message-input');
+    if (saved !== null) {
+        edit_message.value = saved;
+        UpdateRenderedMessage();
+    }
+    edit_message.addEventListener("input", function () {
+        localStorage.setItem(storageKey, edit_message.value);
+    });
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        formData.append('recipients', new Blob(
+            [JSON.stringify(recipientsSelectize.items)],
+            { type: 'application/json' }
+        ));
+        fetch(form.action, {
+            method: form.method,
+            body: formData,
+            credentials: 'include'
+        })
+            .then(response => {
+                return response.text();
+            })
+            .then(text => {
+                const render_message = document.getElementById('message-rendered');
+                form.reset();
+                recipientsSelectize.clear(false);
+                render_message.innerHTML = "";
+                localStorage.removeItem(storageKey);
+                showFlashMessage(text);
+                setTimeout(() => { window.location.reload() }, 2000);
+            })
+            .catch(error => {
+                console.error('Request error:', error);
+                alert('An error occurred while sending the form: ' + error.message);
             });
+    });
 
         });
-    </script>
+</script>
 {% endblock %}

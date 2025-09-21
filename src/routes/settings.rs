@@ -103,7 +103,7 @@ pub async fn history_show(
         &server_config.auth_service_url,
     );
 
-    let history_list = match repo.list_recipients_grouped_by_address(user.hub_id) {
+    let history_list = match repo.list_recent_recipients(user.hub_id, None) {
         Ok(history_list) => history_list,
         Err(e) => {
             log::error!("Error getting history recipients: {e}");
@@ -125,7 +125,7 @@ pub async fn history_download(
         return response;
     };
 
-    let history_list = match repo.list_recipients_grouped_by_address(user.hub_id) {
+    let history_list = match repo.list_recent_recipients(user.hub_id, None) {
         Ok(history_list) => history_list,
         Err(e) => {
             log::error!("Error getting history recipients: {e}");

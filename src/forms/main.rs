@@ -1,9 +1,8 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
-use chrono::{Duration, Utc};
 use pushkind_common::{
-    domain::emailer::email::{EmailRecipient, NewEmail, NewEmailRecipient},
+    domain::emailer::email::{NewEmail, NewEmailRecipient},
     repository::errors::RepositoryResult,
 };
 use serde::Deserialize;
@@ -104,48 +103,14 @@ impl SendEmailForm {
         recipients.dedup_by(|a, b| a.address == b.address);
 
         if let Some(days) = cooldown_days.filter(|d| *d > 0) {
-            let history = repo.list_recipients_grouped_by_address(hub_id)?;
-            if !history.is_empty() {
-                let latest: HashMap<String, EmailRecipient> = history
-                    .into_iter()
-                    .map(|recipient| (recipient.address.clone(), recipient))
-                    .collect();
+            let recent_addresses: HashSet<String> = repo
+                .list_recent_recipients(hub_id, Some(days))?
+                .into_iter()
+                .map(|recipient| recipient.address)
+                .collect();
 
-                let mut send_times = HashMap::new();
-                for entry in latest.values().filter(|entry| entry.is_sent) {
-                    if send_times.contains_key(&entry.email_id) {
-                        continue;
-                    }
-
-                    match repo.get_email_by_id(entry.email_id, hub_id)? {
-                        Some(email) => {
-                            send_times.insert(entry.email_id, email.email.created_at);
-                        }
-                        None => {
-                            log::warn!(
-                                "expected to find email {} for cooldown check but none was returned",
-                                entry.email_id
-                            );
-                        }
-                    }
-                }
-
-                let cutoff = (Utc::now() - Duration::days(days)).naive_utc();
-                recipients.retain(|recipient| {
-                    latest
-                        .get(&recipient.address)
-                        .map(|entry| {
-                            if !entry.is_sent {
-                                true
-                            } else {
-                                send_times
-                                    .get(&entry.email_id)
-                                    .map(|sent_at| *sent_at < cutoff)
-                                    .unwrap_or(true)
-                            }
-                        })
-                        .unwrap_or(true)
-                });
+            if !recent_addresses.is_empty() {
+                recipients.retain(|recipient| !recent_addresses.contains(&recipient.address));
             }
         }
 

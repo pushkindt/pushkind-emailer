@@ -143,14 +143,24 @@ impl RecipientReader for CooldownRepository {
 }
 
 impl EmailRecipientReader for CooldownRepository {
-    fn list_recipients_grouped_by_address(
+    fn list_recent_recipients(
         &self,
-        _hub_id: i32,
+        hub_id: i32,
+        number_of_days: Option<i64>,
     ) -> RepositoryResult<Vec<EmailRecipient>> {
+        if hub_id != self.hub_id {
+            return Ok(vec![]);
+        }
+
+        let cutoff = number_of_days
+            .filter(|days| *days > 0)
+            .map(|days| Utc::now().naive_utc() - Duration::days(days));
+
         let recipients = self
             .history
             .iter()
             .enumerate()
+            .filter(|(_, entry)| cutoff.map(|cutoff| entry.sent_at > cutoff).unwrap_or(true))
             .map(|(index, entry)| EmailRecipient {
                 id: index as i32 + 1,
                 email_id: entry.email_id,

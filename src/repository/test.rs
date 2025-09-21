@@ -58,9 +58,10 @@ impl RecipientReader for TestRepository {
 }
 
 impl EmailRecipientReader for TestRepository {
-    fn list_recipients_grouped_by_address(
+    fn list_recent_recipients(
         &self,
         _hub_id: i32,
+        _number_of_days: Option<i64>,
     ) -> RepositoryResult<Vec<EmailRecipient>> {
         Ok(vec![])
     }

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use pushkind_common::domain::emailer::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
@@ -95,18 +95,32 @@ impl EmailReader for DieselRepository {
 }
 
 impl EmailRecipientReader for DieselRepository {
-    fn list_recipients_grouped_by_address(
+    fn list_recent_recipients(
         &self,
         hub_id: i32,
+        // Only include recipients whose most recent email was sent strictly
+        // after `number_of_days` ago. `None` skips filtering.
+        number_of_days: Option<i64>,
     ) -> RepositoryResult<Vec<DomainEmailRecipient>> {
         use pushkind_common::schema::emailer::{email_recipients, emails};
 
         let mut conn = self.conn()?;
 
-        // Step 1: Load all rows sorted so newest per address comes first
-        let rows: Vec<(DbEmailRecipient, NaiveDateTime)> = email_recipients::table
+        // Build the base query (SQLite-compatible)
+        let mut query = email_recipients::table
             .inner_join(emails::table)
             .filter(emails::hub_id.eq(hub_id))
+            .into_boxed();
+
+        // Push the created_at cutoff into the DB
+        if let Some(days) = number_of_days.filter(|d| *d > 0) {
+            let cutoff = Utc::now().naive_utc() - Duration::days(days);
+            // keep emails strictly AFTER the cutoff
+            query = query.filter(emails::created_at.gt(cutoff));
+        }
+
+        // Step 1: Load all rows sorted so newest per address comes first
+        let rows: Vec<(DbEmailRecipient, NaiveDateTime)> = query
             .order((
                 email_recipients::address.asc(),
                 emails::created_at.desc(),
@@ -115,7 +129,7 @@ impl EmailRecipientReader for DieselRepository {
             .select((DbEmailRecipient::as_select(), emails::created_at))
             .load(&mut conn)?;
 
-        // Step 2: Keep only the first row per address
+        // Step 2: Keep only the first row per address (Rust-side dedup)
         let mut seen = HashSet::new();
         let mut latest = Vec::with_capacity(rows.len());
         for (recipient, email_created_at) in rows {
@@ -186,12 +200,12 @@ impl EmailWriter for DieselRepository {
 #[cfg(test)]
 mod tests {
     use crate::repository::{DieselRepository, EmailRecipientReader};
+    use chrono::{Duration, Utc};
     use diesel::connection::SimpleConnection;
-    use pushkind_common::db::establish_connection_pool;
-    use tempfile::tempdir;
+    use pushkind_common::db::{DbPool, establish_connection_pool};
+    use tempfile::{TempDir, tempdir};
 
-    #[test]
-    fn list_recipients_grouped_by_address_returns_latest_snapshot() {
+    fn setup_db() -> (TempDir, DbPool) {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.sqlite");
         let db_path = db_path.to_string_lossy().to_string();
@@ -247,6 +261,17 @@ mod tests {
                 "#,
             )
             .unwrap();
+        }
+
+        (dir, pool)
+    }
+
+    #[test]
+    fn list_recent_recipients_returns_latest_snapshot() {
+        let (_dir, pool) = setup_db();
+
+        {
+            let mut conn = pool.get().unwrap();
 
             conn.batch_execute(
                 r#"
@@ -305,7 +330,7 @@ mod tests {
 
         let repo = DieselRepository::new(pool.clone());
 
-        let recipients = repo.list_recipients_grouped_by_address(1).unwrap();
+        let recipients = repo.list_recent_recipients(1, None).unwrap();
         assert_eq!(recipients.len(), 2);
 
         let recipient_a = recipients
@@ -334,7 +359,7 @@ mod tests {
             Some("bee")
         );
 
-        let recipients_hub2 = repo.list_recipients_grouped_by_address(2).unwrap();
+        let recipients_hub2 = repo.list_recent_recipients(2, None).unwrap();
         assert_eq!(recipients_hub2.len(), 1);
         assert_eq!(recipients_hub2[0].address, "a@example.com");
         assert_eq!(recipients_hub2[0].name, "Hub2 A");
@@ -342,5 +367,48 @@ mod tests {
             recipients_hub2[0].fields.get("segment").map(String::as_str),
             Some("hub2")
         );
+    }
+
+    #[test]
+    fn list_recent_recipients_applies_number_of_days_filter() {
+        let (_dir, pool) = setup_db();
+
+        let now = Utc::now().naive_utc();
+        let recent = now - Duration::hours(12);
+        let old = now - Duration::days(5);
+
+        {
+            let mut conn = pool.get().unwrap();
+
+            conn.batch_execute(
+                r#"
+                INSERT INTO hubs (id, name) VALUES (1, 'Hub 1');
+                "#,
+            )
+            .unwrap();
+
+            let insert_emails = format!(
+                "INSERT INTO emails (id, message, created_at, is_sent, subject, attachment, attachment_name, attachment_mime, num_sent, num_opened, num_replied, hub_id) VALUES
+                    (1, 'Msg', '{old}', 1, NULL, NULL, NULL, NULL, 0, 0, 0, 1),
+                    (2, 'Msg', '{recent}', 1, NULL, NULL, NULL, NULL, 0, 0, 0, 1);",
+            );
+            conn.batch_execute(&insert_emails).unwrap();
+
+            let insert_recipients = format!(
+                "INSERT INTO email_recipients (id, email_id, address, opened, updated_at, is_sent, replied, reply, name, fields) VALUES
+                    (1, 1, 'slow@example.com', 0, '{old}', 1, 0, NULL, 'Slow', '{{}}'),
+                    (2, 2, 'fast@example.com', 0, '{recent}', 1, 0, NULL, 'Fast', '{{}}');",
+            );
+            conn.batch_execute(&insert_recipients).unwrap();
+        }
+
+        let repo = DieselRepository::new(pool.clone());
+
+        let all = repo.list_recent_recipients(1, None).unwrap();
+        assert_eq!(all.len(), 2);
+
+        let filtered = repo.list_recent_recipients(1, Some(3)).unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].address, "fast@example.com");
     }
 }

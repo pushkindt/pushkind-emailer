@@ -61,7 +61,11 @@
                                 text-secondary
                             {% endif %}">
                             <div class="ms-2 me-auto">
-                                <div class="fw-bold">{{ recipient.address }}</div>
+                                <div class="fw-bold">
+                                    <a href="{{ crm_service_url }}?q={{ recipient.address }}">
+                                        {{ recipient.address }}
+                                    </a>
+                                </div>
                                 <div>{{recipient.reply | default(value="") | truncate(length=100) }}</div>
                             </div>
                             {% if recipient.is_sent or recipient.opened or recipient.replied %}

@@ -165,9 +165,12 @@ pub trait EmailRecipientReader {
     /// When the same email address received multiple emails within the hub,
     /// the record belonging to the most recently created email is returned so
     /// that callers always get the latest snapshot of the recipient data.
-    fn list_recipients_grouped_by_address(
+    fn list_recent_recipients(
         &self,
         hub_id: i32,
+        // Only include recipients whose most recent email was sent strictly
+        // after `number_of_days` ago. `None` skips filtering.
+        number_of_days: Option<i64>,
     ) -> RepositoryResult<Vec<EmailRecipient>>;
 }
 
