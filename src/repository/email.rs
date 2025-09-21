@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use pushkind_common::domain::emailer::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
@@ -103,29 +104,36 @@ impl EmailRecipientReader for DieselRepository {
         let mut conn = self.conn()?;
 
         // Step 1: Load all rows sorted so newest per address comes first
-        let rows: Vec<DbEmailRecipient> = email_recipients::table
+        let rows: Vec<(DbEmailRecipient, NaiveDateTime)> = email_recipients::table
             .inner_join(emails::table)
             .filter(emails::hub_id.eq(hub_id))
             .order((
                 email_recipients::address.asc(),
+                emails::created_at.desc(),
                 email_recipients::updated_at.desc(),
             ))
-            .select(DbEmailRecipient::as_select())
+            .select((DbEmailRecipient::as_select(), emails::created_at))
             .load(&mut conn)?;
 
         // Step 2: Keep only the first row per address
         let mut seen = HashSet::new();
         let mut latest = Vec::with_capacity(rows.len());
-        for r in rows {
-            if seen.insert(r.address.clone()) {
-                latest.push(r);
+        for (recipient, email_created_at) in rows {
+            if seen.insert(recipient.address.clone()) {
+                latest.push((recipient, email_created_at));
             }
         }
 
-        // Step 3: Sort the final set by updated_at descending
-        latest.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        // Step 3: Sort the final set by the originating email creation time
+        latest.sort_by(|a, b| {
+            b.1.cmp(&a.1)
+                .then_with(|| b.0.updated_at.cmp(&a.0.updated_at))
+        });
 
-        Ok(latest.into_iter().map(Into::into).collect())
+        Ok(latest
+            .into_iter()
+            .map(|(recipient, _)| recipient.into())
+            .collect())
     }
 }
 
@@ -286,7 +294,7 @@ mod tests {
                     fields
                 )
                 VALUES
-                    (1, 1, 'a@example.com', 0, '2024-01-01 10:00:00', 0, 0, NULL, 'Old A', '{"segment":"old"}'),
+                    (1, 1, 'a@example.com', 0, '2024-01-04 10:00:00', 0, 0, NULL, 'Old A', '{"segment":"old"}'),
                     (2, 2, 'a@example.com', 1, '2024-01-02 10:00:00', 1, 1, 'Thanks', 'New A', '{"segment":"new"}'),
                     (3, 2, 'b@example.com', 0, '2024-01-01 11:00:00', 0, 0, NULL, 'Bee', '{"segment":"bee"}'),
                     (4, 3, 'a@example.com', 1, '2024-01-03 12:00:00', 1, 0, NULL, 'Hub2 A', '{"segment":"hub2"}');

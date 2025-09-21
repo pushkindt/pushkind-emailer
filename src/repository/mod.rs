@@ -163,8 +163,8 @@ pub trait EmailRecipientReader {
     /// Return recipients grouped by email address for the provided hub.
     ///
     /// When the same email address received multiple emails within the hub,
-    /// the record with the most recent `updated_at` timestamp is returned so
-    /// that caller always gets the latest snapshot of the recipient data.
+    /// the record belonging to the most recently created email is returned so
+    /// that callers always get the latest snapshot of the recipient data.
     fn list_recipients_grouped_by_address(
         &self,
         hub_id: i32,
