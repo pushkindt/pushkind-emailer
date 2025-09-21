@@ -6,13 +6,16 @@ use std::{
 use actix_multipart::form::{json::Json as MpJson, tempfile::TempFile, text::Text};
 use chrono::{Duration, NaiveDateTime, Utc};
 use pushkind_common::{
-    domain::emailer::email::{EmailRecipient, NewEmail},
+    domain::emailer::email::{Email, EmailRecipient, EmailWithRecipients, NewEmail},
     repository::errors::RepositoryResult,
 };
 use pushkind_emailer::{
     domain::recipient::{Recipient, Unsubscribe},
     forms::main::SendEmailForm,
-    repository::{EmailRecipientReader, RecipientListQuery, RecipientReader, test::TestRepository},
+    repository::{
+        EmailListQuery, EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader,
+        test::TestRepository,
+    },
 };
 use tempfile::NamedTempFile;
 
@@ -49,20 +52,29 @@ struct CooldownRepository {
     hub_id: i32,
     names: HashMap<String, String>,
     history: Vec<HistoryEntry>,
+    email_created: HashMap<i32, NaiveDateTime>,
 }
 
 struct HistoryEntry {
+    email_id: i32,
     address: String,
     is_sent: bool,
+    sent_at: NaiveDateTime,
     updated_at: NaiveDateTime,
 }
 
 impl CooldownRepository {
     fn new(hub_id: i32, names: HashMap<String, String>, history: Vec<HistoryEntry>) -> Self {
+        let email_created: HashMap<i32, NaiveDateTime> = history
+            .iter()
+            .map(|entry| (entry.email_id, entry.sent_at))
+            .collect();
+
         Self {
             hub_id,
             names,
             history,
+            email_created,
         }
     }
 
@@ -141,7 +153,7 @@ impl EmailRecipientReader for CooldownRepository {
             .enumerate()
             .map(|(index, entry)| EmailRecipient {
                 id: index as i32 + 1,
-                email_id: 0,
+                email_id: entry.email_id,
                 address: entry.address.clone(),
                 opened: false,
                 updated_at: entry.updated_at,
@@ -161,6 +173,46 @@ impl EmailRecipientReader for CooldownRepository {
     }
 }
 
+impl EmailReader for CooldownRepository {
+    fn get_email_by_id(
+        &self,
+        id: i32,
+        hub_id: i32,
+    ) -> RepositoryResult<Option<EmailWithRecipients>> {
+        if hub_id != self.hub_id {
+            return Ok(None);
+        }
+
+        Ok(self
+            .email_created
+            .get(&id)
+            .map(|created_at| EmailWithRecipients {
+                email: Email {
+                    id,
+                    message: String::new(),
+                    created_at: *created_at,
+                    is_sent: true,
+                    subject: None,
+                    attachment: None,
+                    attachment_name: None,
+                    attachment_mime: None,
+                    num_sent: 0,
+                    num_opened: 0,
+                    num_replied: 0,
+                    hub_id: self.hub_id,
+                },
+                recipients: vec![],
+            }))
+    }
+
+    fn list_emails(
+        &self,
+        _query: EmailListQuery,
+    ) -> RepositoryResult<(usize, Vec<EmailWithRecipients>)> {
+        Ok((0, vec![]))
+    }
+}
+
 #[test]
 fn send_email_form_excludes_recent_recipients() {
     let now = Utc::now().naive_utc();
@@ -170,14 +222,18 @@ fn send_email_form_excludes_recent_recipients() {
     ]);
     let history = vec![
         HistoryEntry {
+            email_id: 1,
             address: "recent@example.com".to_string(),
             is_sent: true,
-            updated_at: now - Duration::days(1),
+            sent_at: now - Duration::days(1),
+            updated_at: now,
         },
         HistoryEntry {
+            email_id: 2,
             address: "stale@example.com".to_string(),
             is_sent: true,
-            updated_at: now - Duration::days(10),
+            sent_at: now - Duration::days(10),
+            updated_at: now,
         },
     ];
     let repo = CooldownRepository::new(1, names, history);

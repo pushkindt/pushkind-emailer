@@ -9,7 +9,7 @@ use pushkind_common::{
 use serde::Deserialize;
 
 use crate::{
-    repository::{EmailRecipientReader, RecipientListQuery, RecipientReader},
+    repository::{EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader},
     utils::read_attachment_file,
 };
 
@@ -40,7 +40,7 @@ impl SendEmailForm {
     /// Converts a [`SendEmailForm`] into the domain [`NewEmail`] type.
     pub fn to_new_email<R>(mut self, hub_id: i32, repo: &R) -> RepositoryResult<NewEmail>
     where
-        R: RecipientReader + EmailRecipientReader,
+        R: RecipientReader + EmailRecipientReader + EmailReader,
     {
         let cooldown_days = self.cooldown_days.0;
         let (attachment_name, attachment_mime, attachment) =
@@ -110,11 +110,40 @@ impl SendEmailForm {
                     .into_iter()
                     .map(|recipient| (recipient.address.clone(), recipient))
                     .collect();
+
+                let mut send_times = HashMap::new();
+                for entry in latest.values().filter(|entry| entry.is_sent) {
+                    if send_times.contains_key(&entry.email_id) {
+                        continue;
+                    }
+
+                    match repo.get_email_by_id(entry.email_id, hub_id)? {
+                        Some(email) => {
+                            send_times.insert(entry.email_id, email.email.created_at);
+                        }
+                        None => {
+                            log::warn!(
+                                "expected to find email {} for cooldown check but none was returned",
+                                entry.email_id
+                            );
+                        }
+                    }
+                }
+
                 let cutoff = (Utc::now() - Duration::days(days)).naive_utc();
                 recipients.retain(|recipient| {
                     latest
                         .get(&recipient.address)
-                        .map(|entry| !(entry.is_sent && entry.updated_at >= cutoff))
+                        .map(|entry| {
+                            if !entry.is_sent {
+                                true
+                            } else {
+                                send_times
+                                    .get(&entry.email_id)
+                                    .map(|sent_at| *sent_at < cutoff)
+                                    .unwrap_or(true)
+                            }
+                        })
                         .unwrap_or(true)
                 });
             }
