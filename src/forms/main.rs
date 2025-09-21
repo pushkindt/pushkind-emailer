@@ -1,12 +1,15 @@
+use std::collections::HashMap;
+
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
+use chrono::{Duration, Utc};
 use pushkind_common::{
-    domain::emailer::email::{NewEmail, NewEmailRecipient},
+    domain::emailer::email::{EmailRecipient, NewEmail, NewEmailRecipient},
     repository::errors::RepositoryResult,
 };
 use serde::Deserialize;
 
 use crate::{
-    repository::{RecipientListQuery, RecipientReader},
+    repository::{EmailRecipientReader, RecipientListQuery, RecipientReader},
     utils::read_attachment_file,
 };
 
@@ -15,6 +18,7 @@ use crate::{
 pub struct SendEmailForm {
     pub message: Text<String>,
     pub subject: Text<Option<String>>,
+    pub cooldown_days: Text<Option<i64>>,
     #[multipart(limit = "10MB")]
     pub attachment: Option<TempFile>,
     pub recipients: MpJson<Vec<String>>,
@@ -36,8 +40,9 @@ impl SendEmailForm {
     /// Converts a [`SendEmailForm`] into the domain [`NewEmail`] type.
     pub fn to_new_email<R>(mut self, hub_id: i32, repo: &R) -> RepositoryResult<NewEmail>
     where
-        R: RecipientReader,
+        R: RecipientReader + EmailRecipientReader,
     {
+        let cooldown_days = self.cooldown_days.0;
         let (attachment_name, attachment_mime, attachment) =
             if let Some(attachment) = self.attachment.as_mut() {
                 match read_attachment_file(attachment) {
@@ -97,6 +102,23 @@ impl SendEmailForm {
 
         recipients.sort_by(|a, b| a.address.cmp(&b.address));
         recipients.dedup_by(|a, b| a.address == b.address);
+
+        if let Some(days) = cooldown_days.filter(|d| *d > 0) {
+            let history = repo.list_recipients_grouped_by_address(hub_id)?;
+            if !history.is_empty() {
+                let latest: HashMap<String, EmailRecipient> = history
+                    .into_iter()
+                    .map(|recipient| (recipient.address.clone(), recipient))
+                    .collect();
+                let cutoff = (Utc::now() - Duration::days(days)).naive_utc();
+                recipients.retain(|recipient| {
+                    latest
+                        .get(&recipient.address)
+                        .map(|entry| !(entry.is_sent && entry.updated_at >= cutoff))
+                        .unwrap_or(true)
+                });
+            }
+        }
 
         Ok(NewEmail {
             hub_id,
