@@ -75,11 +75,11 @@
     {% for recipient in recipients %}
     {% if recipient.unsubscribed_at %} {% continue %} {% endif %}
     {
-                            ...{
+        ...{
             "id": "{{recipient.email}}",
-                "text": "{{recipient.name}} ({{recipient.email}})",
-                            },
-                            ...{{ recipient.fields | json_encode() | safe }}
+            "text": "{{recipient.name}} ({{recipient.email}})",
+        },
+        ...{{ recipient.fields | json_encode() | safe }}
     },
     {% endfor %}
                 ],
