@@ -1,9 +1,14 @@
 use std::collections::HashMap;
 
-use pushkind_common::repository::errors::RepositoryResult;
+use pushkind_common::{
+    domain::emailer::email::{EmailRecipient, EmailWithRecipients},
+    repository::errors::RepositoryResult,
+};
 
 use crate::domain::recipient::{Recipient, RecipientWithGroups};
-use crate::repository::{RecipientListQuery, RecipientReader};
+use crate::repository::{
+    EmailListQuery, EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader,
+};
 
 #[derive(Clone)]
 pub struct TestRepository;
@@ -49,5 +54,32 @@ impl RecipientReader for TestRepository {
         _hub_id: i32,
     ) -> RepositoryResult<Vec<crate::domain::recipient::Unsubscribe>> {
         Ok(vec![])
+    }
+}
+
+impl EmailRecipientReader for TestRepository {
+    fn list_recent_recipients(
+        &self,
+        _hub_id: i32,
+        _number_of_days: Option<i64>,
+    ) -> RepositoryResult<Vec<EmailRecipient>> {
+        Ok(vec![])
+    }
+}
+
+impl EmailReader for TestRepository {
+    fn get_email_by_id(
+        &self,
+        _id: i32,
+        _hub_id: i32,
+    ) -> RepositoryResult<Option<EmailWithRecipients>> {
+        Ok(None)
+    }
+
+    fn list_emails(
+        &self,
+        _query: EmailListQuery,
+    ) -> RepositoryResult<(usize, Vec<EmailWithRecipients>)> {
+        Ok((0, vec![]))
     }
 }

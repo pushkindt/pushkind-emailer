@@ -17,6 +17,7 @@ use tera::Tera;
 
 use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
+use crate::models::config::ServerConfig;
 use crate::repository::{
     DieselRepository, EmailListQuery, EmailReader, EmailWriter, GroupListQuery, GroupReader,
     RecipientListQuery, RecipientReader,
@@ -34,7 +35,8 @@ pub async fn index(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
     flash_messages: IncomingFlashMessages,
-    server_config: web::Data<CommonServerConfig>,
+    common_config: web::Data<CommonServerConfig>,
+    server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -50,7 +52,7 @@ pub async fn index(
         &flash_messages,
         &user,
         "index",
-        &server_config.auth_service_url,
+        &common_config.auth_service_url,
     );
     context.insert("retry", &retry);
 
@@ -97,6 +99,7 @@ pub async fn index(
     context.insert("groups", &groups);
     context.insert("emails", &emails);
     context.insert("custom_fields", &custom_fields);
+    context.insert("crm_service_url", &server_config.crm_service_url);
 
     render_template(&tera, "main/index.html", &context)
 }

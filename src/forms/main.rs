@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
 use pushkind_common::{
     domain::emailer::email::{NewEmail, NewEmailRecipient},
@@ -6,7 +8,7 @@ use pushkind_common::{
 use serde::Deserialize;
 
 use crate::{
-    repository::{RecipientListQuery, RecipientReader},
+    repository::{EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader},
     utils::read_attachment_file,
 };
 
@@ -15,6 +17,7 @@ use crate::{
 pub struct SendEmailForm {
     pub message: Text<String>,
     pub subject: Text<Option<String>>,
+    pub cooldown_days: Text<Option<i64>>,
     #[multipart(limit = "10MB")]
     pub attachment: Option<TempFile>,
     pub recipients: MpJson<Vec<String>>,
@@ -36,8 +39,9 @@ impl SendEmailForm {
     /// Converts a [`SendEmailForm`] into the domain [`NewEmail`] type.
     pub fn to_new_email<R>(mut self, hub_id: i32, repo: &R) -> RepositoryResult<NewEmail>
     where
-        R: RecipientReader,
+        R: RecipientReader + EmailRecipientReader + EmailReader,
     {
+        let cooldown_days = self.cooldown_days.0;
         let (attachment_name, attachment_mime, attachment) =
             if let Some(attachment) = self.attachment.as_mut() {
                 match read_attachment_file(attachment) {
@@ -97,6 +101,18 @@ impl SendEmailForm {
 
         recipients.sort_by(|a, b| a.address.cmp(&b.address));
         recipients.dedup_by(|a, b| a.address == b.address);
+
+        if let Some(days) = cooldown_days.filter(|d| *d > 0) {
+            let recent_addresses: HashSet<String> = repo
+                .list_recent_recipients(hub_id, Some(days))?
+                .into_iter()
+                .map(|recipient| recipient.address)
+                .collect();
+
+            if !recent_addresses.is_empty() {
+                recipients.retain(|recipient| !recent_addresses.contains(&recipient.address));
+            }
+        }
 
         Ok(NewEmail {
             hub_id,
