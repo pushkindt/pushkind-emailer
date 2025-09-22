@@ -72,6 +72,7 @@ impl SendEmailForm {
         let group_recipients: Vec<NewEmailRecipient> = match repo.list_recipients(query) {
             Ok((_total, groups)) => groups
                 .into_iter()
+                .filter(|recipient| recipient.unsubscribed_at.is_none())
                 .map(|recipient| NewEmailRecipient {
                     address: recipient.email,
                     name: recipient.name,
@@ -88,6 +89,7 @@ impl SendEmailForm {
         let individual_recipients: Vec<NewEmailRecipient> = match repo.list_recipients(query) {
             Ok((_total, recipients)) => recipients
                 .into_iter()
+                .filter(|recipient| recipient.unsubscribed_at.is_none())
                 .map(|recipient| NewEmailRecipient {
                     address: recipient.email,
                     name: recipient.name,

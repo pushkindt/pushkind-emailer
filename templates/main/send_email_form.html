@@ -17,8 +17,8 @@
     {% set message = retry.email['message'] | default(value='') %}
     {% include 'markdown.html' %}
     <div class="row">
-        <div class="col">
-            <input type="number" min="0" step="1" name="cooldown_days" class="form-control"
+        <div class="col-md">
+            <input type="number" min="0" step="1" name="cooldown_days" class="form-control mb-1"
                 placeholder="фильтровать недавних получателей (дни)">
         </div>
         <div class="col">

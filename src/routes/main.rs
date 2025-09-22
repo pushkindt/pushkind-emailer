@@ -120,13 +120,16 @@ pub async fn send_email(
         Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
     };
 
-    let mut new_email: NewEmail = match form.0.to_new_email(user.hub_id, repo.get_ref()) {
+    let new_email: NewEmail = match form.0.to_new_email(user.hub_id, repo.get_ref()) {
         Ok(new_email) => new_email,
         Err(err) => {
             return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}"));
         }
     };
-    new_email.hub_id = user.hub_id;
+
+    if new_email.recipients.is_empty() {
+        return HttpResponse::Ok().body("Не указаны получатели.");
+    }
 
     let zmq_message = ZMQSendEmailMessage::NewEmail(Box::new((user, new_email)));
 
