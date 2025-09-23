@@ -52,17 +52,17 @@
                 <div class="col">
                     <ol class="list-group list-group-numbered">
                         {% for recipient in recipients %}
-                        <li class="list-group-item d-flex justify-content-between align-items-start
-                             {% if recipient.replied %}
-                                text-success
-                            {% elif recipient.opened %}
-                                text-warning
-                            {% elif not recipient.is_sent %}
-                                text-secondary
-                            {% endif %}">
+                        <li class="list-group-item d-flex justify-content-between align-items-start">
                             <div class="ms-2 me-auto">
                                 <div class="fw-bold">
-                                    <a href="{{ crm_service_url }}?q={{ recipient.address }}">
+                                    <a class="
+                                        {% if recipient.replied %}
+                                            link-success
+                                        {% elif recipient.opened %}
+                                            link-warning
+                                        {% elif not recipient.is_sent %}
+                                            link-secondary
+                                        {% endif %}" href="{{ crm_service_url }}?q={{ recipient.address }}">
                                         {{ recipient.address }}
                                     </a>
                                 </div>
