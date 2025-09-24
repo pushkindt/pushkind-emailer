@@ -118,7 +118,7 @@ impl SendEmailForm {
 
         Ok(NewEmail {
             hub_id,
-            message: self.message.0,
+            message: ammonia::clean(&self.message.0),
             subject: self.subject.0,
             attachment,
             attachment_mime,

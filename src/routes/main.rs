@@ -116,11 +116,11 @@ pub async fn send_email(
     };
 
     let form = match form {
-        Ok(form) => form,
+        Ok(form) => form.0,
         Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
     };
 
-    let new_email: NewEmail = match form.0.to_new_email(user.hub_id, repo.get_ref()) {
+    let new_email: NewEmail = match form.to_new_email(user.hub_id, repo.get_ref()) {
         Ok(new_email) => new_email,
         Err(err) => {
             return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}"));
