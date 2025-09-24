@@ -4,7 +4,6 @@ use std::sync::Arc;
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
-use ammonia::clean;
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::domain::emailer::email::{NewEmail, UpdateEmailRecipient};
 use pushkind_common::models::config::CommonServerConfig;
@@ -116,12 +115,10 @@ pub async fn send_email(
         return response;
     };
 
-    let mut form = match form {
+    let form = match form {
         Ok(form) => form.0,
         Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
     };
-
-    form.message.0 = clean(&form.message.0);
 
     let new_email: NewEmail = match form.to_new_email(user.hub_id, repo.get_ref()) {
         Ok(new_email) => new_email,
