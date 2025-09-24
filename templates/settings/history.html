@@ -37,7 +37,7 @@
                                 {{history.name}}<br>
                                 {% endif %}
                                 <i class="bi-envelope me-1" aria-hidden="true"></i>
-                                <a href="mailto:{{history.address}}">
+                                <a href="{{ crm_service_url }}?q={{ history.address }}">
                                     {{history.address}}
                                 </a>
                             </td>
