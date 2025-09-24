@@ -9,6 +9,7 @@ use tera::Tera;
 
 use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::settings::SaveHubForm;
+use crate::models::config::ServerConfig;
 use crate::repository::{
     DieselRepository, EmailRecipientReader, HubReader, HubWriter, RecipientReader,
 };
@@ -89,7 +90,8 @@ pub async fn history_show(
     user: AuthenticatedUser,
     flash_messages: IncomingFlashMessages,
     repo: web::Data<DieselRepository>,
-    server_config: web::Data<CommonServerConfig>,
+    common_config: web::Data<CommonServerConfig>,
+    server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
@@ -100,7 +102,7 @@ pub async fn history_show(
         &flash_messages,
         &user,
         "history",
-        &server_config.auth_service_url,
+        &common_config.auth_service_url,
     );
 
     let history_list = match repo.list_recent_recipients(user.hub_id, None) {
@@ -112,6 +114,7 @@ pub async fn history_show(
     };
 
     context.insert("history_list", &history_list);
+    context.insert("crm_service_url", &server_config.crm_service_url);
 
     render_template(&tera, "settings/history.html", &context)
 }
