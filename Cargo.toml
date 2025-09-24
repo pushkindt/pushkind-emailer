@@ -39,6 +39,7 @@ pushkind-common = { git = "https://github.com/pushkindt/pushkind-common.git", br
 validator = { version = "0.20.0", features = ["derive"] }
 reqwest = { version = "0.12.23", features = ["json"] }
 serde_json = "1.0.143"
+ammonia = "4.1.2"
 
 [dev-dependencies]
 tempfile = "3.21.0"
