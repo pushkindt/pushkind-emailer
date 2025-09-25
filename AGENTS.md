@@ -44,7 +44,7 @@ The codebase is organized into several layers:
 
 ### Key Development Rules
 
-- Use idiomatic Rust everywhere
+- Use idiomatic Rust everywhere, avoid .unwrap() and .expect()
 - Follow the Clean Code and Clean Architecture principles
 - Use `thiserror` for error definitions; avoid `anyhow::Result`
 - Define error types inside their unit of fallibility
