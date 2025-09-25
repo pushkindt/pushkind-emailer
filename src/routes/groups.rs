@@ -2,15 +2,12 @@ use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{base_context, render_template};
-use pushkind_common::routes::{ensure_role, redirect};
+use pushkind_common::routes::{base_context, ensure_role, redirect, render_template};
+use pushkind_common::services::errors::ServiceError;
 use tera::{Context, Tera};
-use validator::Validate;
 
-use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
-use crate::repository::{
-    DieselRepository, GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
-};
+use crate::repository::DieselRepository;
+use crate::services::groups::{GroupsOverviewData, GroupsService};
 
 #[get("/groups")]
 pub async fn groups_show(
@@ -24,66 +21,56 @@ pub async fn groups_show(
         return response;
     };
 
-    let query = RecipientListQuery::new(user.hub_id);
-
-    let recipients = match repo.list_recipients(query) {
-        Ok((_total, recipients)) => recipients,
+    let service = GroupsService::new(repo.get_ref());
+    let data = match service.load_overview(user.hub_id) {
+        Ok(data) => data,
         Err(err) => {
-            log::error!("Error while listing recipients: {err}");
+            log::error!("Error while loading groups overview: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    let query = GroupListQuery::new(user.hub_id);
-
-    let groups = match repo.list_groups(query) {
-        Ok((_total, groups)) => groups,
-        Err(err) => {
-            log::error!("Error while listing groups: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-    let custom_fields = match repo.list_custom_fields(user.hub_id) {
-        Ok(custom_fields) => custom_fields,
-        Err(err) => {
-            log::error!("Error while listing custom fields: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let mut context = base_context(
-        &flash_messages,
-        &user,
-        "groups",
+    render_groups_overview(
+        data,
+        flash_messages,
+        user,
         &server_config.auth_service_url,
-    );
-    context.insert("groups", &groups);
-    context.insert("custom_fields", &custom_fields);
-    context.insert("recipients", &recipients);
+        &tera,
+    )
+}
 
-    render_template(&tera, "groups/groups.html", &context)
+fn render_groups_overview(
+    data: GroupsOverviewData,
+    flash_messages: IncomingFlashMessages,
+    user: AuthenticatedUser,
+    auth_service_url: &str,
+    tera: &Tera,
+) -> HttpResponse {
+    let mut context = base_context(&flash_messages, &user, "groups", auth_service_url);
+    context.insert("groups", &data.groups);
+    context.insert("custom_fields", &data.custom_fields);
+    context.insert("recipients", &data.recipients);
+
+    render_template(tera, "groups/groups.html", &context)
 }
 
 #[post("/groups/add")]
 pub async fn groups_add(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<AddGroupForm>,
+    web::Form(form): web::Form<crate::forms::groups::AddGroupForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    if form.validate().is_err() {
-        FlashMessage::error("Некорректные данные.").send();
-        return redirect("/groups");
-    }
-
-    let new_group = form.to_new_group(user.hub_id);
-
-    match repo.create_group(&new_group) {
+    let service = GroupsService::new(repo.get_ref());
+    match service.create_group(user.hub_id, form) {
         Ok(_) => {
             FlashMessage::success("Группа успешно добавлена.").send();
+        }
+        Err(ServiceError::Form(_)) => {
+            FlashMessage::error("Некорректные данные.").send();
         }
         Err(err) => {
             log::error!("Error while creating group: {err}");
@@ -98,34 +85,25 @@ pub async fn groups_add(
 pub async fn groups_delete(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<DeleteGroupForm>,
+    web::Form(form): web::Form<crate::forms::groups::DeleteGroupForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let group = match repo.get_group_by_id(form.id, user.hub_id) {
-        Ok(Some(group)) => group,
-        Ok(None) => {
-            return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving group: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    match repo.delete_group(group.group.id) {
+    let service = GroupsService::new(repo.get_ref());
+    match service.delete_group(user.hub_id, form) {
         Ok(_) => {
             FlashMessage::success("Группа удалена.").send();
+            redirect("/groups")
         }
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
         Err(err) => {
             log::error!("Error while deleting group: {err}");
             FlashMessage::error("Ошибка при удалении группы.").send();
+            redirect("/groups")
         }
     }
-
-    redirect("/groups")
 }
 
 #[post("/groups/assign")]
@@ -138,37 +116,23 @@ pub async fn groups_assign(
         return response;
     };
 
-    let form: AssignGroupRecipientForm = match serde_html_form::from_bytes(&form) {
-        Ok(form) => form,
-        Err(err) => {
-            log::error!("Error parsing form: {err}");
-            FlashMessage::error("Ошибка при обработке формы.").send();
-            return redirect("/groups");
-        }
-    };
-
-    let group = match repo.get_group_by_id(form.group_id, user.hub_id) {
-        Ok(Some(group)) => group,
-        Ok(None) => {
-            return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving group: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    match repo.assign_recipients_to_group(group.group.id, form.recipient_id) {
+    let service = GroupsService::new(repo.get_ref());
+    match service.assign_recipients(user.hub_id, &form) {
         Ok(_) => {
             FlashMessage::success("Группа назначена получателю.").send();
+            redirect("/groups")
         }
+        Err(ServiceError::Form(_)) => {
+            FlashMessage::error("Ошибка при обработке формы.").send();
+            redirect("/groups")
+        }
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
         Err(err) => {
             log::error!("Error while assigning group: {err}");
             FlashMessage::error("Ошибка при назначении группы.").send();
+            redirect("/groups")
         }
     }
-
-    redirect("/groups")
 }
 
 #[post("/groups/modal/{group_id}")]
@@ -182,21 +146,18 @@ pub async fn groups_modal(
         return HttpResponse::Unauthorized().finish();
     };
 
-    let mut context = Context::new();
-
+    let service = GroupsService::new(repo.get_ref());
     let group_id = group_id.into_inner();
-
-    let group = match repo.get_group_by_id(group_id, user.hub_id) {
-        Ok(Some(group)) => group,
-        Ok(None) => {
-            return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving group: {e}");
+    let group = match service.load_modal(user.hub_id, group_id) {
+        Ok(group) => group,
+        Err(ServiceError::NotFound) => return HttpResponse::NotFound().finish(),
+        Err(err) => {
+            log::error!("Error retrieving group: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
+    let mut context = Context::new();
     context.insert("group", &group);
 
     render_template(&tera, "groups/modal_body.html", &context)
