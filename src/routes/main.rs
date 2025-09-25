@@ -5,23 +5,17 @@ use actix_multipart::form::MultipartForm;
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::domain::emailer::email::{NewEmail, UpdateEmailRecipient};
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::models::emailer::zmq::ZMQSendEmailMessage;
-use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
-use pushkind_common::routes::{base_context, render_template};
-use pushkind_common::routes::{ensure_role, redirect};
+use pushkind_common::routes::{base_context, ensure_role, redirect, render_template};
+use pushkind_common::services::errors::ServiceError;
 use pushkind_common::zmq::ZmqSender;
 use serde::Deserialize;
 use tera::Tera;
 
-use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
-use crate::repository::{
-    DieselRepository, EmailListQuery, EmailReader, EmailWriter, GroupListQuery, GroupReader,
-    RecipientListQuery, RecipientReader,
-};
+use crate::repository::DieselRepository;
+use crate::services::main::{ExportedEmailRecipients, MainService};
 
 #[derive(Deserialize)]
 struct IndexQueryParams {
@@ -43,9 +37,14 @@ pub async fn index(
         return response;
     };
 
-    let retry = match params.retry {
-        Some(email_id) => repo.get_email_by_id(email_id, user.hub_id).ok(),
-        None => None,
+    let page = params.page.unwrap_or(1);
+    let service = MainService::new(repo.get_ref());
+    let data = match service.load_index_page(user.hub_id, params.retry, page) {
+        Ok(data) => data,
+        Err(err) => {
+            log::error!("Failed to load index page: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
     };
 
     let mut context = base_context(
@@ -54,51 +53,11 @@ pub async fn index(
         "index",
         &common_config.auth_service_url,
     );
-    context.insert("retry", &retry);
-
-    let query = RecipientListQuery::new(user.hub_id);
-
-    let recipients = match repo.list_recipients(query) {
-        Ok((_total, recipients)) => recipients,
-        Err(e) => {
-            log::error!("Failed to list recipients: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let query = GroupListQuery::new(user.hub_id);
-    let groups = match repo.list_groups(query) {
-        Ok((_total, groups)) => groups,
-        Err(e) => {
-            log::error!("Failed to list groups: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let page = params.page.unwrap_or(1);
-
-    let query = EmailListQuery::new(user.hub_id).paginate(page, DEFAULT_ITEMS_PER_PAGE);
-
-    let emails = match repo.list_emails(query) {
-        Ok((total, emails)) => Paginated::new(emails, page, total.div_ceil(DEFAULT_ITEMS_PER_PAGE)),
-        Err(e) => {
-            log::error!("Failed to list emails: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let custom_fields = match repo.list_custom_fields(user.hub_id) {
-        Ok(custom_fields) => custom_fields,
-        Err(e) => {
-            log::error!("Failed to list custom fields: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    context.insert("recipients", &recipients);
-    context.insert("groups", &groups);
-    context.insert("emails", &emails);
-    context.insert("custom_fields", &custom_fields);
+    context.insert("retry", &data.retry_email);
+    context.insert("recipients", &data.recipients);
+    context.insert("groups", &data.groups);
+    context.insert("emails", &data.emails);
+    context.insert("custom_fields", &data.custom_fields);
     context.insert("crm_service_url", &server_config.crm_service_url);
 
     render_template(&tera, "main/index.html", &context)
@@ -120,23 +79,16 @@ pub async fn send_email(
         Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
     };
 
-    let new_email: NewEmail = match form.to_new_email(user.hub_id, repo.get_ref()) {
-        Ok(new_email) => new_email,
-        Err(err) => {
-            return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}"));
-        }
-    };
-
-    if new_email.recipients.is_empty() {
-        return HttpResponse::Ok().body("Не указаны получатели.");
-    }
-
-    let zmq_message = ZMQSendEmailMessage::NewEmail(Box::new((user, new_email)));
-
-    match zmq_sender.send_json(&zmq_message).await {
+    let service = MainService::new(repo.get_ref());
+    match service
+        .queue_new_email(user, form, zmq_sender.as_ref().as_ref())
+        .await
+    {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь."),
+        Err(ServiceError::Form(message)) => HttpResponse::Ok().body(message),
         Err(err) => {
-            HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
+            log::error!("Failed to queue email: {err}");
+            HttpResponse::InternalServerError().finish()
         }
     }
 }
@@ -151,25 +103,22 @@ pub async fn delete_email(
         return response;
     };
 
-    let email = match repo.get_email_by_id(form.id, user.hub_id) {
-        Ok(Some(email)) => email.email,
-        _ => {
-            FlashMessage::error("Сообщение не найдено.").send();
-            return redirect("/");
-        }
-    };
-
-    match repo.delete_email(email.id) {
+    let service = MainService::new(repo.get_ref());
+    match service.delete_email(user.hub_id, form) {
         Ok(_) => {
             FlashMessage::success("Сообщение удалено.").send();
+            redirect("/")
+        }
+        Err(ServiceError::NotFound) => {
+            FlashMessage::error("Сообщение не найдено.").send();
+            redirect("/")
         }
         Err(err) => {
             log::error!("Failed to delete email: {err}");
             FlashMessage::error("Ошибка при удалении сообщения.").send();
+            redirect("/")
         }
     }
-
-    redirect("/")
 }
 
 #[post("/resend_email")]
@@ -183,24 +132,21 @@ pub async fn resend_email(
         return response;
     };
 
-    let email = match repo.get_email_by_id(form.id, user.hub_id) {
-        Ok(Some(email)) => email,
-        _ => {
-            FlashMessage::error("Сообщение не найдено.").send();
-            return redirect("/");
-        }
-    };
-
-    let zmq_message = ZMQSendEmailMessage::RetryEmail((email.email.id, user.hub_id));
-
-    match zmq_sender.send_json(&zmq_message).await {
+    let service = MainService::new(repo.get_ref());
+    match service
+        .queue_email_retry(user.hub_id, form, zmq_sender.as_ref().as_ref())
+        .await
+    {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь повторно."),
-        Err(err) => {
-            HttpResponse::Ok().body(format!("Ошибка при добавлении сообщения в очередь: {err}"))
+        Err(ServiceError::NotFound) => {
+            FlashMessage::error("Сообщение не найдено.").send();
+            redirect("/")
         }
-    };
-
-    redirect("/")
+        Err(err) => {
+            log::error!("Failed to queue retry: {err}");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 #[get("/track/{recipient_id}")]
@@ -209,24 +155,16 @@ pub async fn track_email(
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
     let recipient_id = recipient_id.into_inner();
+    let service = MainService::new(repo.get_ref());
 
-    if repo
-        .update_recipient(
-            recipient_id,
-            &UpdateEmailRecipient {
-                opened: Some(true),
-                is_sent: Some(true),
-                replied: None,
-                reply: None,
-            },
-        )
-        .is_err()
-    {
-        log::error!("Failed to update recipient status for {recipient_id}"); // Log the error for debugging
-        return HttpResponse::InternalServerError().finish();
+    match service.mark_email_opened(recipient_id) {
+        Ok(_) => redirect("/assets/placeholder.png"),
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
+        Err(err) => {
+            log::error!("Failed to update recipient status for {recipient_id}: {err}");
+            HttpResponse::InternalServerError().finish()
+        }
     }
-
-    redirect("/assets/placeholder.png")
 }
 
 #[get("/emails/{email_id}/recipients/export")]
@@ -239,38 +177,21 @@ pub async fn export_email_recipients(
         return response;
     };
 
+    let service = MainService::new(repo.get_ref());
     let email_id = email_id.into_inner();
-    let email = match repo.get_email_by_id(email_id, user.hub_id) {
-        Ok(Some(email)) => email,
-        Ok(_) => return HttpResponse::NotFound().finish(),
-        Err(err) => {
-            log::error!("Failed to get email: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
 
-    let mut writer = csv::Writer::from_writer(vec![]);
-    for recipient in email.recipients {
-        let recipient = CSVExportRecipient::from(recipient);
-        if let Err(err) = writer.serialize(recipient) {
-            log::error!("Failed to write recipient to csv: {err}");
-            return HttpResponse::InternalServerError().finish();
+    match service.export_email_recipients(user.hub_id, email_id) {
+        Ok(ExportedEmailRecipients { filename, bytes }) => HttpResponse::Ok()
+            .content_type("text/csv")
+            .append_header((
+                "Content-Disposition",
+                format!("attachment; filename=\"{filename}\""),
+            ))
+            .body(bytes),
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
+        Err(err) => {
+            log::error!("Failed to export recipients: {err}");
+            HttpResponse::InternalServerError().finish()
         }
     }
-
-    let data = match writer.into_inner() {
-        Ok(data) => data,
-        Err(err) => {
-            log::error!("Failed to finalize csv: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    HttpResponse::Ok()
-        .content_type("text/csv")
-        .append_header((
-            "Content-Disposition",
-            format!("attachment; filename=\"recipients_{email_id}.csv\""),
-        ))
-        .body(data)
 }

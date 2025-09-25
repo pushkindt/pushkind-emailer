@@ -1,17 +1,15 @@
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::domain::emailer::hub::NewHub;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{base_context, render_template};
-use pushkind_common::routes::{ensure_role, redirect};
+use pushkind_common::routes::{base_context, ensure_role, redirect, render_template};
 use tera::Tera;
 
-use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::settings::SaveHubForm;
 use crate::models::config::ServerConfig;
-use crate::repository::{
-    DieselRepository, EmailRecipientReader, HubReader, HubWriter, RecipientReader,
+use crate::repository::DieselRepository;
+use crate::services::settings::{
+    ExportedHistory, HistoryData, SettingsOverviewData, SettingsService, UnsubscribedData,
 };
 
 #[get("/settings")]
@@ -26,31 +24,35 @@ pub async fn settings_show(
         return response;
     };
 
-    let mut context = base_context(
-        &flash_messages,
-        &user,
-        "settings",
-        &server_config.auth_service_url,
-    );
-
-    let hub = match repo.get_hub_by_id(user.hub_id) {
-        Ok(Some(hub)) => hub,
-        Ok(None) => match repo.create_hub(&NewHub::new(user.hub_id)) {
-            Ok(hub) => hub,
-            Err(e) => {
-                log::error!("Error creating hub: {e}");
-                return HttpResponse::InternalServerError().finish();
-            }
-        },
-        Err(e) => {
-            log::error!("Error getting hub: {e}");
+    let service = SettingsService::new(repo.get_ref());
+    let data = match service.load_overview(user.hub_id) {
+        Ok(data) => data,
+        Err(err) => {
+            log::error!("Error getting hub: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    context.insert("current_hub", &hub);
+    render_settings_overview(
+        data,
+        flash_messages,
+        user,
+        &server_config.auth_service_url,
+        &tera,
+    )
+}
 
-    render_template(&tera, "settings/settings.html", &context)
+fn render_settings_overview(
+    data: SettingsOverviewData,
+    flash_messages: IncomingFlashMessages,
+    user: AuthenticatedUser,
+    auth_service_url: &str,
+    tera: &Tera,
+) -> HttpResponse {
+    let mut context = base_context(&flash_messages, &user, "settings", auth_service_url);
+    context.insert("current_hub", &data.hub);
+
+    render_template(tera, "settings/settings.html", &context)
 }
 
 #[get("/unsubscribed")]
@@ -65,24 +67,35 @@ pub async fn unsubscribed_show(
         return response;
     };
 
-    let mut context = base_context(
-        &flash_messages,
-        &user,
-        "unsubscribed",
-        &server_config.auth_service_url,
-    );
-
-    let unsubscribed_list = match repo.list_unsubscribed_recipients(user.hub_id) {
-        Ok(unsubscribed) => unsubscribed,
-        Err(e) => {
-            log::error!("Error getting unsubscribed recipients: {e}");
+    let service = SettingsService::new(repo.get_ref());
+    let data = match service.load_unsubscribed(user.hub_id) {
+        Ok(data) => data,
+        Err(err) => {
+            log::error!("Error getting unsubscribed recipients: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    context.insert("unsubscribed_list", &unsubscribed_list);
+    render_unsubscribed(
+        data,
+        flash_messages,
+        user,
+        &server_config.auth_service_url,
+        &tera,
+    )
+}
 
-    render_template(&tera, "settings/unsubscribed.html", &context)
+fn render_unsubscribed(
+    data: UnsubscribedData,
+    flash_messages: IncomingFlashMessages,
+    user: AuthenticatedUser,
+    auth_service_url: &str,
+    tera: &Tera,
+) -> HttpResponse {
+    let mut context = base_context(&flash_messages, &user, "unsubscribed", auth_service_url);
+    context.insert("unsubscribed_list", &data.unsubscribed);
+
+    render_template(tera, "settings/unsubscribed.html", &context)
 }
 
 #[get("/history")]
@@ -98,25 +111,36 @@ pub async fn history_show(
         return response;
     };
 
-    let mut context = base_context(
-        &flash_messages,
-        &user,
-        "history",
-        &common_config.auth_service_url,
-    );
-
-    let history_list = match repo.list_recent_recipients(user.hub_id, None) {
-        Ok(history_list) => history_list,
-        Err(e) => {
-            log::error!("Error getting history recipients: {e}");
+    let service = SettingsService::new(repo.get_ref());
+    let data = match service.load_history(user.hub_id, &server_config) {
+        Ok(data) => data,
+        Err(err) => {
+            log::error!("Error getting history recipients: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    context.insert("history_list", &history_list);
-    context.insert("crm_service_url", &server_config.crm_service_url);
+    render_history(
+        data,
+        flash_messages,
+        user,
+        &common_config.auth_service_url,
+        &tera,
+    )
+}
 
-    render_template(&tera, "settings/history.html", &context)
+fn render_history(
+    data: HistoryData,
+    flash_messages: IncomingFlashMessages,
+    user: AuthenticatedUser,
+    auth_service_url: &str,
+    tera: &Tera,
+) -> HttpResponse {
+    let mut context = base_context(&flash_messages, &user, "history", auth_service_url);
+    context.insert("history_list", &data.history);
+    context.insert("crm_service_url", &data.crm_service_url);
+
+    render_template(tera, "settings/history.html", &context)
 }
 
 #[get("/history/download")]
@@ -128,38 +152,20 @@ pub async fn history_download(
         return response;
     };
 
-    let history_list = match repo.list_recent_recipients(user.hub_id, None) {
-        Ok(history_list) => history_list,
-        Err(e) => {
-            log::error!("Error getting history recipients: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let mut writer = csv::Writer::from_writer(vec![]);
-    for recipient in history_list {
-        let recipient = CSVExportRecipient::from(recipient);
-        if let Err(err) = writer.serialize(recipient) {
-            log::error!("Failed to write recipient to csv: {err}");
-            return HttpResponse::InternalServerError().finish();
+    let service = SettingsService::new(repo.get_ref());
+    match service.export_history(user.hub_id) {
+        Ok(ExportedHistory { bytes }) => HttpResponse::Ok()
+            .content_type("text/csv")
+            .append_header((
+                "Content-Disposition",
+                "attachment; filename=\"recipients_history.csv\"",
+            ))
+            .body(bytes),
+        Err(err) => {
+            log::error!("Error exporting history: {err}");
+            HttpResponse::InternalServerError().finish()
         }
     }
-
-    let data = match writer.into_inner() {
-        Ok(data) => data,
-        Err(err) => {
-            log::error!("Failed to finalize csv: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    HttpResponse::Ok()
-        .content_type("text/csv")
-        .append_header((
-            "Content-Disposition",
-            "attachment; filename=\"recipients_history.csv\"",
-        ))
-        .body(data)
 }
 
 #[post("/settings/save")]
@@ -172,29 +178,16 @@ pub async fn settings_save(
         return response;
     };
 
-    let hub = match repo.get_hub_by_id(user.hub_id) {
-        Ok(Some(hub)) => hub,
-        Ok(None) => match repo.create_hub(&NewHub::new(user.hub_id)) {
-            Ok(hub) => hub,
-            Err(e) => {
-                log::error!("Error creating hub: {e}");
-                return HttpResponse::InternalServerError().finish();
-            }
-        },
-        Err(e) => {
-            log::error!("Error getting hub: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    match repo.update_hub(hub.id, &form.into()) {
+    let service = SettingsService::new(repo.get_ref());
+    match service.save_hub(user.hub_id, form) {
         Ok(_) => {
             FlashMessage::success("Хаб сохранён.").send();
+            redirect("/settings")
         }
         Err(err) => {
             log::error!("Error updating hub: {err}");
             FlashMessage::error("Ошибка при изменении хаба.").send();
+            redirect("/settings")
         }
-    };
-    redirect("/settings")
+    }
 }

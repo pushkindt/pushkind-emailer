@@ -3,23 +3,17 @@ use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
-use pushkind_common::routes::{base_context, render_template};
-use pushkind_common::routes::{ensure_role, redirect};
+use pushkind_common::routes::{base_context, ensure_role, redirect, render_template};
+use pushkind_common::services::errors::ServiceError;
 use serde::Deserialize;
 use tera::{Context, Tera};
-use validator::Validate;
 
-use crate::domain::recipient::NewRecipient;
 use crate::forms::recipients::{
-    AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, SourceRecipientForm,
-    UploadRecipientsForm,
+    AddRecipientForm, DeleteRecipientForm, SourceRecipientForm, UploadRecipientsForm,
 };
 use crate::models::config::ServerConfig;
-use crate::repository::{
-    DieselRepository, GroupListQuery, GroupReader, GroupWriter, RecipientListQuery,
-    RecipientReader, RecipientWriter,
-};
+use crate::repository::DieselRepository;
+use crate::services::recipients::{RecipientModalData, RecipientsService};
 
 #[derive(Deserialize)]
 struct RecipientsQueryParams {
@@ -41,6 +35,16 @@ pub async fn recipients_show(
         return response;
     };
 
+    let service = RecipientsService::new(repo.get_ref());
+    let page = params.page.unwrap_or(1);
+    let data = match service.load_overview(user.hub_id, page, params.q.clone()) {
+        Ok(data) => data,
+        Err(err) => {
+            log::error!("Failed to get recipients: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
     let mut context = base_context(
         &flash_messages,
         &user,
@@ -48,29 +52,10 @@ pub async fn recipients_show(
         &common_config.auth_service_url,
     );
     context.insert("crm_service_url", &server_config.crm_service_url);
-
-    let page = params.page.unwrap_or(1);
-    let q = params.q.as_deref().unwrap_or("").trim();
-    let query = RecipientListQuery::new(user.hub_id).paginate(page, DEFAULT_ITEMS_PER_PAGE);
-
-    let recipients_result = if !q.is_empty() {
-        context.insert("search_query", q);
-        repo.search_recipients(query.search(q))
-    } else {
-        repo.list_recipients(query)
-    };
-
-    let recipients = match recipients_result {
-        Ok((total, recipients)) => {
-            Paginated::new(recipients, page, total.div_ceil(DEFAULT_ITEMS_PER_PAGE))
-        }
-        Err(err) => {
-            log::error!("Failed to get recipients: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    context.insert("recipients", &recipients);
+    context.insert("recipients", &data.recipients);
+    if let Some(search) = data.search_query {
+        context.insert("search_query", &search);
+    }
 
     render_template(&tera, "recipients/recipients.html", &context)
 }
@@ -85,17 +70,11 @@ pub async fn recipients_add(
         return response;
     };
 
-    if form.validate().is_err() {
-        FlashMessage::error("Ошибка при добавлении получателя.").send();
-        return redirect("/recipients");
-    }
-
-    let mut new_recipient: NewRecipient = form.into();
-
-    new_recipient.hub_id = user.hub_id;
-    match repo.create_recipients(&[new_recipient]) {
-        Ok(_) => {
-            FlashMessage::success("Получатель успешно добавлен.").send();
+    let service = RecipientsService::new(repo.get_ref());
+    match service.create_recipient(user.hub_id, form) {
+        Ok(_) => FlashMessage::success("Получатель успешно добавлен.").send(),
+        Err(ServiceError::Form(_)) => {
+            FlashMessage::error("Ошибка при добавлении получателя.").send();
         }
         Err(err) => {
             log::error!("Failed to create recipient: {err}");
@@ -116,28 +95,19 @@ pub async fn recipients_delete(
         return response;
     };
 
-    let recipient = match repo.get_recipient_by_id(form.id, user.hub_id) {
-        Ok(Some(recipient)) => recipient.recipient,
-        Ok(None) => {
-            return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving recipient: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    match repo.delete_recipient(recipient.id) {
+    let service = RecipientsService::new(repo.get_ref());
+    match service.delete_recipient(user.hub_id, form) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
+            redirect("/recipients")
         }
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
         Err(err) => {
             log::error!("Failed to delete recipient: {err}");
             FlashMessage::error("Ошибка при удалении получателя.").send();
+            redirect("/recipients")
         }
     }
-
-    redirect("/recipients")
 }
 
 #[post("/recipients/clean")]
@@ -149,59 +119,47 @@ pub async fn recipients_clean(
         return response;
     };
 
-    match repo.delete_all_groups(user.hub_id) {
+    let service = RecipientsService::new(repo.get_ref());
+    match service.clean(user.hub_id) {
         Ok(_) => {
             FlashMessage::success("Все группы удалены.").send();
-        }
-        Err(err) => {
-            log::error!("Failed to delete groups: {err}");
-            FlashMessage::error("Ошибка при удалении групп.").send();
-            return redirect("/recipients");
-        }
-    }
-
-    match repo.delete_all_recipients(user.hub_id) {
-        Ok(_) => {
             FlashMessage::success("Все получатели удалены.").send();
+            redirect("/recipients")
         }
         Err(err) => {
-            log::error!("Failed to delete recipients: {err}");
+            log::error!("Failed to clean recipients: {err}");
             FlashMessage::error("Ошибка при удалении получателей.").send();
+            redirect("/recipients")
         }
     }
-
-    redirect("/recipients")
 }
 
 #[post("/recipients/upload")]
 pub async fn recipients_upload(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    MultipartForm(mut form): MultipartForm<UploadRecipientsForm>,
+    MultipartForm(form): MultipartForm<UploadRecipientsForm>,
 ) -> impl Responder {
     if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
         return response;
     };
 
-    let recipients: Vec<NewRecipient> = match form.parse(user.hub_id) {
-        Ok(recipients) => recipients,
-        Err(err) => {
-            FlashMessage::error(format!("Ошибка при парсинге получателей: {err}")).send();
-            return redirect("/recipients");
-        }
-    };
-
-    match repo.create_recipients(&recipients) {
+    let service = RecipientsService::new(repo.get_ref());
+    match service.upload_recipients(user.hub_id, form) {
         Ok(_) => {
             FlashMessage::success("Получатели добавлены.").send();
+            redirect("/recipients")
+        }
+        Err(ServiceError::Form(message)) => {
+            FlashMessage::error(format!("Ошибка при парсинге получателей: {message}")).send();
+            redirect("/recipients")
         }
         Err(err) => {
             log::error!("Failed to add recipients: {err}");
             FlashMessage::error("Ошибка при добавлении получателей.").send();
+            redirect("/recipients")
         }
     }
-
-    redirect("/recipients")
 }
 
 #[post("/recipients/modal/{recipient_id}")]
@@ -215,35 +173,25 @@ pub async fn recipients_modal(
         return response;
     };
 
+    let service = RecipientsService::new(repo.get_ref());
+    let data = match service.load_modal(user.hub_id, recipient_id.into_inner()) {
+        Ok(data) => data,
+        Err(ServiceError::NotFound) => return HttpResponse::NotFound().finish(),
+        Err(err) => {
+            log::error!("Error retrieving recipient: {err}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    render_recipient_modal(&data, &tera)
+}
+
+fn render_recipient_modal(data: &RecipientModalData, tera: &Tera) -> HttpResponse {
     let mut context = Context::new();
+    context.insert("recipient", &data.recipient);
+    context.insert("groups", &data.groups);
 
-    let recipient_id = recipient_id.into_inner();
-
-    let recipient = match repo.get_recipient_by_id(recipient_id, user.hub_id) {
-        Ok(Some(recipient)) => recipient,
-        Ok(None) => {
-            return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving recipient: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let query = GroupListQuery::new(user.hub_id);
-
-    let groups = match repo.list_groups(query) {
-        Ok((_total, groups)) => groups,
-        Err(e) => {
-            log::error!("Error retrieving groups: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    context.insert("recipient", &recipient);
-    context.insert("groups", &groups);
-
-    render_template(&tera, "recipients/modal_body.html", &context)
+    render_template(tera, "recipients/modal_body.html", &context)
 }
 
 #[post("/recipients/save")]
@@ -256,38 +204,23 @@ pub async fn recipients_save(
         return response;
     };
 
-    let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {
-        Ok(form) => form,
-        Err(err) => {
-            log::error!("Error parsing form: {err}");
-            FlashMessage::error("Ошибка при обработке формы.").send();
-            return redirect("/recipients");
-        }
-    };
-
-    let recipient = match repo.get_recipient_by_id(form.id, user.hub_id) {
-        Ok(Some(recipient)) => recipient.recipient,
-        Ok(None) => {
-            log::error!("Recipient not found");
-            return HttpResponse::NotFound().finish();
-        }
-        Err(e) => {
-            log::error!("Error retrieving recipient: {e}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    match repo.update_recipient(recipient.id, &form.into()) {
+    let service = RecipientsService::new(repo.get_ref());
+    match service.save_recipient(user.hub_id, &form) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
+            redirect("/recipients")
         }
+        Err(ServiceError::Form(_)) => {
+            FlashMessage::error("Ошибка при обработке формы.").send();
+            redirect("/recipients")
+        }
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
         Err(err) => {
             log::error!("Error saving recipient: {err}");
             FlashMessage::error("Ошибка при сохранении получателя.").send();
+            redirect("/recipients")
         }
     }
-
-    redirect("/recipients")
 }
 
 #[post("/recipients/source")]
@@ -301,11 +234,6 @@ pub async fn recipients_source(
         return response;
     };
 
-    if form.validate().is_err() {
-        FlashMessage::error("Ошибка валидации формы.").send();
-        return redirect("/recipients");
-    }
-
     let id_cookie = match req.cookie("id") {
         Some(cookie) => cookie,
         None => {
@@ -314,24 +242,23 @@ pub async fn recipients_source(
         }
     };
 
-    let new_recipients: Vec<NewRecipient> = match form.load(id_cookie.value()).await {
-        Ok(recipients) => recipients,
-        Err(err) => {
-            log::error!("Failed to load recipients: {err}");
-            FlashMessage::error("Ошибка при загрузке получателей.").send();
-            return redirect("/recipients");
-        }
-    };
-
-    match repo.create_recipients(&new_recipients) {
+    let service = RecipientsService::new(repo.get_ref());
+    match service
+        .import_from_source(user.hub_id, form, id_cookie.value())
+        .await
+    {
         Ok(_) => {
             FlashMessage::success("Получатели успешно добавлены.").send();
+            redirect("/recipients")
+        }
+        Err(ServiceError::Form(message)) => {
+            FlashMessage::error(format!("Ошибка при загрузке получателей: {message}")).send();
+            redirect("/recipients")
         }
         Err(err) => {
             log::error!("Failed to create recipients: {err}");
             FlashMessage::error("Ошибка при добавлении получателя.").send();
+            redirect("/recipients")
         }
     }
-
-    redirect("/recipients")
 }
