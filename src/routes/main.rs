@@ -137,7 +137,10 @@ pub async fn resend_email(
         .queue_email_retry(user.hub_id, form, zmq_sender.as_ref().as_ref())
         .await
     {
-        Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь повторно."),
+        Ok(_) => {
+            FlashMessage::success("Сообщение добавлено в очередь.").send();
+            redirect("/")
+        }
         Err(ServiceError::NotFound) => {
             FlashMessage::error("Сообщение не найдено.").send();
             redirect("/")
