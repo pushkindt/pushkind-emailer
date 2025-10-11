@@ -11,3 +11,5 @@ pub mod repository;
 pub mod routes;
 pub mod services;
 pub mod utils;
+
+pub const SERVICE_ACCESS_ROLE: &str = "emailer";
