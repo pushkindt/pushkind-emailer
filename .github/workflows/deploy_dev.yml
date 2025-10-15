@@ -42,10 +42,10 @@ jobs:
           if_key_exists: fail # replace / ignore / fail; optional (defaults to fail)
       - name: Deploy
         run: |
-          ssh cicd@mail.pushkind.com "supervisorctl stop emailer"
+          ssh cicd@mail.pushkind.com "sudo /usr/bin/systemctl stop pushkind-emailer.service"
           scp ./target/release/pushkind-emailer cicd@mail.pushkind.com:/var/www5/html/
           scp -r ./assets/ cicd@mail.pushkind.com:/var/www5/html/
           scp -r ./templates/ cicd@mail.pushkind.com:/var/www5/html/
           scp -r ./migrations/ cicd@mail.pushkind.com:/var/www5/html/
           ssh cicd@mail.pushkind.com "cd /var/www5/html/ && /home/cicd/.cargo/bin/diesel migration run"
-          ssh cicd@mail.pushkind.com "supervisorctl start emailer"
+          ssh cicd@mail.pushkind.com "sudo /usr/bin/systemctl start pushkind-emailer.service"
