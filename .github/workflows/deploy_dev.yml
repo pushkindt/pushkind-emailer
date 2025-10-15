@@ -48,4 +48,4 @@ jobs:
           scp -r ./templates/ cicd@mail.pushkind.com:/var/www5/html/
           scp -r ./migrations/ cicd@mail.pushkind.com:/var/www5/html/
           ssh cicd@mail.pushkind.com "cd /var/www5/html/ && /home/cicd/.cargo/bin/diesel migration run"
-          ssh cicd@mail.pushkind.com "sudo /usr/bin/systemctl stop pushkind-emailer.service"
+          ssh cicd@mail.pushkind.com "sudo /usr/bin/systemctl start pushkind-emailer.service"
