@@ -2,14 +2,16 @@ use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{base_context, ensure_role, redirect, render_template};
+use pushkind_common::routes::{base_context, redirect, render_template};
+use pushkind_common::services::errors::ServiceError;
 use tera::Tera;
 
 use crate::forms::settings::SaveHubForm;
 use crate::models::config::ServerConfig;
 use crate::repository::DieselRepository;
 use crate::services::settings::{
-    ExportedHistory, HistoryData, SettingsOverviewData, SettingsService, UnsubscribedData,
+    ExportedHistory, export_history, load_history, load_settings_overview, load_unsubscribed,
+    save_hub,
 };
 
 #[get("/settings")]
@@ -20,39 +22,27 @@ pub async fn settings_show(
     server_config: web::Data<CommonServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "admin", None) {
-        return response;
-    };
-
-    let service = SettingsService::new(repo.get_ref());
-    let data = match service.load_overview(user.hub_id) {
+    let data = match load_settings_overview(repo.get_ref(), &user) {
         Ok(data) => data,
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            return redirect("/");
+        }
         Err(err) => {
             log::error!("Error getting hub: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    render_settings_overview(
-        data,
-        flash_messages,
-        user,
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "settings",
         &server_config.auth_service_url,
-        &tera,
-    )
-}
-
-fn render_settings_overview(
-    data: SettingsOverviewData,
-    flash_messages: IncomingFlashMessages,
-    user: AuthenticatedUser,
-    auth_service_url: &str,
-    tera: &Tera,
-) -> HttpResponse {
-    let mut context = base_context(&flash_messages, &user, "settings", auth_service_url);
+    );
     context.insert("current_hub", &data.hub);
 
-    render_template(tera, "settings/settings.html", &context)
+    render_template(&tera, "settings/settings.html", &context)
 }
 
 #[get("/unsubscribed")]
@@ -63,39 +53,27 @@ pub async fn unsubscribed_show(
     server_config: web::Data<CommonServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = SettingsService::new(repo.get_ref());
-    let data = match service.load_unsubscribed(user.hub_id) {
+    let data = match load_unsubscribed(repo.get_ref(), &user) {
         Ok(data) => data,
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            return redirect("/na");
+        }
         Err(err) => {
             log::error!("Error getting unsubscribed recipients: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    render_unsubscribed(
-        data,
-        flash_messages,
-        user,
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "unsubscribed",
         &server_config.auth_service_url,
-        &tera,
-    )
-}
-
-fn render_unsubscribed(
-    data: UnsubscribedData,
-    flash_messages: IncomingFlashMessages,
-    user: AuthenticatedUser,
-    auth_service_url: &str,
-    tera: &Tera,
-) -> HttpResponse {
-    let mut context = base_context(&flash_messages, &user, "unsubscribed", auth_service_url);
+    );
     context.insert("unsubscribed_list", &data.unsubscribed);
 
-    render_template(tera, "settings/unsubscribed.html", &context)
+    render_template(&tera, "settings/unsubscribed.html", &context)
 }
 
 #[get("/history")]
@@ -107,40 +85,28 @@ pub async fn history_show(
     server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = SettingsService::new(repo.get_ref());
-    let data = match service.load_history(user.hub_id, &server_config) {
+    let data = match load_history(repo.get_ref(), &user, &server_config) {
         Ok(data) => data,
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            return redirect("/na");
+        }
         Err(err) => {
             log::error!("Error getting history recipients: {err}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    render_history(
-        data,
-        flash_messages,
-        user,
+    let mut context = base_context(
+        &flash_messages,
+        &user,
+        "history",
         &common_config.auth_service_url,
-        &tera,
-    )
-}
-
-fn render_history(
-    data: HistoryData,
-    flash_messages: IncomingFlashMessages,
-    user: AuthenticatedUser,
-    auth_service_url: &str,
-    tera: &Tera,
-) -> HttpResponse {
-    let mut context = base_context(&flash_messages, &user, "history", auth_service_url);
+    );
     context.insert("history_list", &data.history);
     context.insert("crm_service_url", &data.crm_service_url);
 
-    render_template(tera, "settings/history.html", &context)
+    render_template(&tera, "settings/history.html", &context)
 }
 
 #[get("/history/download")]
@@ -148,12 +114,7 @@ pub async fn history_download(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = SettingsService::new(repo.get_ref());
-    match service.export_history(user.hub_id) {
+    match export_history(repo.get_ref(), &user) {
         Ok(ExportedHistory { bytes }) => HttpResponse::Ok()
             .content_type("text/csv")
             .append_header((
@@ -161,6 +122,10 @@ pub async fn history_download(
                 "attachment; filename=\"recipients_history.csv\"",
             ))
             .body(bytes),
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
+        }
         Err(err) => {
             log::error!("Error exporting history: {err}");
             HttpResponse::InternalServerError().finish()
@@ -174,15 +139,14 @@ pub async fn settings_save(
     repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<SaveHubForm>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "admin", None) {
-        return response;
-    };
-
-    let service = SettingsService::new(repo.get_ref());
-    match service.save_hub(user.hub_id, form) {
+    match save_hub(repo.get_ref(), &user, form) {
         Ok(_) => {
             FlashMessage::success("Хаб сохранён.").send();
             redirect("/settings")
+        }
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/")
         }
         Err(err) => {
             log::error!("Error updating hub: {err}");

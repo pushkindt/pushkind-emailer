@@ -11,7 +11,8 @@ SQLite, Tera templates, and the shared `pushkind-common` crate. The codebase is
 layered into domain models, repository traits and implementations, service
 modules, Actix routes, forms, and templates. Business logic belongs in the
 service layer; handlers and repositories should stay thin and focused on I/O
-concerns.
+concerns. Routes must never implement business rules; they only orchestrate the
+service calls and surface the outcomes.
 
 ## Development Commands
 
@@ -66,8 +67,10 @@ cargo fmt --all -- --check
 
 ## HTTP and Template Guidelines
 
-- Keep Actix handlers in `src/routes` focused on extracting inputs, invoking a
-  service, and returning an HTTP response.
+- Keep Actix handlers in `src/routes` as thin wrappers: extract inputs, invoke
+  the appropriate service, and map the service success or failure into Actix
+  responses (e.g., flash messages plus redirects). Push all branching and logic
+  into services.
 - Let Actix handlers manage redirects and flash messaging; keep services transport-agnostic.
 - Render templates with Tera contexts that only expose sanitized data. Use the
   existing component templates under `templates/` for shared UI.

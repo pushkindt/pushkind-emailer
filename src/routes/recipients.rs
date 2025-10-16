@@ -3,7 +3,7 @@ use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{base_context, ensure_role, redirect, render_template};
+use pushkind_common::routes::{base_context, redirect, render_template};
 use pushkind_common::services::errors::ServiceError;
 use serde::Deserialize;
 use tera::{Context, Tera};
@@ -13,7 +13,10 @@ use crate::forms::recipients::{
 };
 use crate::models::config::ServerConfig;
 use crate::repository::DieselRepository;
-use crate::services::recipients::{RecipientModalData, RecipientsService};
+use crate::services::recipients::{
+    clean_recipients, create_recipient, delete_recipient, import_recipients_from_source,
+    load_recipient_modal, load_recipients_overview, save_recipient, upload_recipients,
+};
 
 #[derive(Deserialize)]
 struct RecipientsQueryParams {
@@ -31,14 +34,13 @@ pub async fn recipients_show(
     server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = RecipientsService::new(repo.get_ref());
     let page = params.page.unwrap_or(1);
-    let data = match service.load_overview(user.hub_id, page, params.q.clone()) {
+    let data = match load_recipients_overview(repo.get_ref(), &user, page, params.q.clone()) {
         Ok(data) => data,
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            return redirect("/na");
+        }
         Err(err) => {
             log::error!("Failed to get recipients: {err}");
             return HttpResponse::InternalServerError().finish();
@@ -66,15 +68,14 @@ pub async fn recipients_add(
     repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<AddRecipientForm>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = RecipientsService::new(repo.get_ref());
-    match service.create_recipient(user.hub_id, form) {
+    match create_recipient(repo.get_ref(), &user, form) {
         Ok(_) => FlashMessage::success("Получатель успешно добавлен.").send(),
         Err(ServiceError::Form(_)) => {
             FlashMessage::error("Ошибка при добавлении получателя.").send();
+        }
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            return redirect("/na");
         }
         Err(err) => {
             log::error!("Failed to create recipient: {err}");
@@ -91,17 +92,16 @@ pub async fn recipients_delete(
     repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<DeleteRecipientForm>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = RecipientsService::new(repo.get_ref());
-    match service.delete_recipient(user.hub_id, form) {
+    match delete_recipient(repo.get_ref(), &user, form) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
             redirect("/recipients")
         }
         Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
+        }
         Err(err) => {
             log::error!("Failed to delete recipient: {err}");
             FlashMessage::error("Ошибка при удалении получателя.").send();
@@ -115,16 +115,15 @@ pub async fn recipients_clean(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = RecipientsService::new(repo.get_ref());
-    match service.clean(user.hub_id) {
+    match clean_recipients(repo.get_ref(), &user) {
         Ok(_) => {
             FlashMessage::success("Все группы удалены.").send();
             FlashMessage::success("Все получатели удалены.").send();
             redirect("/recipients")
+        }
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
         }
         Err(err) => {
             log::error!("Failed to clean recipients: {err}");
@@ -140,12 +139,7 @@ pub async fn recipients_upload(
     repo: web::Data<DieselRepository>,
     MultipartForm(form): MultipartForm<UploadRecipientsForm>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = RecipientsService::new(repo.get_ref());
-    match service.upload_recipients(user.hub_id, form) {
+    match upload_recipients(repo.get_ref(), &user, form) {
         Ok(_) => {
             FlashMessage::success("Получатели добавлены.").send();
             redirect("/recipients")
@@ -153,6 +147,10 @@ pub async fn recipients_upload(
         Err(ServiceError::Form(message)) => {
             FlashMessage::error(format!("Ошибка при парсинге получателей: {message}")).send();
             redirect("/recipients")
+        }
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
         }
         Err(err) => {
             log::error!("Failed to add recipients: {err}");
@@ -169,13 +167,12 @@ pub async fn recipients_modal(
     repo: web::Data<DieselRepository>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = RecipientsService::new(repo.get_ref());
-    let data = match service.load_modal(user.hub_id, recipient_id.into_inner()) {
+    let data = match load_recipient_modal(repo.get_ref(), &user, recipient_id.into_inner()) {
         Ok(data) => data,
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            return redirect("/na");
+        }
         Err(ServiceError::NotFound) => return HttpResponse::NotFound().finish(),
         Err(err) => {
             log::error!("Error retrieving recipient: {err}");
@@ -183,15 +180,11 @@ pub async fn recipients_modal(
         }
     };
 
-    render_recipient_modal(&data, &tera)
-}
-
-fn render_recipient_modal(data: &RecipientModalData, tera: &Tera) -> HttpResponse {
     let mut context = Context::new();
     context.insert("recipient", &data.recipient);
     context.insert("groups", &data.groups);
 
-    render_template(tera, "recipients/modal_body.html", &context)
+    render_template(&tera, "recipients/modal_body.html", &context)
 }
 
 #[post("/recipients/save")]
@@ -200,12 +193,7 @@ pub async fn recipients_save(
     repo: web::Data<DieselRepository>,
     form: web::Bytes,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = RecipientsService::new(repo.get_ref());
-    match service.save_recipient(user.hub_id, &form) {
+    match save_recipient(repo.get_ref(), &user, &form) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
             redirect("/recipients")
@@ -215,6 +203,10 @@ pub async fn recipients_save(
             redirect("/recipients")
         }
         Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
+        }
         Err(err) => {
             log::error!("Error saving recipient: {err}");
             FlashMessage::error("Ошибка при сохранении получателя.").send();
@@ -230,10 +222,6 @@ pub async fn recipients_source(
     repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<SourceRecipientForm>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
     let id_cookie = match req.cookie("id") {
         Some(cookie) => cookie,
         None => {
@@ -242,11 +230,7 @@ pub async fn recipients_source(
         }
     };
 
-    let service = RecipientsService::new(repo.get_ref());
-    match service
-        .import_from_source(user.hub_id, form, id_cookie.value())
-        .await
-    {
+    match import_recipients_from_source(repo.get_ref(), &user, form, id_cookie.value()).await {
         Ok(_) => {
             FlashMessage::success("Получатели успешно добавлены.").send();
             redirect("/recipients")
@@ -254,6 +238,10 @@ pub async fn recipients_source(
         Err(ServiceError::Form(message)) => {
             FlashMessage::error(format!("Ошибка при загрузке получателей: {message}")).send();
             redirect("/recipients")
+        }
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
         }
         Err(err) => {
             log::error!("Failed to create recipients: {err}");

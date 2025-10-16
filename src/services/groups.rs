@@ -1,3 +1,5 @@
+use pushkind_common::domain::auth::AuthenticatedUser;
+use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
@@ -15,82 +17,106 @@ pub struct GroupsOverviewData {
     pub recipients: Vec<Recipient>,
 }
 
-/// Service encapsulating group operations.
-pub struct GroupsService<'a, R>
+/// Loads the data required to render the groups overview page.
+pub fn load_groups_overview<R>(
+    repo: &R,
+    user: &AuthenticatedUser,
+) -> ServiceResult<GroupsOverviewData>
 where
-    R: GroupReader + GroupWriter + RecipientReader,
+    R: GroupReader + RecipientReader,
 {
-    repo: &'a R,
+    ensure_emailer(user)?;
+
+    let hub_id = user.hub_id;
+    let groups_query = GroupListQuery::new(hub_id);
+    let (_, groups) = repo.list_groups(groups_query)?;
+
+    let recipients_query = RecipientListQuery::new(hub_id);
+    let (_, recipients) = repo.list_recipients(recipients_query)?;
+
+    let custom_fields = repo.list_custom_fields(hub_id)?;
+
+    Ok(GroupsOverviewData {
+        groups,
+        custom_fields,
+        recipients,
+    })
 }
 
-impl<'a, R> GroupsService<'a, R>
+/// Creates a new group.
+pub fn create_group<R>(repo: &R, user: &AuthenticatedUser, form: AddGroupForm) -> ServiceResult<()>
 where
-    R: GroupReader + GroupWriter + RecipientReader,
+    R: GroupWriter,
 {
-    pub fn new(repo: &'a R) -> Self {
-        Self { repo }
-    }
+    ensure_emailer(user)?;
 
-    /// Loads the data required to render the groups overview page.
-    pub fn load_overview(&self, hub_id: i32) -> ServiceResult<GroupsOverviewData> {
-        let groups_query = GroupListQuery::new(hub_id);
-        let (_, groups) = self.repo.list_groups(groups_query)?;
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-        let recipients_query = RecipientListQuery::new(hub_id);
-        let (_, recipients) = self.repo.list_recipients(recipients_query)?;
+    let new_group = form.to_new_group(user.hub_id);
+    repo.create_group(&new_group)?;
+    Ok(())
+}
 
-        let custom_fields = self.repo.list_custom_fields(hub_id)?;
+/// Deletes the specified group if it belongs to the hub.
+pub fn delete_group<R>(
+    repo: &R,
+    user: &AuthenticatedUser,
+    form: DeleteGroupForm,
+) -> ServiceResult<()>
+where
+    R: GroupReader + GroupWriter,
+{
+    ensure_emailer(user)?;
 
-        Ok(GroupsOverviewData {
-            groups,
-            custom_fields,
-            recipients,
-        })
-    }
+    let group = repo
+        .get_group_by_id(form.id, user.hub_id)?
+        .ok_or(ServiceError::NotFound)?;
 
-    /// Creates a new group.
-    pub fn create_group(&self, hub_id: i32, form: AddGroupForm) -> ServiceResult<()> {
-        form.validate()
-            .map_err(|err| ServiceError::Form(err.to_string()))?;
+    repo.delete_group(group.group.id)?;
+    Ok(())
+}
 
-        let new_group = form.to_new_group(hub_id);
-        self.repo.create_group(&new_group)?;
+/// Assigns recipients to a group.
+pub fn assign_recipients<R>(repo: &R, user: &AuthenticatedUser, payload: &[u8]) -> ServiceResult<()>
+where
+    R: GroupReader + GroupWriter,
+{
+    ensure_emailer(user)?;
+
+    let form: AssignGroupRecipientForm =
+        serde_html_form::from_bytes(payload).map_err(|err| ServiceError::Form(err.to_string()))?;
+
+    let group = repo
+        .get_group_by_id(form.group_id, user.hub_id)?
+        .ok_or(ServiceError::NotFound)?;
+
+    repo.assign_recipients_to_group(group.group.id, form.recipient_id)?;
+    Ok(())
+}
+
+/// Loads the data required to render the modal with group details.
+pub fn load_group_modal<R>(
+    repo: &R,
+    user: &AuthenticatedUser,
+    group_id: i32,
+) -> ServiceResult<GroupWithRecipients>
+where
+    R: GroupReader,
+{
+    ensure_emailer(user)?;
+
+    let group = repo
+        .get_group_by_id(group_id, user.hub_id)?
+        .ok_or(ServiceError::NotFound)?;
+
+    Ok(group)
+}
+
+fn ensure_emailer(user: &AuthenticatedUser) -> ServiceResult<()> {
+    if check_role("emailer", &user.roles) {
         Ok(())
-    }
-
-    /// Deletes the specified group if it belongs to the hub.
-    pub fn delete_group(&self, hub_id: i32, form: DeleteGroupForm) -> ServiceResult<()> {
-        let group = self
-            .repo
-            .get_group_by_id(form.id, hub_id)?
-            .ok_or(ServiceError::NotFound)?;
-
-        self.repo.delete_group(group.group.id)?;
-        Ok(())
-    }
-
-    /// Assigns recipients to a group.
-    pub fn assign_recipients(&self, hub_id: i32, payload: &[u8]) -> ServiceResult<()> {
-        let form: AssignGroupRecipientForm = serde_html_form::from_bytes(payload)
-            .map_err(|err| ServiceError::Form(err.to_string()))?;
-
-        let group = self
-            .repo
-            .get_group_by_id(form.group_id, hub_id)?
-            .ok_or(ServiceError::NotFound)?;
-
-        self.repo
-            .assign_recipients_to_group(group.group.id, form.recipient_id)?;
-        Ok(())
-    }
-
-    /// Loads the data required to render the modal with group details.
-    pub fn load_modal(&self, hub_id: i32, group_id: i32) -> ServiceResult<GroupWithRecipients> {
-        let group = self
-            .repo
-            .get_group_by_id(group_id, hub_id)?
-            .ok_or(ServiceError::NotFound)?;
-
-        Ok(group)
+    } else {
+        Err(ServiceError::Unauthorized)
     }
 }

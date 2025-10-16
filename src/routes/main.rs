@@ -6,7 +6,7 @@ use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{base_context, ensure_role, redirect, render_template};
+use pushkind_common::routes::{base_context, redirect, render_template};
 use pushkind_common::services::errors::ServiceError;
 use pushkind_common::zmq::ZmqSender;
 use serde::Deserialize;
@@ -15,7 +15,11 @@ use tera::Tera;
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
 use crate::repository::DieselRepository;
-use crate::services::main::{ExportedEmailRecipients, MainService};
+use crate::services::main::{
+    ExportedEmailRecipients, delete_email as delete_email_service,
+    export_email_recipients as export_email_recipients_service, load_index_page, mark_email_opened,
+    queue_email_retry, queue_new_email,
+};
 
 #[derive(Deserialize)]
 struct IndexQueryParams {
@@ -33,14 +37,13 @@ pub async fn index(
     server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
     let page = params.page.unwrap_or(1);
-    let service = MainService::new(repo.get_ref());
-    let data = match service.load_index_page(user.hub_id, params.retry, page) {
+    let data = match load_index_page(repo.get_ref(), &user, params.retry, page) {
         Ok(data) => data,
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            return redirect("/na");
+        }
         Err(err) => {
             log::error!("Failed to load index page: {err}");
             return HttpResponse::InternalServerError().finish();
@@ -70,21 +73,17 @@ pub async fn send_email(
     repo: web::Data<DieselRepository>,
     form: Result<MultipartForm<SendEmailForm>, Box<dyn Error>>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
     let form = match form {
         Ok(form) => form.0,
         Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
     };
 
-    let service = MainService::new(repo.get_ref());
-    match service
-        .queue_new_email(user, form, zmq_sender.as_ref().as_ref())
-        .await
-    {
+    match queue_new_email(repo.get_ref(), user, form, zmq_sender.as_ref().as_ref()).await {
         Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь."),
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
+        }
         Err(ServiceError::Form(message)) => HttpResponse::Ok().body(message),
         Err(err) => {
             log::error!("Failed to queue email: {err}");
@@ -99,12 +98,7 @@ pub async fn delete_email(
     repo: web::Data<DieselRepository>,
     web::Form(form): web::Form<DeleteEmailForm>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = MainService::new(repo.get_ref());
-    match service.delete_email(user.hub_id, form) {
+    match delete_email_service(repo.get_ref(), &user, form) {
         Ok(_) => {
             FlashMessage::success("Сообщение удалено.").send();
             redirect("/")
@@ -112,6 +106,10 @@ pub async fn delete_email(
         Err(ServiceError::NotFound) => {
             FlashMessage::error("Сообщение не найдено.").send();
             redirect("/")
+        }
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
         }
         Err(err) => {
             log::error!("Failed to delete email: {err}");
@@ -128,15 +126,7 @@ pub async fn resend_email(
     zmq_sender: web::Data<Arc<ZmqSender>>,
     web::Form(form): web::Form<ResendEmailForm>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = MainService::new(repo.get_ref());
-    match service
-        .queue_email_retry(user.hub_id, form, zmq_sender.as_ref().as_ref())
-        .await
-    {
+    match queue_email_retry(repo.get_ref(), &user, form, zmq_sender.as_ref().as_ref()).await {
         Ok(_) => {
             FlashMessage::success("Сообщение добавлено в очередь.").send();
             redirect("/")
@@ -144,6 +134,10 @@ pub async fn resend_email(
         Err(ServiceError::NotFound) => {
             FlashMessage::error("Сообщение не найдено.").send();
             redirect("/")
+        }
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
         }
         Err(err) => {
             log::error!("Failed to queue retry: {err}");
@@ -158,9 +152,8 @@ pub async fn track_email(
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
     let recipient_id = recipient_id.into_inner();
-    let service = MainService::new(repo.get_ref());
 
-    match service.mark_email_opened(recipient_id) {
+    match mark_email_opened(repo.get_ref(), recipient_id) {
         Ok(_) => redirect("/assets/placeholder.png"),
         Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
         Err(err) => {
@@ -176,14 +169,9 @@ pub async fn export_email_recipients(
     repo: web::Data<DieselRepository>,
     email_id: web::Path<i32>,
 ) -> impl Responder {
-    if let Err(response) = ensure_role(&user, "emailer", Some("/na")) {
-        return response;
-    };
-
-    let service = MainService::new(repo.get_ref());
     let email_id = email_id.into_inner();
 
-    match service.export_email_recipients(user.hub_id, email_id) {
+    match export_email_recipients_service(repo.get_ref(), &user, email_id) {
         Ok(ExportedEmailRecipients { filename, bytes }) => HttpResponse::Ok()
             .content_type("text/csv")
             .append_header((
@@ -192,6 +180,10 @@ pub async fn export_email_recipients(
             ))
             .body(bytes),
         Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
+        Err(ServiceError::Unauthorized) => {
+            FlashMessage::error("Недостаточно прав.").send();
+            redirect("/na")
+        }
         Err(err) => {
             log::error!("Failed to export recipients: {err}");
             HttpResponse::InternalServerError().finish()
