@@ -102,43 +102,43 @@
                 labelField: "name",
                 searchField: ["name", "email",
                     {% for field in custom_fields %}
-            "{{field}}",
-                {% endfor %}
-                    ],
-            options: [
-            {% for recipient in recipients %}
-                            {% set fields = recipient.fields %}
-        {
-            ...{
-                "id": "{{recipient.id}}",
-                "name": "{{recipient.name}}",
-                "email": "{{recipient.email}}",
-            },
-            ...{{ fields | json_encode() | safe}}
+                        "{{field}}",
+                    {% endfor %}
+                ],
+                options: [
+                    {% for recipient in recipients %}
+                        {% set fields = recipient.fields %}
+                        {
+                            ...{
+                                "id": "{{recipient.id}}",
+                                "name": "{{recipient.name}}",
+                                "email": "{{recipient.email}}",
                             },
-        {% endfor %}
-                    ],
-        render: {
-        option: function (item, escape) {
-            let result = `<div class="border-bottom"><strong>${escape(item.name)} (${escape(item.email)})</strong>`;
-            result += '<br><small>';
-            for (const field in item) {
-                if (["id", "name", "email", "$order"].includes(field)) {
-                    continue;
-                }
-                result += escape(field) + ': ' + escape(item[field]) + ' ';
-            }
-            result += '</small>';
-            result += '</div>';
-            return result
-        }
-    },
-                };
-    tomSelectInstance = new TomSelect('#recipients-assign-form-recipient-id', settings);
-            });
-
-    createFilter("filter", "items", ".selectable");
-
+                            ...{{ fields | json_encode() | safe}}
+                        },
+                    {% endfor %}
+                ],
+                render: {
+                    option: function (item, escape) {
+                        let result = `<div class="border-bottom"><strong>${escape(item.name)} (${escape(item.email)})</strong>`;
+                        result += '<br><small>';
+                        for (const field in item) {
+                            if (["id", "name", "email", "$order"].includes(field)) {
+                                continue;
+                            }
+                            result += escape(field) + ': ' + escape(item[field]) + ' ';
+                        }
+                        result += '</small>';
+                        result += '</div>';
+                        return result
+                    }
+                },
+            };
+            tomSelectInstance = new TomSelect('#recipients-assign-form-recipient-id', settings);
         });
+
+        createFilter("filter", "items", ".selectable");
+
+    });
 </script>
 {% endblock %}
