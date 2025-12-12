@@ -4,7 +4,7 @@ use pushkind_common::models::emailer::zmq::ZMQSendEmailMessage;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
-use pushkind_common::zmq::ZmqSender;
+use pushkind_common::zmq::{ZmqSender, ZmqSenderExt};
 
 use crate::domain::group::Group;
 use crate::domain::recipient::{CSVExportRecipient, Recipient};
