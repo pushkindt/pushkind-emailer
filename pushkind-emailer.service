@@ -8,6 +8,7 @@ User=www-data5
 Group=www-data
 
 WorkingDirectory=/var/www5/html
+Environment=APP_ENV=prod
 ExecStart=/var/www5/html/pushkind-emailer
 
 Restart=on-failure
