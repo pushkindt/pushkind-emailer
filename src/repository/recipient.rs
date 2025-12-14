@@ -54,18 +54,22 @@ impl RecipientReader for DieselRepository {
             .first::<chrono::NaiveDateTime>(&mut conn)
             .optional()?;
 
+        let group_ids = groups.iter().map(|gr| gr.id).collect::<Vec<_>>();
+        let domain_recipient = DomainRecipient::try_new(
+            recipient.id,
+            recipient.name,
+            recipient.email,
+            recipient.hub_id,
+            field_map,
+            recipient.created_at,
+            recipient.updated_at,
+            unsubscribed_at,
+            group_ids,
+        )
+        .map_err(|err| RepositoryError::ValidationError(err.to_string()))?;
+
         Ok(Some(RecipientWithGroups {
-            recipient: DomainRecipient {
-                id: recipient.id,
-                name: recipient.name,
-                email: recipient.email,
-                hub_id: recipient.hub_id,
-                fields: field_map,
-                created_at: recipient.created_at,
-                updated_at: recipient.updated_at,
-                unsubscribed_at,
-                groups: groups.iter().map(|gr| gr.id).collect(),
-            },
+            recipient: domain_recipient,
             groups: groups
                 .into_iter()
                 .map(DomainGroup::try_from)
@@ -207,7 +211,11 @@ impl RecipientReader for DieselRepository {
             .order(unsubscribes::created_at.desc())
             .load::<Unsubscribe>(&mut conn)?;
 
-        Ok(results.into_iter().map(Into::into).collect())
+        results
+            .into_iter()
+            .map(DomainUnsubscribe::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
     }
 }
 
@@ -227,7 +235,7 @@ impl RecipientWriter for DieselRepository {
                     .values(&db_new)
                     .on_conflict((recipients::email, recipients::hub_id))
                     .do_update()
-                    .set((recipients::name.eq(&new.name),))
+                    .set((recipients::name.eq(new.name.as_str()),))
                     .get_result::<Recipient>(conn)?;
 
                 // Update fields (delete all → insert new)
@@ -286,7 +294,7 @@ impl RecipientWriter for DieselRepository {
                         // Check if group already exists
                         let existing = groups::table
                             .filter(groups::name.eq(group_name))
-                            .filter(groups::hub_id.eq(new.hub_id))
+                            .filter(groups::hub_id.eq(new.hub_id.get()))
                             .select(Group::as_select())
                             .first::<Group>(conn)
                             .optional()?;
@@ -296,7 +304,7 @@ impl RecipientWriter for DieselRepository {
                             None => {
                                 let new_group = crate::models::group::NewGroup {
                                     name: group_name,
-                                    hub_id: new.hub_id,
+                                    hub_id: new.hub_id.get(),
                                 };
                                 diesel::insert_into(groups::table)
                                     .values(&new_group)
@@ -332,8 +340,8 @@ impl RecipientWriter for DieselRepository {
         // Update basic recipient info
         diesel::update(recipients::table.filter(recipients::id.eq(id)))
             .set((
-                recipients::name.eq(&recipient.name),
-                recipients::email.eq(&recipient.email),
+                recipients::name.eq(recipient.name.as_str()),
+                recipients::email.eq(recipient.email.as_str()),
             ))
             .execute(&mut conn)?;
 
@@ -368,7 +376,7 @@ impl RecipientWriter for DieselRepository {
             .execute(&mut conn)?;
         for group_id in &recipient.groups {
             let link = GroupRecipient {
-                group_id: *group_id,
+                group_id: group_id.get(),
                 recipient_id: id,
             };
             diesel::insert_into(groups_recipients::table)
@@ -406,17 +414,18 @@ impl RecipientWriter for DieselRepository {
             .select(groups_recipients::group_id)
             .load::<i32>(&mut conn)?;
 
-        Ok(DomainRecipient {
-            id: rec.id,
-            name: rec.name,
-            email: rec.email,
-            hub_id: rec.hub_id,
-            fields: fields_map,
-            created_at: rec.created_at,
-            updated_at: rec.updated_at,
+        DomainRecipient::try_new(
+            rec.id,
+            rec.name,
+            rec.email,
+            rec.hub_id,
+            fields_map,
+            rec.created_at,
+            rec.updated_at,
             unsubscribed_at,
-            groups: group_ids,
-        })
+            group_ids,
+        )
+        .map_err(|err| RepositoryError::ValidationError(err.to_string()))
     }
 
     fn delete_recipient(&self, id: i32) -> RepositoryResult<()> {

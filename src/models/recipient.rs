@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::domain::recipient::{
     NewRecipient as DomainNewRecipient, Unsubscribe as DomainUnsubscribe,
 };
+use crate::domain::types::{HubId, RecipientEmail, TypeConstraintError, UnsubscribeReason};
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations, QueryableByName)]
 #[diesel(table_name = crate::schema::recipients)]
@@ -58,20 +59,22 @@ pub struct Unsubscribe {
 impl<'a> From<&'a DomainNewRecipient> for NewRecipient<'a> {
     fn from(value: &'a DomainNewRecipient) -> Self {
         Self {
-            name: &value.name,
-            email: &value.email,
-            hub_id: value.hub_id,
+            name: value.name.as_str(),
+            email: value.email.as_str(),
+            hub_id: value.hub_id.get(),
         }
     }
 }
 
-impl From<Unsubscribe> for DomainUnsubscribe {
-    fn from(value: Unsubscribe) -> Self {
-        Self {
-            email: value.email,
-            hub_id: value.hub_id,
-            reason: value.reason,
+impl TryFrom<Unsubscribe> for DomainUnsubscribe {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: Unsubscribe) -> Result<Self, Self::Error> {
+        Ok(Self {
+            email: RecipientEmail::new(value.email)?,
+            hub_id: HubId::try_from(value.hub_id)?,
+            reason: value.reason.map(UnsubscribeReason::try_from).transpose()?,
             unsubscribed_at: value.created_at,
-        }
+        })
     }
 }

@@ -5,6 +5,7 @@ use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
 use crate::domain::recipient::NewRecipient;
+use crate::domain::types::TypeConstraintError;
 use crate::dto::recipients::{RecipientModalData, RecipientsOverviewData};
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, SourceRecipientForm,
@@ -71,9 +72,11 @@ where
     form.validate()
         .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-    let mut new_recipient: NewRecipient = form.into();
-    new_recipient.hub_id = user.hub_id;
-
+    let new_recipient = NewRecipient::try_new(form.name, form.email, user.hub_id, None, None)
+        .map_err(|err| {
+            log::error!("Invalid recipient payload: {err}");
+            ServiceError::Form(err.to_string())
+        })?;
     repo.create_recipients(&[new_recipient])?;
     Ok(())
 }
@@ -93,7 +96,7 @@ where
         .get_recipient_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.delete_recipient(recipient.recipient.id)?;
+    repo.delete_recipient(recipient.recipient.id.get())?;
     Ok(())
 }
 
@@ -164,7 +167,10 @@ where
         .ok_or(ServiceError::NotFound)?
         .recipient;
 
-    repo.update_recipient(recipient.id, &form.into())?;
+    let updates = form
+        .try_into_update_recipient()
+        .map_err(|err: TypeConstraintError| ServiceError::Form(err.to_string()))?;
+    repo.update_recipient(recipient.id.get(), &updates)?;
     Ok(())
 }
 
@@ -183,14 +189,10 @@ where
     form.validate()
         .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-    let mut recipients = form
-        .load(cookie_value)
+    let recipients = form
+        .load(cookie_value, user.hub_id)
         .await
         .map_err(|err| ServiceError::Form(err.to_string()))?;
-
-    for recipient in &mut recipients {
-        recipient.hub_id = user.hub_id;
-    }
 
     repo.create_recipients(&recipients)?;
     Ok(())

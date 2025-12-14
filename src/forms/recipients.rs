@@ -8,6 +8,7 @@ use thiserror::Error;
 use validator::Validate;
 
 use crate::domain::recipient::{NewRecipient, UpdateRecipient};
+use crate::domain::types::TypeConstraintError;
 
 /// Form for adding a single recipient manually.
 #[derive(Deserialize, Validate)]
@@ -52,21 +53,16 @@ pub struct SaveRecipientForm {
     pub value: Vec<String>,
 }
 
-impl From<SaveRecipientForm> for UpdateRecipient {
-    fn from(form: SaveRecipientForm) -> Self {
-        let fields = form
+impl SaveRecipientForm {
+    pub fn try_into_update_recipient(self) -> Result<UpdateRecipient, TypeConstraintError> {
+        let fields = self
             .field
             .iter()
             .cloned()
-            .zip(form.value.iter().cloned())
+            .zip(self.value.iter().cloned())
             .collect();
 
-        Self {
-            name: form.name,
-            email: form.email,
-            fields,
-            groups: form.groups,
-        }
+        UpdateRecipient::try_new(self.name, self.email, fields, self.groups)
     }
 }
 
@@ -77,6 +73,8 @@ pub enum UploadRecipientsFormError {
     FileReadError,
     #[error("Error parsing CSV file")]
     CsvParseError,
+    #[error("Recipient validation failed: {0}")]
+    ValidationError(String),
 }
 
 impl From<std::io::Error> for UploadRecipientsFormError {
@@ -145,22 +143,13 @@ impl UploadRecipientsForm {
                 continue;
             }
 
-            recipients.push(NewRecipient::new(
-                name,
-                email,
-                hub_id,
-                Some(optional_fields),
-                Some(groups),
-            ));
+            let recipient =
+                NewRecipient::try_new(name, email, hub_id, Some(optional_fields), Some(groups))
+                    .map_err(|err| UploadRecipientsFormError::ValidationError(err.to_string()))?;
+            recipients.push(recipient);
         }
 
         Ok(recipients)
-    }
-}
-
-impl From<AddRecipientForm> for NewRecipient {
-    fn from(form: AddRecipientForm) -> Self {
-        NewRecipient::new(form.name, form.email, 0, None, None)
     }
 }
 
@@ -171,6 +160,8 @@ pub enum SourceRecipientFormError {
     RequestError,
     #[error("Error parsing API")]
     DeserializeError,
+    #[error("Recipient validation failed: {0}")]
+    ValidationError(String),
 }
 
 impl From<reqwest::Error> for SourceRecipientFormError {
@@ -186,6 +177,7 @@ impl SourceRecipientForm {
     pub async fn load(
         &self,
         id_value: &str,
+        hub_id: i32,
     ) -> Result<Vec<NewRecipient>, SourceRecipientFormError> {
         let client = reqwest::Client::new();
         let response = client
@@ -199,7 +191,6 @@ impl SourceRecipientForm {
             struct SourceRecipient {
                 name: String,
                 email: Option<String>,
-                hub_id: i32,
                 fields: Option<HashMap<String, String>>,
                 groups: Option<Vec<String>>,
             }
@@ -209,8 +200,11 @@ impl SourceRecipientForm {
                 .into_iter()
                 .filter(|r| r.email.is_some())
                 .filter(|r| !r.email.as_ref().unwrap().trim().is_empty())
-                .map(|r| NewRecipient::new(r.name, r.email.unwrap(), r.hub_id, r.fields, r.groups))
-                .collect();
+                .map(|r| {
+                    NewRecipient::try_new(r.name, r.email.unwrap(), hub_id, r.fields, r.groups)
+                        .map_err(|err| SourceRecipientFormError::ValidationError(err.to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             Ok(recipients)
         } else {
             Err(SourceRecipientFormError::RequestError)

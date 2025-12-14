@@ -5,7 +5,7 @@ use diesel::query_dsl::methods::{LimitDsl, OffsetDsl};
 
 use pushkind_common::db::DbConnection;
 use pushkind_common::pagination::Pagination;
-use pushkind_common::repository::errors::RepositoryResult;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use crate::domain::recipient::Recipient as DomainRecipient;
 use crate::models::group::GroupRecipient;
@@ -37,7 +37,7 @@ pub(super) fn hydrate_recipients(
 
     let recipient_emails: Vec<String> = db_recipients
         .iter()
-        .map(|recipient| recipient.email.clone())
+        .map(|recipient| recipient.email.trim().to_lowercase())
         .collect();
 
     let unsubscribed_lookup = if recipient_emails.is_empty() {
@@ -73,24 +73,27 @@ pub(super) fn hydrate_recipients(
         .into_iter()
         .zip(db_fields)
         .map(|(r, fields)| {
-            let unsubscribed_at = unsubscribed_lookup.get(&r.email).copied();
+            let normalized_email = r.email.trim().to_lowercase();
+            let unsubscribed_at = unsubscribed_lookup.get(&normalized_email).copied();
             let groups = recipient_id_to_group_ids.remove(&r.id).unwrap_or_default();
-            DomainRecipient {
+            let fields = fields
+                .into_iter()
+                .map(|f| (f.field, f.value))
+                .collect::<HashMap<_, _>>();
+            DomainRecipient::try_new(
+                r.id,
+                r.name,
+                r.email,
+                r.hub_id,
+                fields,
+                r.created_at,
+                r.updated_at,
                 unsubscribed_at,
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                hub_id: r.hub_id,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                fields: fields
-                    .into_iter()
-                    .map(|f| (f.field, f.value))
-                    .collect::<HashMap<_, _>>(),
                 groups,
-            }
+            )
+            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(recipients)
 }

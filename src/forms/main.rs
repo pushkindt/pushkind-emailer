@@ -72,8 +72,8 @@ impl SendEmailForm {
                 .into_iter()
                 .filter(|recipient| recipient.unsubscribed_at.is_none())
                 .map(|recipient| NewEmailRecipient {
-                    address: recipient.email,
-                    name: recipient.name,
+                    address: recipient.email.into_inner(),
+                    name: recipient.name.into_inner(),
                     fields: recipient.fields,
                 })
                 .collect(),
@@ -89,8 +89,8 @@ impl SendEmailForm {
                 .into_iter()
                 .filter(|recipient| recipient.unsubscribed_at.is_none())
                 .map(|recipient| NewEmailRecipient {
-                    address: recipient.email,
-                    name: recipient.name,
+                    address: recipient.email.into_inner(),
+                    name: recipient.name.into_inner(),
                     fields: recipient.fields,
                 })
                 .collect(),

@@ -9,6 +9,7 @@ use pushkind_common::repository::errors::RepositoryResult;
 use pushkind_emailer::{
     domain::email::{Email, EmailRecipient, EmailWithRecipients, NewEmail},
     domain::recipient::{Recipient, Unsubscribe},
+    domain::types::{RecipientEmail, RecipientName},
     forms::main::SendEmailForm,
     repository::{
         EmailListQuery, EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader,
@@ -80,16 +81,18 @@ impl CooldownRepository {
         emails
             .into_iter()
             .filter_map(|address| {
-                self.names.get(&address).map(|name| Recipient {
-                    id: 0,
-                    name: name.clone(),
-                    email: address,
-                    hub_id: self.hub_id,
-                    fields: HashMap::new(),
-                    created_at: None,
-                    updated_at: None,
-                    unsubscribed_at: None,
-                    groups: vec![],
+                self.names.get(&address).map(|name| {
+                    Recipient::new(
+                        pushkind_emailer::domain::types::RecipientId::try_from(1).unwrap(),
+                        RecipientName::try_from(name.as_str()).unwrap(),
+                        RecipientEmail::try_from(address.as_str()).unwrap(),
+                        pushkind_emailer::domain::types::HubId::try_from(self.hub_id).unwrap(),
+                        HashMap::new(),
+                        None,
+                        None,
+                        None,
+                        vec![],
+                    )
                 })
             })
             .collect()

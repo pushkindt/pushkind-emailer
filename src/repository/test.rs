@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pushkind_common::repository::errors::RepositoryResult;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use crate::domain::email::{EmailRecipient, EmailWithRecipients};
 use crate::domain::recipient::{Recipient, RecipientWithGroups};
@@ -17,18 +17,20 @@ impl RecipientReader for TestRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<RecipientWithGroups>> {
+        let recipient = Recipient::try_new(
+            id,
+            "Test",
+            "test@test.test",
+            hub_id,
+            HashMap::new(),
+            None,
+            None,
+            None,
+            vec![],
+        )
+        .map_err(|err| RepositoryError::ValidationError(err.to_string()))?;
         Ok(Some(RecipientWithGroups {
-            recipient: Recipient {
-                id,
-                name: "Test".to_string(),
-                email: "test@test.test".to_string(),
-                hub_id,
-                fields: HashMap::new(),
-                created_at: None,
-                updated_at: None,
-                unsubscribed_at: None,
-                groups: vec![],
-            },
+            recipient,
             groups: vec![],
         }))
     }
