@@ -27,8 +27,9 @@ pub struct SourceRecipientForm {
 }
 
 /// Form used to delete a recipient by identifier.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct DeleteRecipientForm {
+    #[validate(range(min = 1))]
     pub id: i32,
 }
 
@@ -40,10 +41,13 @@ pub struct UploadRecipientsForm {
 }
 
 /// Form data for updating an existing recipient.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct SaveRecipientForm {
+    #[validate(range(min = 1))]
     pub id: i32,
+    #[validate(length(min = 1))]
     pub name: String,
+    #[validate(email)]
     pub email: String,
     #[serde(default)]
     pub groups: Vec<i32>,

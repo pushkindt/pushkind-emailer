@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 use serde::Deserialize;
+use validator::Validate;
 
 use crate::domain::email::{NewEmail, NewEmailRecipient};
 use crate::domain::types::RecipientEmail;
@@ -23,14 +24,16 @@ pub struct SendEmailForm {
 }
 
 /// Form data to remove an existing email.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct DeleteEmailForm {
+    #[validate(range(min = 1))]
     pub id: i32,
 }
 
 /// Form data to resend an existing email (only unsent).
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct ResendEmailForm {
+    #[validate(range(min = 1))]
     pub id: i32,
 }
 

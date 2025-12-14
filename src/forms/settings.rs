@@ -1,4 +1,6 @@
+use pushkind_common::routes::empty_string_as_none;
 use serde::Deserialize;
+use validator::Validate;
 
 use crate::domain::hub::UpdateHub;
 use crate::domain::types::{
@@ -7,23 +9,32 @@ use crate::domain::types::{
 };
 
 /// Form to create a new hub configuration.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct AddHubForm {
+    #[validate(length(min = 1))]
     pub hub_name: String,
 }
 
 /// Form for updating hub configuration details.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct SaveHubForm {
+    #[validate(range(min = 1))]
     pub id: i32,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub login: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub password: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub sender: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub smtp_server: Option<String>,
     pub smtp_port: Option<i32>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub imap_server: Option<String>,
+    #[validate(range(min = 0))]
     pub imap_port: Option<i32>,
     pub created_at: Option<chrono::NaiveDateTime>,
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub message: Option<String>,
 }
 
@@ -53,7 +64,8 @@ impl SaveHubForm {
 }
 
 /// Form to remove a hub from the system.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct DeleteHubForm {
+    #[validate(range(min = 1))]
     pub id: i32,
 }

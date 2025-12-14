@@ -5,6 +5,7 @@ use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use pushkind_common::zmq::{ZmqSender, ZmqSenderExt};
+use validator::Validate;
 
 use crate::domain::recipient::CSVExportRecipient;
 use crate::dto::main::{ExportedEmailRecipients, IndexPageData};
@@ -88,6 +89,9 @@ where
 {
     ensure_emailer(user)?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let email = repo
         .get_email_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
@@ -107,6 +111,9 @@ where
     R: EmailReader,
 {
     ensure_emailer(user)?;
+
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
 
     let email = repo
         .get_email_by_id(form.id, user.hub_id)?

@@ -92,6 +92,9 @@ where
 {
     ensure_emailer(user)?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let recipient = repo
         .get_recipient_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
@@ -161,6 +164,9 @@ where
 
     let form: SaveRecipientForm =
         serde_html_form::from_bytes(payload).map_err(|err| ServiceError::Form(err.to_string()))?;
+
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
 
     let recipient = repo
         .get_recipient_by_id(form.id, user.hub_id)?

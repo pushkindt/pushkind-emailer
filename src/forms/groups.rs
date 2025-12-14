@@ -12,16 +12,18 @@ pub struct AddGroupForm {
 }
 
 /// Form data to delete an existing group by identifier.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct DeleteGroupForm {
+    #[validate(range(min = 1))]
     pub id: i32,
 }
 
 /// Assigns a recipient to a group.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct AssignGroupRecipientForm {
     #[serde(default)]
     pub recipient_id: Vec<i32>,
+    #[validate(range(min = 1))]
     pub group_id: i32,
 }
 

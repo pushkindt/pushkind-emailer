@@ -2,6 +2,7 @@ use crate::domain::hub::NewHub;
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
+use validator::Validate;
 
 use crate::dto::settings::{ExportedHistory, HistoryData, SettingsOverviewData, UnsubscribedData};
 
@@ -92,6 +93,9 @@ where
     R: HubReader + HubWriter,
 {
     ensure_admin(user)?;
+
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
 
     let hub = match repo.get_hub_by_id(user.hub_id)? {
         Some(hub) => hub,

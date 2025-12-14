@@ -40,6 +40,38 @@ pub struct Email {
 
 impl Email {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn new(
+        id: EmailId,
+        message: EmailBody,
+        created_at: NaiveDateTime,
+        is_sent: bool,
+        subject: Option<EmailSubject>,
+        attachment: Option<Vec<u8>>,
+        attachment_name: Option<AttachmentName>,
+        attachment_mime: Option<AttachmentMimeType>,
+        num_sent: EmailSentCount,
+        num_opened: EmailOpenedCount,
+        num_replied: EmailRepliedCount,
+        hub_id: HubId,
+    ) -> Self {
+        Self {
+            id,
+            message,
+            created_at,
+            is_sent,
+            subject,
+            attachment,
+            attachment_name,
+            attachment_mime,
+            num_sent,
+            num_opened,
+            num_replied,
+            hub_id,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         id: i32,
         message: impl Into<String>,
@@ -54,26 +86,22 @@ impl Email {
         num_replied: i32,
         hub_id: i32,
     ) -> Result<Self, TypeConstraintError> {
-        Ok(Self {
-            id: EmailId::try_from(id)?,
-            message: EmailBody::new(message.into())?,
+        Ok(Self::new(
+            EmailId::try_from(id)?,
+            EmailBody::new(message.into())?,
             created_at,
             is_sent,
-            subject: subject.map(EmailSubject::try_from).transpose()?,
+            subject.map(EmailSubject::try_from).transpose()?,
             attachment,
-            attachment_name: attachment_name
-                .filter(|s| !s.trim().is_empty())
-                .map(AttachmentName::try_from)
-                .transpose()?,
-            attachment_mime: attachment_mime
-                .filter(|s| !s.trim().is_empty())
+            attachment_name.map(AttachmentName::try_from).transpose()?,
+            attachment_mime
                 .map(AttachmentMimeType::try_from)
                 .transpose()?,
-            num_sent: EmailSentCount::try_from(num_sent)?,
-            num_opened: EmailOpenedCount::try_from(num_opened)?,
-            num_replied: EmailRepliedCount::try_from(num_replied)?,
-            hub_id: HubId::try_from(hub_id)?,
-        })
+            EmailSentCount::try_from(num_sent)?,
+            EmailOpenedCount::try_from(num_opened)?,
+            EmailRepliedCount::try_from(num_replied)?,
+            HubId::try_from(hub_id)?,
+        ))
     }
 }
 
@@ -104,6 +132,34 @@ pub struct EmailRecipient {
 
 impl EmailRecipient {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn new(
+        id: EmailRecipientId,
+        email_id: EmailId,
+        address: RecipientEmail,
+        opened: bool,
+        updated_at: NaiveDateTime,
+        is_sent: bool,
+        replied: bool,
+        reply: Option<EmailRecipientReply>,
+        name: RecipientName,
+        fields: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            id,
+            email_id,
+            address,
+            opened,
+            updated_at,
+            is_sent,
+            replied,
+            reply,
+            name,
+            fields,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         id: i32,
         email_id: i32,
@@ -116,21 +172,18 @@ impl EmailRecipient {
         name: impl Into<String>,
         fields: HashMap<String, String>,
     ) -> Result<Self, TypeConstraintError> {
-        Ok(Self {
-            id: EmailRecipientId::try_from(id)?,
-            email_id: EmailId::try_from(email_id)?,
-            address: RecipientEmail::new(address.into())?,
+        Ok(Self::new(
+            EmailRecipientId::try_from(id)?,
+            EmailId::try_from(email_id)?,
+            RecipientEmail::new(address.into())?,
             opened,
             updated_at,
             is_sent,
             replied,
-            reply: reply
-                .filter(|s| !s.trim().is_empty())
-                .map(EmailRecipientReply::try_from)
-                .transpose()?,
-            name: RecipientName::new(name.into())?,
+            reply.map(EmailRecipientReply::try_from).transpose()?,
+            RecipientName::new(name.into())?,
             fields,
-        })
+        ))
     }
 }
 
@@ -183,42 +236,14 @@ impl NewEmail {
         recipients: Vec<NewEmailRecipient>,
     ) -> Result<Self, TypeConstraintError> {
         Ok(Self {
-            hub_id: HubId::try_from(hub_id)?,
             message: EmailBody::new(message.into())?,
-            subject: subject
-                .and_then(|s| {
-                    let trimmed = s.trim().to_string();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed)
-                    }
-                })
-                .map(EmailSubject::try_from)
-                .transpose()?,
+            subject: subject.map(EmailSubject::try_from).transpose()?,
             attachment,
-            attachment_name: attachment_name
-                .and_then(|s| {
-                    let trimmed = s.trim().to_string();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed)
-                    }
-                })
-                .map(AttachmentName::try_from)
-                .transpose()?,
+            attachment_name: attachment_name.map(AttachmentName::try_from).transpose()?,
             attachment_mime: attachment_mime
-                .and_then(|s| {
-                    let trimmed = s.trim().to_string();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed)
-                    }
-                })
                 .map(AttachmentMimeType::try_from)
                 .transpose()?,
+            hub_id: HubId::try_from(hub_id)?,
             recipients,
         })
     }

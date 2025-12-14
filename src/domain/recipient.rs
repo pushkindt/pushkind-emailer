@@ -72,20 +72,20 @@ impl Recipient {
         unsubscribed_at: Option<NaiveDateTime>,
         groups: Vec<i32>,
     ) -> Result<Self, TypeConstraintError> {
-        Ok(Self {
-            id: RecipientId::try_from(id)?,
-            name: RecipientName::new(name.into())?,
-            email: RecipientEmail::new(email.into())?,
-            hub_id: HubId::try_from(hub_id)?,
+        Ok(Self::new(
+            RecipientId::try_from(id)?,
+            RecipientName::new(name.into())?,
+            RecipientEmail::new(email.into())?,
+            HubId::try_from(hub_id)?,
             fields,
             created_at,
             updated_at,
             unsubscribed_at,
-            groups: groups
+            groups
                 .into_iter()
                 .map(GroupId::try_from)
                 .collect::<Result<Vec<_>, _>>()?,
-        })
+        ))
     }
 }
 
