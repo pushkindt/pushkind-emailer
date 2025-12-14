@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
+use diesel::dsl::exists;
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Integer, Nullable, Text};
+use diesel::sql_types::{Bool, Nullable, Text};
 use diesel::upsert::excluded;
 use pushkind_common::repository::build_fts_match_query;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
@@ -82,7 +83,7 @@ impl RecipientReader for DieselRepository {
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
-        use crate::schema::{groups_recipients, recipients};
+        use crate::schema::{groups_recipients, recipient_fts, recipients};
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -104,6 +105,20 @@ impl RecipientReader for DieselRepository {
                 );
             }
 
+            if let Some(term) = query.search.as_ref()
+                && let Some(fts_query) = build_fts_match_query(term)
+            {
+                let fts_filter = exists(
+                    recipient_fts::table
+                        .filter(recipient_fts::rowid.eq(recipients::id))
+                        .filter(
+                            diesel::dsl::sql::<Bool>("recipient_fts MATCH ")
+                                .bind::<Text, _>(fts_query),
+                        ),
+                );
+                items = items.filter(fts_filter);
+            }
+
             items
         };
 
@@ -114,68 +129,6 @@ impl RecipientReader for DieselRepository {
 
         // Load recipients for the hub
         let db_recipients: Vec<Recipient> = items.order(recipients::name.desc()).load(&mut conn)?;
-        let recipients = hydrate_recipients(&mut conn, query.hub_id, db_recipients)?;
-
-        Ok((total, recipients))
-    }
-
-    fn search_recipients(
-        &self,
-        query: RecipientListQuery,
-    ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
-        use crate::models::recipient::RecipientCount;
-
-        let mut conn = self.conn()?;
-
-        // Prepare a safe FTS5 MATCH query using helper
-        let match_query = match &query.search {
-            None => return Ok((0, vec![])),
-            Some(raw) => match build_fts_match_query(raw) {
-                Some(mq) => mq,
-                None => return Ok((0, vec![])),
-            },
-        };
-
-        // Build base SQL
-        let mut sql = String::from(
-            r#"
-            SELECT recipients.*
-            FROM recipients
-            JOIN recipient_fts ON recipients.id = recipient_fts.rowid
-            WHERE recipient_fts MATCH ?
-            AND recipients.hub_id = ?
-            "#,
-        );
-
-        let total_sql = format!("SELECT COUNT(*) as count FROM ({sql})");
-
-        // Now add pagination to SQL (but not count)
-        if query.pagination.is_some() {
-            sql.push_str(" LIMIT ? OFFSET ? ");
-        }
-
-        // Build final data query
-        let mut data_query = diesel::sql_query(&sql)
-            .into_boxed()
-            .bind::<Text, _>(&match_query)
-            .bind::<Integer, _>(query.hub_id);
-
-        let total_query = diesel::sql_query(&total_sql)
-            .into_boxed()
-            .bind::<Text, _>(&match_query)
-            .bind::<Integer, _>(query.hub_id);
-
-        if let Some(pagination) = &query.pagination {
-            let limit = pagination.per_page as i64;
-            let offset = ((pagination.page.max(1) - 1) * pagination.per_page) as i64;
-            data_query = data_query
-                .bind::<BigInt, _>(limit)
-                .bind::<BigInt, _>(offset);
-        }
-
-        let db_recipients = data_query.load::<Recipient>(&mut conn)?;
-
-        let total = total_query.get_result::<RecipientCount>(&mut conn)?.count as usize;
         let recipients = hydrate_recipients(&mut conn, query.hub_id, db_recipients)?;
 
         Ok((total, recipients))

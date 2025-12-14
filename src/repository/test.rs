@@ -43,12 +43,6 @@ impl RecipientReader for TestRepository {
     ) -> RepositoryResult<(usize, Vec<Recipient>)> {
         Ok((0, vec![]))
     }
-    fn search_recipients(
-        &self,
-        _query: RecipientListQuery,
-    ) -> RepositoryResult<(usize, Vec<Recipient>)> {
-        Ok((0, vec![]))
-    }
     fn list_unsubscribed_recipients(
         &self,
         _hub_id: i32,

@@ -43,11 +43,7 @@ where
         list_query
     };
 
-    let (total, recipients) = if normalized_query.is_some() {
-        repo.search_recipients(list_query)?
-    } else {
-        repo.list_recipients(list_query)?
-    };
+    let (total, recipients) = repo.list_recipients(list_query)?;
 
     let total_pages = calculate_total_pages(total, DEFAULT_ITEMS_PER_PAGE);
     let recipients = Paginated::new(recipients, page, total_pages);

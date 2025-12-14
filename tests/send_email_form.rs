@@ -131,19 +131,6 @@ impl RecipientReader for CooldownRepository {
         }
     }
 
-    fn search_recipients(
-        &self,
-        query: RecipientListQuery,
-    ) -> RepositoryResult<(usize, Vec<Recipient>)> {
-        if let Some(emails) = query.emails {
-            let recipients = self.recipients_for(emails);
-            let total = recipients.len();
-            Ok((total, recipients))
-        } else {
-            Ok((0, vec![]))
-        }
-    }
-
     fn list_unsubscribed_recipients(&self, _hub_id: i32) -> RepositoryResult<Vec<Unsubscribe>> {
         Ok(vec![])
     }
