@@ -1,3 +1,4 @@
+//! Diesel ORM models used to persist domain data to SQLite.
 pub mod config;
 pub mod email;
 pub mod group;

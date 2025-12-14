@@ -1,3 +1,4 @@
+//! Main email workflow HTTP handlers.
 use std::error::Error;
 use std::sync::Arc;
 
@@ -12,11 +13,12 @@ use pushkind_common::zmq::ZmqSender;
 use serde::Deserialize;
 use tera::Tera;
 
+use crate::dto::main::ExportedEmailRecipients;
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::models::config::ServerConfig;
 use crate::repository::DieselRepository;
 use crate::services::main::{
-    ExportedEmailRecipients, delete_email as delete_email_service,
+    delete_email as delete_email_service,
     export_email_recipients as export_email_recipients_service, load_index_page, mark_email_opened,
     queue_email_retry, queue_new_email,
 };

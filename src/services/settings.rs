@@ -1,35 +1,16 @@
+//! Business logic for application settings and history.
+use crate::domain::hub::NewHub;
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::domain::emailer::hub::{Hub, NewHub};
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
+use validator::Validate;
 
-use pushkind_common::domain::emailer::email::EmailRecipient;
+use crate::dto::settings::{ExportedHistory, HistoryData, SettingsOverviewData, UnsubscribedData};
 
-use crate::domain::recipient::{CSVExportRecipient, Unsubscribe};
+use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::settings::SaveHubForm;
 use crate::models::config::ServerConfig;
 use crate::repository::{EmailRecipientReader, HubReader, HubWriter, RecipientReader};
-
-/// Data required to render the settings overview page.
-pub struct SettingsOverviewData {
-    pub hub: Hub,
-}
-
-/// Data required to render the unsubscribed recipients page.
-pub struct UnsubscribedData {
-    pub unsubscribed: Vec<Unsubscribe>,
-}
-
-/// Data required to render the history page.
-pub struct HistoryData {
-    pub history: Vec<EmailRecipient>,
-    pub crm_service_url: String,
-}
-
-/// Result of exporting recipient history as CSV.
-pub struct ExportedHistory {
-    pub bytes: Vec<u8>,
-}
 
 /// Loads the hub configuration, creating it if necessary.
 pub fn load_settings_overview<R>(
@@ -43,7 +24,10 @@ where
 
     let hub = match repo.get_hub_by_id(user.hub_id)? {
         Some(hub) => hub,
-        None => repo.create_hub(&NewHub::new(user.hub_id))?,
+        None => repo.create_hub(&NewHub::try_new(user.hub_id).map_err(|err| {
+            log::error!("Invalid hub id: {err}");
+            ServiceError::Internal
+        })?)?,
     };
 
     Ok(SettingsOverviewData { hub })
@@ -111,12 +95,21 @@ where
 {
     ensure_admin(user)?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let hub = match repo.get_hub_by_id(user.hub_id)? {
         Some(hub) => hub,
-        None => repo.create_hub(&NewHub::new(user.hub_id))?,
+        None => repo.create_hub(&NewHub::try_new(user.hub_id).map_err(|err| {
+            log::error!("Invalid hub id: {err}");
+            ServiceError::Internal
+        })?)?,
     };
 
-    repo.update_hub(hub.id, &form.into())?;
+    let updates = form
+        .try_into_update_hub()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+    repo.update_hub(hub.id.get(), &updates)?;
     Ok(())
 }
 

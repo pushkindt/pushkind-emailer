@@ -1,21 +1,15 @@
+//! Business logic for group management.
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
-use crate::domain::group::{Group, GroupWithRecipients};
-use crate::domain::recipient::Recipient;
+use crate::domain::group::GroupWithRecipients;
+use crate::dto::groups::GroupsOverviewData;
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
 };
-
-/// Data required to render the groups overview page.
-pub struct GroupsOverviewData {
-    pub groups: Vec<Group>,
-    pub custom_fields: Vec<String>,
-    pub recipients: Vec<Recipient>,
-}
 
 /// Loads the data required to render the groups overview page.
 pub fn load_groups_overview<R>(
@@ -53,7 +47,9 @@ where
     form.validate()
         .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-    let new_group = form.to_new_group(user.hub_id);
+    let new_group = form
+        .to_new_group(user.hub_id)
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
     repo.create_group(&new_group)?;
     Ok(())
 }
@@ -69,11 +65,14 @@ where
 {
     ensure_emailer(user)?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let group = repo
         .get_group_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.delete_group(group.group.id)?;
+    repo.delete_group(group.group.id.get())?;
     Ok(())
 }
 
@@ -87,11 +86,14 @@ where
     let form: AssignGroupRecipientForm =
         serde_html_form::from_bytes(payload).map_err(|err| ServiceError::Form(err.to_string()))?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let group = repo
         .get_group_by_id(form.group_id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.assign_recipients_to_group(group.group.id, form.recipient_id)?;
+    repo.assign_recipients_to_group(group.group.id.get(), form.recipient_id)?;
     Ok(())
 }
 

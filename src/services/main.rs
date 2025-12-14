@@ -1,33 +1,20 @@
+//! Business logic for email composition, sending, and tracking.
+use crate::domain::email::UpdateEmailRecipient;
+use crate::models::zmq::ZMQSendEmailMessage;
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::domain::emailer::email::{EmailWithRecipients, UpdateEmailRecipient};
-use pushkind_common::models::emailer::zmq::ZMQSendEmailMessage;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use pushkind_common::zmq::{ZmqSender, ZmqSenderExt};
+use validator::Validate;
 
-use crate::domain::group::Group;
-use crate::domain::recipient::{CSVExportRecipient, Recipient};
+use crate::domain::recipient::CSVExportRecipient;
+use crate::dto::main::{ExportedEmailRecipients, IndexPageData};
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::repository::{
     EmailListQuery, EmailReader, EmailRecipientReader, EmailWriter, GroupListQuery, GroupReader,
     RecipientListQuery, RecipientReader,
 };
-
-/// Data required to render the main index page.
-pub struct IndexPageData {
-    pub retry_email: Option<EmailWithRecipients>,
-    pub recipients: Vec<Recipient>,
-    pub groups: Vec<Group>,
-    pub emails: Paginated<EmailWithRecipients>,
-    pub custom_fields: Vec<String>,
-}
-
-/// Result of exporting recipients for a specific email.
-pub struct ExportedEmailRecipients {
-    pub filename: String,
-    pub bytes: Vec<u8>,
-}
 
 /// Loads the data required to render the index page.
 pub fn load_index_page<R>(
@@ -103,11 +90,14 @@ where
 {
     ensure_emailer(user)?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let email = repo
         .get_email_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.delete_email(email.email.id)?;
+    repo.delete_email(email.email.id.get())?;
     Ok(())
 }
 
@@ -123,11 +113,14 @@ where
 {
     ensure_emailer(user)?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let email = repo
         .get_email_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    let zmq_message = ZMQSendEmailMessage::RetryEmail((email.email.id, user.hub_id));
+    let zmq_message = ZMQSendEmailMessage::RetryEmail((email.email.id.get(), user.hub_id));
     zmq_sender.send_json(&zmq_message).await?;
     Ok(())
 }

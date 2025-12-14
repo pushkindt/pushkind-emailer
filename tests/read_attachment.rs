@@ -1,3 +1,4 @@
+//! Integration tests for reading stored email attachments.
 use actix_multipart::form::tempfile::TempFile;
 use pushkind_emailer::utils::read_attachment_file;
 use std::io::{Seek, SeekFrom, Write};

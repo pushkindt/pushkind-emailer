@@ -1,3 +1,4 @@
+//! Diesel models used for ZMQ-related persistence needs.
 use serde::{Deserialize, Serialize};
 
 use pushkind_common::domain::auth::AuthenticatedUser;

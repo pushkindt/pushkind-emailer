@@ -1,3 +1,4 @@
+//! Diesel models backing email and email recipient persistence.
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
@@ -9,6 +10,7 @@ use crate::domain::email::{
     Email as DomainEmail, EmailRecipient as DomainEmailRecipient, NewEmail as DomainNewEmail,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
+use crate::domain::types::TypeConstraintError;
 use crate::models::hub::Hub;
 
 #[derive(Queryable, Selectable, Serialize, Identifiable, Associations, QueryableByName)]
@@ -116,53 +118,63 @@ pub struct UpdateEmailRecipient<'a> {
     updated_at: Option<NaiveDateTime>,
 }
 
-impl From<Email> for DomainEmail {
-    fn from(value: Email) -> Self {
-        Self {
-            id: value.id,
-            message: value.message,
-            created_at: value.created_at,
-            is_sent: value.is_sent,
-            subject: value.subject,
-            attachment: value.attachment,
-            attachment_name: value.attachment_name,
-            attachment_mime: value.attachment_mime,
-            num_sent: value.num_sent,
-            num_opened: value.num_opened,
-            num_replied: value.num_replied,
-            hub_id: value.hub_id,
-        }
+impl TryFrom<Email> for DomainEmail {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: Email) -> Result<Self, Self::Error> {
+        DomainEmail::try_new(
+            value.id,
+            value.message,
+            value.created_at,
+            value.is_sent,
+            value.subject,
+            value.attachment,
+            value.attachment_name,
+            value.attachment_mime,
+            value.num_sent,
+            value.num_opened,
+            value.num_replied,
+            value.hub_id,
+        )
     }
 }
 
-impl From<EmailRecipient> for DomainEmailRecipient {
-    fn from(value: EmailRecipient) -> Self {
-        Self {
-            id: value.id,
-            email_id: value.email_id,
-            address: value.address,
-            opened: value.opened,
-            updated_at: value.updated_at,
-            is_sent: value.is_sent,
-            replied: value.replied,
-            name: value.name,
-            reply: value.reply,
-            fields: serde_json::from_str(&value.fields).unwrap_or_default(),
-        }
+impl TryFrom<EmailRecipient> for DomainEmailRecipient {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: EmailRecipient) -> Result<Self, Self::Error> {
+        DomainEmailRecipient::try_new(
+            value.id,
+            value.email_id,
+            value.address,
+            value.opened,
+            value.updated_at,
+            value.is_sent,
+            value.replied,
+            value.reply,
+            value.name,
+            serde_json::from_str(&value.fields).unwrap_or_default(),
+        )
     }
 }
 
 impl<'a> From<&'a DomainNewEmail> for NewEmail<'a> {
     fn from(value: &'a DomainNewEmail) -> Self {
         Self {
-            message: &value.message,
+            message: value.message.as_str(),
             created_at: Utc::now().naive_utc(),
             is_sent: false,
-            subject: value.subject.as_deref(),
+            subject: value.subject.as_ref().map(|subject| subject.as_str()),
             attachment: value.attachment.as_deref(),
-            attachment_name: value.attachment_name.as_deref(),
-            attachment_mime: value.attachment_mime.as_deref(),
-            hub_id: value.hub_id,
+            attachment_name: value
+                .attachment_name
+                .as_ref()
+                .map(|attachment_name| attachment_name.as_str()),
+            attachment_mime: value
+                .attachment_mime
+                .as_ref()
+                .map(|attachment_mime| attachment_mime.as_str()),
+            hub_id: value.hub_id.get(),
         }
     }
 }
@@ -173,7 +185,7 @@ impl<'a> From<&'a DomainUpdateEmailRecipient> for UpdateEmailRecipient<'a> {
             opened: value.opened,
             is_sent: value.is_sent,
             replied: value.replied,
-            reply: value.reply.as_deref(),
+            reply: value.reply.as_ref().map(|reply| reply.as_str()),
             updated_at: Some(chrono::Utc::now().naive_utc()),
         }
     }

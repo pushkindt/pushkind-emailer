@@ -1,3 +1,4 @@
+//! Recipient-related HTTP handlers.
 use actix_multipart::form::MultipartForm;
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};

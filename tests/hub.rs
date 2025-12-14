@@ -1,10 +1,12 @@
-use pushkind_common::domain::emailer::hub::Hub;
+//! Integration tests covering hub-related repository and service behavior.
+use pushkind_emailer::domain::hub::Hub;
+use pushkind_emailer::domain::types::{HubId, HubLogin, ImapUid};
 
 #[test]
 fn unsubscribe_url_with_login() {
     let hub = Hub {
-        id: 1,
-        login: Some("user@example.com".to_string()),
+        id: HubId::try_from(1).unwrap(),
+        login: Some(HubLogin::try_from("user@example.com").unwrap()),
         password: None,
         sender: None,
         smtp_server: None,
@@ -14,7 +16,7 @@ fn unsubscribe_url_with_login() {
         imap_server: None,
         imap_port: None,
         email_template: None,
-        imap_last_uid: 0,
+        imap_last_uid: ImapUid::try_from(0).unwrap(),
     };
     assert_eq!(
         hub.unsubscribe_url(),
@@ -25,7 +27,7 @@ fn unsubscribe_url_with_login() {
 #[test]
 fn unsubscribe_url_no_login() {
     let hub = Hub {
-        id: 1,
+        id: HubId::try_from(1).unwrap(),
         login: None,
         password: None,
         sender: None,
@@ -36,7 +38,7 @@ fn unsubscribe_url_no_login() {
         imap_server: None,
         imap_port: None,
         email_template: None,
-        imap_last_uid: 0,
+        imap_last_uid: ImapUid::try_from(0).unwrap(),
     };
     assert_eq!(hub.unsubscribe_url(), "");
 }

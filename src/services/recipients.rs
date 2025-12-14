@@ -1,11 +1,13 @@
+//! Business logic for recipient management and importing.
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
-use crate::domain::group::Group;
-use crate::domain::recipient::{NewRecipient, Recipient, RecipientWithGroups};
+use crate::domain::recipient::NewRecipient;
+use crate::domain::types::TypeConstraintError;
+use crate::dto::recipients::{RecipientModalData, RecipientsOverviewData};
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, SourceRecipientForm,
     UploadRecipientsForm,
@@ -13,18 +15,6 @@ use crate::forms::recipients::{
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader, RecipientWriter,
 };
-
-/// Data required to render the recipients overview page.
-pub struct RecipientsOverviewData {
-    pub recipients: Paginated<Recipient>,
-    pub search_query: Option<String>,
-}
-
-/// Data required to render the recipient modal dialog.
-pub struct RecipientModalData {
-    pub recipient: RecipientWithGroups,
-    pub groups: Vec<Group>,
-}
 
 /// Loads the data required to render the recipients overview page.
 pub fn load_recipients_overview<R>(
@@ -54,11 +44,7 @@ where
         list_query
     };
 
-    let (total, recipients) = if normalized_query.is_some() {
-        repo.search_recipients(list_query)?
-    } else {
-        repo.list_recipients(list_query)?
-    };
+    let (total, recipients) = repo.list_recipients(list_query)?;
 
     let total_pages = calculate_total_pages(total, DEFAULT_ITEMS_PER_PAGE);
     let recipients = Paginated::new(recipients, page, total_pages);
@@ -83,9 +69,11 @@ where
     form.validate()
         .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-    let mut new_recipient: NewRecipient = form.into();
-    new_recipient.hub_id = user.hub_id;
-
+    let new_recipient = NewRecipient::try_new(form.name, form.email, user.hub_id, None, None)
+        .map_err(|err| {
+            log::error!("Invalid recipient payload: {err}");
+            ServiceError::Form(err.to_string())
+        })?;
     repo.create_recipients(&[new_recipient])?;
     Ok(())
 }
@@ -101,11 +89,14 @@ where
 {
     ensure_emailer(user)?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let recipient = repo
         .get_recipient_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.delete_recipient(recipient.recipient.id)?;
+    repo.delete_recipient(recipient.recipient.id.get())?;
     Ok(())
 }
 
@@ -171,12 +162,18 @@ where
     let form: SaveRecipientForm =
         serde_html_form::from_bytes(payload).map_err(|err| ServiceError::Form(err.to_string()))?;
 
+    form.validate()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+
     let recipient = repo
         .get_recipient_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?
         .recipient;
 
-    repo.update_recipient(recipient.id, &form.into())?;
+    let updates = form
+        .try_into_update_recipient()
+        .map_err(|err: TypeConstraintError| ServiceError::Form(err.to_string()))?;
+    repo.update_recipient(recipient.id.get(), &updates)?;
     Ok(())
 }
 
@@ -195,14 +192,10 @@ where
     form.validate()
         .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-    let mut recipients = form
-        .load(cookie_value)
+    let recipients = form
+        .load(cookie_value, user.hub_id)
         .await
         .map_err(|err| ServiceError::Form(err.to_string()))?;
-
-    for recipient in &mut recipients {
-        recipient.hub_id = user.hub_id;
-    }
 
     repo.create_recipients(&recipients)?;
     Ok(())

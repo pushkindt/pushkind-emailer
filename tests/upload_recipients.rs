@@ -1,4 +1,6 @@
+//! Integration tests for recipient uploads.
 use actix_multipart::form::tempfile::TempFile;
+use pushkind_emailer::domain::types::{HubId, RecipientEmail, RecipientName};
 use pushkind_emailer::forms::recipients::UploadRecipientsForm;
 use std::collections::HashMap;
 use std::io::{Seek, SeekFrom, Write};
@@ -20,16 +22,22 @@ fn upload_recipients_parse() {
     let mut form = UploadRecipientsForm { csv: temp };
     let res = form.parse(42).unwrap();
     assert_eq!(res.len(), 2);
-    assert_eq!(res[0].name, "John");
-    assert_eq!(res[0].email, "john@example.com");
-    assert_eq!(res[0].hub_id, 42);
+    assert_eq!(res[0].name, RecipientName::new("John").unwrap());
+    assert_eq!(
+        res[0].email,
+        RecipientEmail::new("john@example.com").unwrap()
+    );
+    assert_eq!(res[0].hub_id, HubId::try_from(42).unwrap());
     assert_eq!(res[0].groups.as_ref().unwrap(), &vec!["group1".to_string()]);
     let mut fields = HashMap::new();
     fields.insert("foo".to_string(), "bar".to_string());
     assert_eq!(res[0].fields.as_ref().unwrap(), &fields);
 
-    assert_eq!(res[1].name, "Jane");
-    assert_eq!(res[1].email, "jane@example.com");
+    assert_eq!(res[1].name, RecipientName::new("Jane").unwrap());
+    assert_eq!(
+        res[1].email,
+        RecipientEmail::new("jane@example.com").unwrap()
+    );
     assert_eq!(res[1].groups.as_ref().unwrap(), &vec!["group1".to_string()]);
     let mut fields2 = HashMap::new();
     fields2.insert("foo".to_string(), "bar2".to_string());

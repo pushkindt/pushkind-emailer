@@ -1,11 +1,13 @@
+//! Diesel models backing recipient group persistence.
+use crate::models::hub::Hub;
 use diesel::prelude::*;
-use pushkind_common::models::emailer::hub::Hub;
 
 use crate::domain::group::{Group as DomainGroup, NewGroup as DomainNewGroup};
+use crate::domain::types::{GroupId, HubId, NonEmptyString, TypeConstraintError};
 use crate::models::recipient::Recipient;
 
 #[derive(Queryable, Selectable, Identifiable, Associations, Clone, QueryableByName)]
-#[diesel(table_name = pushkind_common::schema::emailer::groups)]
+#[diesel(table_name = crate::schema::groups)]
 #[diesel(belongs_to(Hub, foreign_key = hub_id))]
 #[diesel(foreign_derive)]
 pub struct Group {
@@ -17,14 +19,14 @@ pub struct Group {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = pushkind_common::schema::emailer::groups)]
+#[diesel(table_name = crate::schema::groups)]
 pub struct NewGroup<'a> {
     pub name: &'a str,
     pub hub_id: i32,
 }
 
 #[derive(Identifiable, Queryable, Selectable, Associations, Insertable)]
-#[diesel(table_name = pushkind_common::schema::emailer::groups_recipients)]
+#[diesel(table_name = crate::schema::groups_recipients)]
 #[diesel(belongs_to(Recipient, foreign_key = recipient_id))]
 #[diesel(belongs_to(Group, foreign_key = group_id))]
 #[diesel(primary_key(group_id, recipient_id))]
@@ -33,15 +35,17 @@ pub struct GroupRecipient {
     pub recipient_id: i32,
 }
 
-impl From<Group> for DomainGroup {
-    fn from(value: Group) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            hub_id: value.hub_id,
+impl TryFrom<Group> for DomainGroup {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: Group) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: GroupId::try_from(value.id)?,
+            name: NonEmptyString::try_from(value.name)?,
+            hub_id: HubId::try_from(value.hub_id)?,
             created_at: value.created_at,
             updated_at: value.updated_at,
-        }
+        })
     }
 }
 
@@ -49,7 +53,7 @@ impl<'a> From<&'a DomainNewGroup> for NewGroup<'a> {
     fn from(value: &'a DomainNewGroup) -> Self {
         Self {
             name: value.name.as_str(),
-            hub_id: value.hub_id,
+            hub_id: value.hub_id.get(),
         }
     }
 }

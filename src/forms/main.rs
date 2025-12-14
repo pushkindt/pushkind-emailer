@@ -1,12 +1,13 @@
+//! Email composition and sending form types.
 use std::collections::HashSet;
 
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
-use pushkind_common::{
-    domain::emailer::email::{NewEmail, NewEmailRecipient},
-    repository::errors::RepositoryResult,
-};
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 use serde::Deserialize;
+use validator::Validate;
 
+use crate::domain::email::{NewEmail, NewEmailRecipient};
+use crate::domain::types::RecipientEmail;
 use crate::{
     repository::{EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader},
     utils::read_attachment_file,
@@ -24,14 +25,16 @@ pub struct SendEmailForm {
 }
 
 /// Form data to remove an existing email.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct DeleteEmailForm {
+    #[validate(range(min = 1))]
     pub id: i32,
 }
 
 /// Form data to resend an existing email (only unsent).
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct ResendEmailForm {
+    #[validate(range(min = 1))]
     pub id: i32,
 }
 
@@ -101,11 +104,11 @@ impl SendEmailForm {
 
         recipients.extend(individual_recipients);
 
-        recipients.sort_by(|a, b| a.address.cmp(&b.address));
+        recipients.sort_by(|a, b| a.address.as_str().cmp(b.address.as_str()));
         recipients.dedup_by(|a, b| a.address == b.address);
 
         if let Some(days) = cooldown_days.filter(|d| *d > 0) {
-            let recent_addresses: HashSet<String> = repo
+            let recent_addresses: HashSet<RecipientEmail> = repo
                 .list_recent_recipients(hub_id, Some(days))?
                 .into_iter()
                 .map(|recipient| recipient.address)
@@ -116,14 +119,15 @@ impl SendEmailForm {
             }
         }
 
-        Ok(NewEmail {
+        NewEmail::try_new(
             hub_id,
-            message: ammonia::clean(&self.message.0),
-            subject: self.subject.0,
+            ammonia::clean(&self.message.0),
+            self.subject.0,
             attachment,
-            attachment_mime,
             attachment_name,
+            attachment_mime,
             recipients,
-        })
+        )
+        .map_err(|err| RepositoryError::ValidationError(err.to_string()))
     }
 }

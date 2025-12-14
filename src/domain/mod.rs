@@ -1,3 +1,4 @@
+//! Domain layer types and invariants.
 pub mod email;
 pub mod group;
 pub mod hub;

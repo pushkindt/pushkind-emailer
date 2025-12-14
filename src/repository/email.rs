@@ -1,16 +1,18 @@
+//! Repository operations for emails and email recipients.
 use std::collections::HashSet;
 
-use chrono::{Duration, NaiveDateTime, Utc};
-use diesel::prelude::*;
-use pushkind_common::domain::emailer::email::{
+use crate::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
-use pushkind_common::models::emailer::email::{
+use crate::domain::types::TypeConstraintError;
+use crate::models::email::{
     Email as DbEmail, EmailRecipient as DbEmailRecipient,
     UpdateEmailRecipient as DbUpdateEmailRecipient,
 };
-use pushkind_common::repository::errors::RepositoryResult;
+use chrono::{Duration, NaiveDateTime, Utc};
+use diesel::prelude::*;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use super::helpers::apply_pagination;
 use crate::repository::{
@@ -23,74 +25,100 @@ impl EmailReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
 
-        let email = emails::table
-            .filter(emails::id.eq(id))
-            .filter(emails::hub_id.eq(hub_id))
-            .select(DbEmail::as_select())
-            .first::<DbEmail>(&mut conn)
-            .optional()?;
+        conn.transaction::<Option<DomainEmailWithRecipients>, RepositoryError, _>(|conn| {
+            let email = emails::table
+                .filter(emails::id.eq(id))
+                .filter(emails::hub_id.eq(hub_id))
+                .select(DbEmail::as_select())
+                .first::<DbEmail>(conn)
+                .optional()?;
 
-        if let Some(email) = email {
+            let Some(email) = email else {
+                return Ok(None);
+            };
+
             let recipients = email_recipients::table
                 .filter(email_recipients::email_id.eq(email.id))
                 .select(DbEmailRecipient::as_select())
-                .load::<DbEmailRecipient>(&mut conn)?;
+                .load::<DbEmailRecipient>(conn)?;
 
-            Ok(Some(DomainEmailWithRecipients {
-                email: email.into(),
-                recipients: recipients.into_iter().map(Into::into).collect(),
-            }))
-        } else {
-            Ok(None)
-        }
+            let email = DomainEmailWithRecipients {
+                email: email.try_into().map_err(|err: TypeConstraintError| {
+                    RepositoryError::ValidationError(err.to_string())
+                })?,
+                recipients: recipients
+                    .into_iter()
+                    .map(|recipient| {
+                        recipient.try_into().map_err(|err: TypeConstraintError| {
+                            RepositoryError::ValidationError(err.to_string())
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            };
+
+            Ok(Some(email))
+        })
     }
 
     fn list_emails(
         &self,
         query: EmailListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainEmailWithRecipients>)> {
-        use pushkind_common::schema::emailer::emails;
+        use crate::schema::emails;
         let mut conn = self.conn()?;
 
-        let query_builder = || {
-            emails::table
-                .filter(emails::hub_id.eq(query.hub_id))
-                .select(DbEmail::as_select())
-                .into_boxed::<diesel::sqlite::Sqlite>()
-        };
+        conn.transaction::<(usize, Vec<DomainEmailWithRecipients>), RepositoryError, _>(|conn| {
+            let query_builder = || {
+                emails::table
+                    .filter(emails::hub_id.eq(query.hub_id))
+                    .select(DbEmail::as_select())
+                    .into_boxed::<diesel::sqlite::Sqlite>()
+            };
 
-        let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
+            let total = query_builder().count().get_result::<i64>(conn)? as usize;
 
-        let mut items = query_builder();
-        items = apply_pagination(items, query.pagination.as_ref());
+            let mut items = query_builder();
+            items = apply_pagination(items, query.pagination.as_ref());
 
-        let db_emails = items
-            .order(emails::created_at.desc())
-            .load::<DbEmail>(&mut conn)?;
+            let db_emails = items
+                .order(emails::created_at.desc())
+                .load::<DbEmail>(conn)?;
 
-        if db_emails.is_empty() {
-            return Ok((total, vec![]));
-        }
+            if db_emails.is_empty() {
+                return Ok((total, vec![]));
+            }
 
-        let db_recipients: Vec<DbEmailRecipient> = DbEmailRecipient::belonging_to(&db_emails)
-            .select(DbEmailRecipient::as_select())
-            .load(&mut conn)?;
+            let db_recipients: Vec<DbEmailRecipient> = DbEmailRecipient::belonging_to(&db_emails)
+                .select(DbEmailRecipient::as_select())
+                .load(conn)?;
 
-        let grouped = db_recipients.grouped_by(&db_emails);
+            let grouped = db_recipients.grouped_by(&db_emails);
 
-        let result: Vec<DomainEmailWithRecipients> = db_emails
-            .into_iter()
-            .zip(grouped)
-            .map(|(email, recipients)| DomainEmailWithRecipients {
-                email: email.into(),
-                recipients: recipients.into_iter().map(Into::into).collect(),
-            })
-            .collect();
+            let result: Vec<DomainEmailWithRecipients> = db_emails
+                .into_iter()
+                .zip(grouped)
+                .map(|(email, recipients)| {
+                    Ok::<_, RepositoryError>(DomainEmailWithRecipients {
+                        email: email.try_into().map_err(|err: TypeConstraintError| {
+                            RepositoryError::ValidationError(err.to_string())
+                        })?,
+                        recipients: recipients
+                            .into_iter()
+                            .map(|recipient| {
+                                recipient.try_into().map_err(|err: TypeConstraintError| {
+                                    RepositoryError::ValidationError(err.to_string())
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
 
-        Ok((total, result))
+            Ok((total, result))
+        })
     }
 }
 
@@ -102,7 +130,7 @@ impl EmailRecipientReader for DieselRepository {
         // after `number_of_days` ago. `None` skips filtering.
         number_of_days: Option<i64>,
     ) -> RepositoryResult<Vec<DomainEmailRecipient>> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
 
         let mut conn = self.conn()?;
 
@@ -130,10 +158,10 @@ impl EmailRecipientReader for DieselRepository {
             .load(&mut conn)?;
 
         // Step 2: Keep only the first row per address (Rust-side dedup)
-        let mut seen = HashSet::new();
+        let mut seen: HashSet<String> = HashSet::new();
         let mut latest = Vec::with_capacity(rows.len());
         for (recipient, email_created_at) in rows {
-            if seen.insert(recipient.address.clone()) {
+            if seen.insert(recipient.address.trim().to_lowercase()) {
                 latest.push((recipient, email_created_at));
             }
         }
@@ -144,10 +172,14 @@ impl EmailRecipientReader for DieselRepository {
                 .then_with(|| b.0.updated_at.cmp(&a.0.updated_at))
         });
 
-        Ok(latest
+        latest
             .into_iter()
-            .map(|(recipient, _)| recipient.into())
-            .collect())
+            .map(|(recipient, _)| {
+                recipient.try_into().map_err(|err: TypeConstraintError| {
+                    RepositoryError::ValidationError(err.to_string())
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 
@@ -157,43 +189,56 @@ impl EmailWriter for DieselRepository {
         recipient_id: i32,
         updates: &DomainUpdateEmailRecipient,
     ) -> RepositoryResult<DomainEmailWithRecipients> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
 
         let mut conn = self.conn()?;
-        let email_id: i32 = email_recipients::table
-            .filter(email_recipients::id.eq(recipient_id))
-            .select(email_recipients::email_id)
-            .first(&mut conn)?;
+        conn.transaction::<DomainEmailWithRecipients, RepositoryError, _>(|conn| {
+            let email_id: i32 = email_recipients::table
+                .filter(email_recipients::id.eq(recipient_id))
+                .select(email_recipients::email_id)
+                .first(conn)?;
 
-        let changeset = DbUpdateEmailRecipient::from(updates);
-        diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
-            .set(changeset)
-            .execute(&mut conn)?;
+            let changeset = DbUpdateEmailRecipient::from(updates);
+            diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
+                .set(changeset)
+                .execute(conn)?;
 
-        DbEmail::recalc_email_stats(&mut conn, email_id)?;
+            DbEmail::recalc_email_stats(conn, email_id)?;
 
-        let email = emails::table
-            .filter(emails::id.eq(email_id))
-            .select(DbEmail::as_select())
-            .first::<DbEmail>(&mut conn)?;
+            let email = emails::table
+                .filter(emails::id.eq(email_id))
+                .select(DbEmail::as_select())
+                .first::<DbEmail>(conn)?;
 
-        let recipients = DbEmailRecipient::belonging_to(&email)
-            .select(DbEmailRecipient::as_select())
-            .load::<DbEmailRecipient>(&mut conn)?;
+            let recipients = DbEmailRecipient::belonging_to(&email)
+                .select(DbEmailRecipient::as_select())
+                .load::<DbEmailRecipient>(conn)?;
 
-        Ok(DomainEmailWithRecipients {
-            email: email.into(),
-            recipients: recipients.into_iter().map(Into::into).collect(),
+            Ok(DomainEmailWithRecipients {
+                email: email.try_into().map_err(|err: TypeConstraintError| {
+                    RepositoryError::ValidationError(err.to_string())
+                })?,
+                recipients: recipients
+                    .into_iter()
+                    .map(|recipient| {
+                        recipient.try_into().map_err(|err: TypeConstraintError| {
+                            RepositoryError::ValidationError(err.to_string())
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
         })
     }
 
     fn delete_email(&self, id: i32) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
-        diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
-            .execute(&mut conn)?;
-        diesel::delete(emails::table.filter(emails::id.eq(id))).execute(&mut conn)?;
-        Ok(())
+        conn.transaction::<(), RepositoryError, _>(|conn| {
+            diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
+                .execute(conn)?;
+            diesel::delete(emails::table.filter(emails::id.eq(id))).execute(conn)?;
+            Ok(())
+        })
     }
 }
 
@@ -204,6 +249,8 @@ mod tests {
     use diesel::connection::SimpleConnection;
     use pushkind_common::db::{DbPool, establish_connection_pool};
     use tempfile::{TempDir, tempdir};
+
+    use crate::domain::types::{EmailId, RecipientEmail, RecipientName};
 
     fn setup_db() -> (TempDir, DbPool) {
         let dir = tempdir().unwrap();
@@ -335,14 +382,17 @@ mod tests {
 
         let recipient_a = recipients
             .iter()
-            .find(|recipient| recipient.address == "a@example.com")
+            .find(|recipient| recipient.address == RecipientEmail::new("a@example.com").unwrap())
             .unwrap();
-        assert_eq!(recipient_a.email_id, 2);
+        assert_eq!(recipient_a.email_id, EmailId::try_from(2).unwrap());
         assert!(recipient_a.opened);
         assert!(recipient_a.is_sent);
         assert!(recipient_a.replied);
-        assert_eq!(recipient_a.reply.as_deref(), Some("Thanks"));
-        assert_eq!(recipient_a.name, "New A");
+        assert_eq!(
+            recipient_a.reply.as_ref().map(|reply| reply.as_str()),
+            Some("Thanks")
+        );
+        assert_eq!(recipient_a.name, RecipientName::new("New A").unwrap());
         assert_eq!(
             recipient_a.fields.get("segment").map(String::as_str),
             Some("new")
@@ -350,10 +400,10 @@ mod tests {
 
         let recipient_b = recipients
             .iter()
-            .find(|recipient| recipient.address == "b@example.com")
+            .find(|recipient| recipient.address == RecipientEmail::new("b@example.com").unwrap())
             .unwrap();
-        assert_eq!(recipient_b.email_id, 2);
-        assert_eq!(recipient_b.name, "Bee");
+        assert_eq!(recipient_b.email_id, EmailId::try_from(2).unwrap());
+        assert_eq!(recipient_b.name, RecipientName::new("Bee").unwrap());
         assert_eq!(
             recipient_b.fields.get("segment").map(String::as_str),
             Some("bee")
@@ -361,8 +411,14 @@ mod tests {
 
         let recipients_hub2 = repo.list_recent_recipients(2, None).unwrap();
         assert_eq!(recipients_hub2.len(), 1);
-        assert_eq!(recipients_hub2[0].address, "a@example.com");
-        assert_eq!(recipients_hub2[0].name, "Hub2 A");
+        assert_eq!(
+            recipients_hub2[0].address,
+            RecipientEmail::new("a@example.com").unwrap()
+        );
+        assert_eq!(
+            recipients_hub2[0].name,
+            RecipientName::new("Hub2 A").unwrap()
+        );
         assert_eq!(
             recipients_hub2[0].fields.get("segment").map(String::as_str),
             Some("hub2")
@@ -409,6 +465,9 @@ mod tests {
 
         let filtered = repo.list_recent_recipients(1, Some(3)).unwrap();
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].address, "fast@example.com");
+        assert_eq!(
+            filtered[0].address,
+            RecipientEmail::new("fast@example.com").unwrap()
+        );
     }
 }

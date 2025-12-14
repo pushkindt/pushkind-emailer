@@ -1,3 +1,4 @@
+//! Settings and history HTTP handlers.
 use actix_web::{HttpResponse, Responder, get, post, web};
 use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
 use pushkind_common::domain::auth::AuthenticatedUser;
@@ -6,12 +7,12 @@ use pushkind_common::routes::{base_context, redirect, render_template};
 use pushkind_common::services::errors::ServiceError;
 use tera::Tera;
 
+use crate::dto::settings::ExportedHistory;
 use crate::forms::settings::SaveHubForm;
 use crate::models::config::ServerConfig;
 use crate::repository::DieselRepository;
 use crate::services::settings::{
-    ExportedHistory, export_history, load_history, load_settings_overview, load_unsubscribed,
-    save_hub,
+    export_history, load_history, load_settings_overview, load_unsubscribed, save_hub,
 };
 
 #[get("/settings")]
