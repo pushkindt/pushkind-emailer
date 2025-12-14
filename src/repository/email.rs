@@ -27,18 +27,22 @@ impl EmailReader for DieselRepository {
         use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
 
-        let email = emails::table
-            .filter(emails::id.eq(id))
-            .filter(emails::hub_id.eq(hub_id))
-            .select(DbEmail::as_select())
-            .first::<DbEmail>(&mut conn)
-            .optional()?;
+        conn.transaction::<Option<DomainEmailWithRecipients>, RepositoryError, _>(|conn| {
+            let email = emails::table
+                .filter(emails::id.eq(id))
+                .filter(emails::hub_id.eq(hub_id))
+                .select(DbEmail::as_select())
+                .first::<DbEmail>(conn)
+                .optional()?;
 
-        if let Some(email) = email {
+            let Some(email) = email else {
+                return Ok(None);
+            };
+
             let recipients = email_recipients::table
                 .filter(email_recipients::email_id.eq(email.id))
                 .select(DbEmailRecipient::as_select())
-                .load::<DbEmailRecipient>(&mut conn)?;
+                .load::<DbEmailRecipient>(conn)?;
 
             let email = DomainEmailWithRecipients {
                 email: email.try_into().map_err(|err: TypeConstraintError| {
@@ -55,9 +59,7 @@ impl EmailReader for DieselRepository {
             };
 
             Ok(Some(email))
-        } else {
-            Ok(None)
-        }
+        })
     }
 
     fn list_emails(
@@ -67,53 +69,55 @@ impl EmailReader for DieselRepository {
         use crate::schema::emails;
         let mut conn = self.conn()?;
 
-        let query_builder = || {
-            emails::table
-                .filter(emails::hub_id.eq(query.hub_id))
-                .select(DbEmail::as_select())
-                .into_boxed::<diesel::sqlite::Sqlite>()
-        };
+        conn.transaction::<(usize, Vec<DomainEmailWithRecipients>), RepositoryError, _>(|conn| {
+            let query_builder = || {
+                emails::table
+                    .filter(emails::hub_id.eq(query.hub_id))
+                    .select(DbEmail::as_select())
+                    .into_boxed::<diesel::sqlite::Sqlite>()
+            };
 
-        let total = query_builder().count().get_result::<i64>(&mut conn)? as usize;
+            let total = query_builder().count().get_result::<i64>(conn)? as usize;
 
-        let mut items = query_builder();
-        items = apply_pagination(items, query.pagination.as_ref());
+            let mut items = query_builder();
+            items = apply_pagination(items, query.pagination.as_ref());
 
-        let db_emails = items
-            .order(emails::created_at.desc())
-            .load::<DbEmail>(&mut conn)?;
+            let db_emails = items
+                .order(emails::created_at.desc())
+                .load::<DbEmail>(conn)?;
 
-        if db_emails.is_empty() {
-            return Ok((total, vec![]));
-        }
+            if db_emails.is_empty() {
+                return Ok((total, vec![]));
+            }
 
-        let db_recipients: Vec<DbEmailRecipient> = DbEmailRecipient::belonging_to(&db_emails)
-            .select(DbEmailRecipient::as_select())
-            .load(&mut conn)?;
+            let db_recipients: Vec<DbEmailRecipient> = DbEmailRecipient::belonging_to(&db_emails)
+                .select(DbEmailRecipient::as_select())
+                .load(conn)?;
 
-        let grouped = db_recipients.grouped_by(&db_emails);
+            let grouped = db_recipients.grouped_by(&db_emails);
 
-        let result: Vec<DomainEmailWithRecipients> = db_emails
-            .into_iter()
-            .zip(grouped)
-            .map(|(email, recipients)| {
-                Ok::<_, RepositoryError>(DomainEmailWithRecipients {
-                    email: email.try_into().map_err(|err: TypeConstraintError| {
-                        RepositoryError::ValidationError(err.to_string())
-                    })?,
-                    recipients: recipients
-                        .into_iter()
-                        .map(|recipient| {
-                            recipient.try_into().map_err(|err: TypeConstraintError| {
-                                RepositoryError::ValidationError(err.to_string())
+            let result: Vec<DomainEmailWithRecipients> = db_emails
+                .into_iter()
+                .zip(grouped)
+                .map(|(email, recipients)| {
+                    Ok::<_, RepositoryError>(DomainEmailWithRecipients {
+                        email: email.try_into().map_err(|err: TypeConstraintError| {
+                            RepositoryError::ValidationError(err.to_string())
+                        })?,
+                        recipients: recipients
+                            .into_iter()
+                            .map(|recipient| {
+                                recipient.try_into().map_err(|err: TypeConstraintError| {
+                                    RepositoryError::ValidationError(err.to_string())
+                                })
                             })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
+                            .collect::<Result<Vec<_>, _>>()?,
+                    })
                 })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, _>>()?;
 
-        Ok((total, result))
+            Ok((total, result))
+        })
     }
 }
 
@@ -187,49 +191,53 @@ impl EmailWriter for DieselRepository {
         use crate::schema::{email_recipients, emails};
 
         let mut conn = self.conn()?;
-        let email_id: i32 = email_recipients::table
-            .filter(email_recipients::id.eq(recipient_id))
-            .select(email_recipients::email_id)
-            .first(&mut conn)?;
+        conn.transaction::<DomainEmailWithRecipients, RepositoryError, _>(|conn| {
+            let email_id: i32 = email_recipients::table
+                .filter(email_recipients::id.eq(recipient_id))
+                .select(email_recipients::email_id)
+                .first(conn)?;
 
-        let changeset = DbUpdateEmailRecipient::from(updates);
-        diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
-            .set(changeset)
-            .execute(&mut conn)?;
+            let changeset = DbUpdateEmailRecipient::from(updates);
+            diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
+                .set(changeset)
+                .execute(conn)?;
 
-        DbEmail::recalc_email_stats(&mut conn, email_id)?;
+            DbEmail::recalc_email_stats(conn, email_id)?;
 
-        let email = emails::table
-            .filter(emails::id.eq(email_id))
-            .select(DbEmail::as_select())
-            .first::<DbEmail>(&mut conn)?;
+            let email = emails::table
+                .filter(emails::id.eq(email_id))
+                .select(DbEmail::as_select())
+                .first::<DbEmail>(conn)?;
 
-        let recipients = DbEmailRecipient::belonging_to(&email)
-            .select(DbEmailRecipient::as_select())
-            .load::<DbEmailRecipient>(&mut conn)?;
+            let recipients = DbEmailRecipient::belonging_to(&email)
+                .select(DbEmailRecipient::as_select())
+                .load::<DbEmailRecipient>(conn)?;
 
-        Ok(DomainEmailWithRecipients {
-            email: email.try_into().map_err(|err: TypeConstraintError| {
-                RepositoryError::ValidationError(err.to_string())
-            })?,
-            recipients: recipients
-                .into_iter()
-                .map(|recipient| {
-                    recipient.try_into().map_err(|err: TypeConstraintError| {
-                        RepositoryError::ValidationError(err.to_string())
+            Ok(DomainEmailWithRecipients {
+                email: email.try_into().map_err(|err: TypeConstraintError| {
+                    RepositoryError::ValidationError(err.to_string())
+                })?,
+                recipients: recipients
+                    .into_iter()
+                    .map(|recipient| {
+                        recipient.try_into().map_err(|err: TypeConstraintError| {
+                            RepositoryError::ValidationError(err.to_string())
+                        })
                     })
-                })
-                .collect::<Result<Vec<_>, _>>()?,
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
         })
     }
 
     fn delete_email(&self, id: i32) -> RepositoryResult<()> {
         use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
-        diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
-            .execute(&mut conn)?;
-        diesel::delete(emails::table.filter(emails::id.eq(id))).execute(&mut conn)?;
-        Ok(())
+        conn.transaction::<(), RepositoryError, _>(|conn| {
+            diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
+                .execute(conn)?;
+            diesel::delete(emails::table.filter(emails::id.eq(id))).execute(conn)?;
+            Ok(())
+        })
     }
 }
 
