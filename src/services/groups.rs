@@ -3,19 +3,12 @@ use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
-use crate::domain::group::{Group, GroupWithRecipients};
-use crate::domain::recipient::Recipient;
+use crate::domain::group::GroupWithRecipients;
+use crate::dto::groups::GroupsOverviewData;
 use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupForm};
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
 };
-
-/// Data required to render the groups overview page.
-pub struct GroupsOverviewData {
-    pub groups: Vec<Group>,
-    pub custom_fields: Vec<String>,
-    pub recipients: Vec<Recipient>,
-}
 
 /// Loads the data required to render the groups overview page.
 pub fn load_groups_overview<R>(

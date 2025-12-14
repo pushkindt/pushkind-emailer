@@ -34,6 +34,7 @@ use crate::routes::settings::{
 };
 
 pub mod domain;
+pub mod dto;
 pub mod forms;
 pub mod models;
 pub mod repository;

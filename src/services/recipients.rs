@@ -4,8 +4,8 @@ use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
-use crate::domain::group::Group;
-use crate::domain::recipient::{NewRecipient, Recipient, RecipientWithGroups};
+use crate::domain::recipient::NewRecipient;
+use crate::dto::recipients::{RecipientModalData, RecipientsOverviewData};
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, SourceRecipientForm,
     UploadRecipientsForm,
@@ -13,18 +13,6 @@ use crate::forms::recipients::{
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader, RecipientWriter,
 };
-
-/// Data required to render the recipients overview page.
-pub struct RecipientsOverviewData {
-    pub recipients: Paginated<Recipient>,
-    pub search_query: Option<String>,
-}
-
-/// Data required to render the recipient modal dialog.
-pub struct RecipientModalData {
-    pub recipient: RecipientWithGroups,
-    pub groups: Vec<Group>,
-}
 
 /// Loads the data required to render the recipients overview page.
 pub fn load_recipients_overview<R>(

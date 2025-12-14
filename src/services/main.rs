@@ -1,33 +1,18 @@
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::domain::emailer::email::{EmailWithRecipients, UpdateEmailRecipient};
+use pushkind_common::domain::emailer::email::UpdateEmailRecipient;
 use pushkind_common::models::emailer::zmq::ZMQSendEmailMessage;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use pushkind_common::zmq::{ZmqSender, ZmqSenderExt};
 
-use crate::domain::group::Group;
-use crate::domain::recipient::{CSVExportRecipient, Recipient};
+use crate::domain::recipient::CSVExportRecipient;
+use crate::dto::main::{ExportedEmailRecipients, IndexPageData};
 use crate::forms::main::{DeleteEmailForm, ResendEmailForm, SendEmailForm};
 use crate::repository::{
     EmailListQuery, EmailReader, EmailRecipientReader, EmailWriter, GroupListQuery, GroupReader,
     RecipientListQuery, RecipientReader,
 };
-
-/// Data required to render the main index page.
-pub struct IndexPageData {
-    pub retry_email: Option<EmailWithRecipients>,
-    pub recipients: Vec<Recipient>,
-    pub groups: Vec<Group>,
-    pub emails: Paginated<EmailWithRecipients>,
-    pub custom_fields: Vec<String>,
-}
-
-/// Result of exporting recipients for a specific email.
-pub struct ExportedEmailRecipients {
-    pub filename: String,
-    pub bytes: Vec<u8>,
-}
 
 /// Loads the data required to render the index page.
 pub fn load_index_page<R>(

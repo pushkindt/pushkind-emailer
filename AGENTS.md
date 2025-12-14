@@ -9,7 +9,7 @@ architecture and conventions.
 `pushkind-emailer` is a Rust 2024 Actix Web application that uses Diesel with
 SQLite, Tera templates, and the shared `pushkind-common` crate. The codebase is
 layered into domain models, repository traits and implementations, service
-modules, Actix routes, forms, and templates. Business logic belongs in the
+modules, DTOs, Actix routes, forms, and templates. Business logic belongs in the
 service layer; handlers and repositories should stay thin and focused on I/O
 concerns. Routes must never implement business rules; they only orchestrate the
 service calls and surface the outcomes.
@@ -41,11 +41,14 @@ cargo fmt --all -- --check
 ## Coding Standards
 
 - Use idiomatic Rust; avoid `unwrap` and `expect` in production paths.
-- Keep modules focused: domain types in `src/domain`, Diesel models in
+- Keep modules focused: domain types in `src/domain`, DTOs in `src/dto`, Diesel models in
   `src/models`, and conversions implemented via `From`/`Into`.
 - Define error enums with `thiserror` inside the crate that owns the failure and
   return `RepositoryResult<T>` / `ServiceResult<T>` from repository and service
   functions.
+- Services should return DTO-level structs when handing data to routes; perform
+  domain-to-DTO conversion inside the service layer to keep handlers thin. DTOs
+  live in `src/dto` and are optimized for template rendering or JSON serialization.
 - Service functions should accept trait bounds
   (e.g., `RecipientReader + RecipientWriter`)
   so the `DieselRepository` and `mockall`-powered fakes remain interchangeable.
