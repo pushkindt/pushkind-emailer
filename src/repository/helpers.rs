@@ -1,3 +1,4 @@
+//! Shared Diesel query helpers used by repository implementations.
 use std::collections::HashMap;
 
 use diesel::prelude::*;

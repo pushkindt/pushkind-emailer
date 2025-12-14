@@ -1,3 +1,4 @@
+//! DTOs used by settings pages and templates.
 use crate::domain::email::EmailRecipient;
 use crate::domain::hub::Hub;
 

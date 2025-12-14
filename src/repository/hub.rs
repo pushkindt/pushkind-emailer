@@ -1,3 +1,4 @@
+//! Repository operations for hubs.
 use crate::domain::hub::{Hub as DomainHub, NewHub as DomainNewHub, UpdateHub as DomainUpdateHub};
 use crate::models::hub::{Hub as DbHub, NewHub as DbNewHub, UpdateHub as DbUpdateHub};
 use diesel::prelude::*;

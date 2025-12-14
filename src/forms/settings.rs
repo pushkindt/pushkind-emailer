@@ -1,3 +1,4 @@
+//! Settings-related form types and input validation.
 use pushkind_common::routes::empty_string_as_none;
 use serde::Deserialize;
 use validator::Validate;

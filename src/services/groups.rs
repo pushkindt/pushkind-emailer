@@ -1,3 +1,4 @@
+//! Business logic for group management.
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};

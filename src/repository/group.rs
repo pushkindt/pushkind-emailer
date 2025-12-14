@@ -1,3 +1,4 @@
+//! Repository operations for recipient groups.
 use diesel::prelude::*;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 

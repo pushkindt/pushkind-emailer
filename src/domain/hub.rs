@@ -1,3 +1,4 @@
+//! Domain types representing hubs.
 use chrono::NaiveDateTime;
 use serde::Serialize;
 

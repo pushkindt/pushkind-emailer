@@ -1,3 +1,4 @@
+//! Diesel models backing email and email recipient persistence.
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use serde::Serialize;

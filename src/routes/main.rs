@@ -1,3 +1,4 @@
+//! Main email workflow HTTP handlers.
 use std::error::Error;
 use std::sync::Arc;
 

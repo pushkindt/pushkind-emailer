@@ -1,3 +1,4 @@
+//! Recipient-related form types and input validation.
 use std::collections::HashMap;
 use std::io::Read;
 

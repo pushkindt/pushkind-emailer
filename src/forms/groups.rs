@@ -1,3 +1,4 @@
+//! Group-related form types and input validation.
 use serde::Deserialize;
 use validator::Validate;
 

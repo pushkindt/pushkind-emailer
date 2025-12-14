@@ -1,3 +1,4 @@
+//! Multipart and file-upload form types.
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
 
 /// Form used to upload a single file via multipart request.

@@ -1,3 +1,4 @@
+//! Business logic for application settings and history.
 use crate::domain::hub::NewHub;
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::routes::check_role;

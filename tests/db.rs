@@ -1,3 +1,4 @@
+//! Integration test helpers for setting up an isolated test database.
 mod common;
 
 #[test]

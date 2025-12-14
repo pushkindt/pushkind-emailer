@@ -1,3 +1,4 @@
+//! Domain types for recipients and subscriptions.
 use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
@@ -10,7 +11,7 @@ use crate::domain::types::{
     UnsubscribeReason,
 };
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 /// An individual that can receive emails from a hub.
 pub struct Recipient {
     /// Database identifier of the recipient.

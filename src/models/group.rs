@@ -1,3 +1,4 @@
+//! Diesel models backing recipient group persistence.
 use crate::models::hub::Hub;
 use diesel::prelude::*;
 

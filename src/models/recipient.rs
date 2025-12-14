@@ -1,3 +1,4 @@
+//! Diesel models backing recipient persistence.
 use crate::models::hub::Hub;
 use diesel::prelude::*;
 use serde::Serialize;

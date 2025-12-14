@@ -1,3 +1,4 @@
+//! Domain types for emails and email recipients.
 use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
@@ -9,7 +10,7 @@ use crate::domain::types::{
     RecipientName, TypeConstraintError,
 };
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 /// An email message stored in the system.
 pub struct Email {
     /// Database identifier of the email.
@@ -105,7 +106,7 @@ impl Email {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 /// A single email address targeted by an email.
 pub struct EmailRecipient {
     /// Identifier of the record.
@@ -187,7 +188,7 @@ impl EmailRecipient {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 /// A convenience wrapper containing an email and its recipients.
 pub struct EmailWithRecipients {
     /// The email message.

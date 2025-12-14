@@ -1,3 +1,4 @@
+//! DTOs used by main (email) pages and templates.
 use crate::domain::email::EmailWithRecipients;
 use pushkind_common::pagination::Paginated;
 

@@ -1,3 +1,4 @@
+//! Integration tests for recipient uploads.
 use actix_multipart::form::tempfile::TempFile;
 use pushkind_emailer::domain::types::{HubId, RecipientEmail, RecipientName};
 use pushkind_emailer::forms::recipients::UploadRecipientsForm;

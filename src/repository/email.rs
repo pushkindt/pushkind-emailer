@@ -1,3 +1,4 @@
+//! Repository operations for emails and email recipients.
 use std::collections::HashSet;
 
 use crate::domain::email::{

@@ -1,3 +1,4 @@
+//! DTOs used by group-related routes and templates.
 use crate::domain::group::Group;
 use crate::domain::recipient::Recipient;
 

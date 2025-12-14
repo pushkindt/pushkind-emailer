@@ -1,3 +1,4 @@
+//! Email composition and sending form types.
 use std::collections::HashSet;
 
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};

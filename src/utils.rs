@@ -1,3 +1,4 @@
+//! Small utility helpers shared across the crate.
 use std::io::Read;
 
 use actix_multipart::form::tempfile::TempFile;

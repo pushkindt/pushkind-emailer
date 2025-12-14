@@ -1,3 +1,4 @@
+//! Integration tests covering email form validation and handling.
 use std::{
     collections::HashMap,
     io::{Seek, SeekFrom, Write},

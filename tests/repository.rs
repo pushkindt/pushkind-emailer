@@ -1,3 +1,4 @@
+//! Integration tests covering repository operations.
 mod common;
 
 use std::collections::HashMap;

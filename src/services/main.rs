@@ -1,3 +1,4 @@
+//! Business logic for email composition, sending, and tracking.
 use crate::domain::email::UpdateEmailRecipient;
 use crate::models::zmq::ZMQSendEmailMessage;
 use pushkind_common::domain::auth::AuthenticatedUser;

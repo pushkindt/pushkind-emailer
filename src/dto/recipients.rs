@@ -1,3 +1,4 @@
+//! DTOs used by recipient-related routes and templates.
 use pushkind_common::pagination::Paginated;
 
 use crate::domain::group::Group;

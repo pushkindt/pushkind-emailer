@@ -1,3 +1,4 @@
+//! Repository helpers used by integration and unit tests.
 use std::collections::HashMap;
 
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};

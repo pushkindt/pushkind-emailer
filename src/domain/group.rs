@@ -1,10 +1,11 @@
+//! Domain types for recipient groups.
 use chrono::NaiveDateTime;
 use serde::Serialize;
 
 use crate::domain::recipient::Recipient;
 use crate::domain::types::{GroupId, HubId, NonEmptyString, TypeConstraintError};
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 /// A named collection of recipients within a hub.
 pub struct Group {
     /// Identifier of the group.

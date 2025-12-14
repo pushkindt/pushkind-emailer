@@ -1,3 +1,4 @@
+//! Diesel models backing hub persistence.
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};

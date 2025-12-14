@@ -1,3 +1,4 @@
+//! Repository operations for recipients and subscriptions.
 use std::collections::HashMap;
 
 use diesel::dsl::exists;

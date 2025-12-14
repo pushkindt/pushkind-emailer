@@ -1,3 +1,4 @@
+//! Integration tests covering hub-related repository and service behavior.
 use pushkind_emailer::domain::hub::Hub;
 use pushkind_emailer::domain::types::{HubId, HubLogin, ImapUid};
 
