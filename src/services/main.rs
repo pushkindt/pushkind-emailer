@@ -92,7 +92,7 @@ where
         .get_email_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.delete_email(email.email.id)?;
+    repo.delete_email(email.email.id.get())?;
     Ok(())
 }
 
@@ -112,7 +112,7 @@ where
         .get_email_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    let zmq_message = ZMQSendEmailMessage::RetryEmail((email.email.id, user.hub_id));
+    let zmq_message = ZMQSendEmailMessage::RetryEmail((email.email.id.get(), user.hub_id));
     zmq_sender.send_json(&zmq_message).await?;
     Ok(())
 }

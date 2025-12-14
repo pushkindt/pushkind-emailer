@@ -4,13 +4,14 @@ use crate::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
+use crate::domain::types::TypeConstraintError;
 use crate::models::email::{
     Email as DbEmail, EmailRecipient as DbEmailRecipient,
     UpdateEmailRecipient as DbUpdateEmailRecipient,
 };
 use chrono::{Duration, NaiveDateTime, Utc};
 use diesel::prelude::*;
-use pushkind_common::repository::errors::RepositoryResult;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use super::helpers::apply_pagination;
 use crate::repository::{
@@ -39,10 +40,21 @@ impl EmailReader for DieselRepository {
                 .select(DbEmailRecipient::as_select())
                 .load::<DbEmailRecipient>(&mut conn)?;
 
-            Ok(Some(DomainEmailWithRecipients {
-                email: email.into(),
-                recipients: recipients.into_iter().map(Into::into).collect(),
-            }))
+            let email = DomainEmailWithRecipients {
+                email: email.try_into().map_err(|err: TypeConstraintError| {
+                    RepositoryError::ValidationError(err.to_string())
+                })?,
+                recipients: recipients
+                    .into_iter()
+                    .map(|recipient| {
+                        recipient.try_into().map_err(|err: TypeConstraintError| {
+                            RepositoryError::ValidationError(err.to_string())
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            };
+
+            Ok(Some(email))
         } else {
             Ok(None)
         }
@@ -84,11 +96,22 @@ impl EmailReader for DieselRepository {
         let result: Vec<DomainEmailWithRecipients> = db_emails
             .into_iter()
             .zip(grouped)
-            .map(|(email, recipients)| DomainEmailWithRecipients {
-                email: email.into(),
-                recipients: recipients.into_iter().map(Into::into).collect(),
+            .map(|(email, recipients)| {
+                Ok::<_, RepositoryError>(DomainEmailWithRecipients {
+                    email: email.try_into().map_err(|err: TypeConstraintError| {
+                        RepositoryError::ValidationError(err.to_string())
+                    })?,
+                    recipients: recipients
+                        .into_iter()
+                        .map(|recipient| {
+                            recipient.try_into().map_err(|err: TypeConstraintError| {
+                                RepositoryError::ValidationError(err.to_string())
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok((total, result))
     }
@@ -130,10 +153,10 @@ impl EmailRecipientReader for DieselRepository {
             .load(&mut conn)?;
 
         // Step 2: Keep only the first row per address (Rust-side dedup)
-        let mut seen = HashSet::new();
+        let mut seen: HashSet<String> = HashSet::new();
         let mut latest = Vec::with_capacity(rows.len());
         for (recipient, email_created_at) in rows {
-            if seen.insert(recipient.address.clone()) {
+            if seen.insert(recipient.address.trim().to_lowercase()) {
                 latest.push((recipient, email_created_at));
             }
         }
@@ -144,10 +167,14 @@ impl EmailRecipientReader for DieselRepository {
                 .then_with(|| b.0.updated_at.cmp(&a.0.updated_at))
         });
 
-        Ok(latest
+        latest
             .into_iter()
-            .map(|(recipient, _)| recipient.into())
-            .collect())
+            .map(|(recipient, _)| {
+                recipient.try_into().map_err(|err: TypeConstraintError| {
+                    RepositoryError::ValidationError(err.to_string())
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 
@@ -182,8 +209,17 @@ impl EmailWriter for DieselRepository {
             .load::<DbEmailRecipient>(&mut conn)?;
 
         Ok(DomainEmailWithRecipients {
-            email: email.into(),
-            recipients: recipients.into_iter().map(Into::into).collect(),
+            email: email.try_into().map_err(|err: TypeConstraintError| {
+                RepositoryError::ValidationError(err.to_string())
+            })?,
+            recipients: recipients
+                .into_iter()
+                .map(|recipient| {
+                    recipient.try_into().map_err(|err: TypeConstraintError| {
+                        RepositoryError::ValidationError(err.to_string())
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 
@@ -204,6 +240,8 @@ mod tests {
     use diesel::connection::SimpleConnection;
     use pushkind_common::db::{DbPool, establish_connection_pool};
     use tempfile::{TempDir, tempdir};
+
+    use crate::domain::types::{EmailId, RecipientEmail, RecipientName};
 
     fn setup_db() -> (TempDir, DbPool) {
         let dir = tempdir().unwrap();
@@ -335,14 +373,17 @@ mod tests {
 
         let recipient_a = recipients
             .iter()
-            .find(|recipient| recipient.address == "a@example.com")
+            .find(|recipient| recipient.address == RecipientEmail::new("a@example.com").unwrap())
             .unwrap();
-        assert_eq!(recipient_a.email_id, 2);
+        assert_eq!(recipient_a.email_id, EmailId::try_from(2).unwrap());
         assert!(recipient_a.opened);
         assert!(recipient_a.is_sent);
         assert!(recipient_a.replied);
-        assert_eq!(recipient_a.reply.as_deref(), Some("Thanks"));
-        assert_eq!(recipient_a.name, "New A");
+        assert_eq!(
+            recipient_a.reply.as_ref().map(|reply| reply.as_str()),
+            Some("Thanks")
+        );
+        assert_eq!(recipient_a.name, RecipientName::new("New A").unwrap());
         assert_eq!(
             recipient_a.fields.get("segment").map(String::as_str),
             Some("new")
@@ -350,10 +391,10 @@ mod tests {
 
         let recipient_b = recipients
             .iter()
-            .find(|recipient| recipient.address == "b@example.com")
+            .find(|recipient| recipient.address == RecipientEmail::new("b@example.com").unwrap())
             .unwrap();
-        assert_eq!(recipient_b.email_id, 2);
-        assert_eq!(recipient_b.name, "Bee");
+        assert_eq!(recipient_b.email_id, EmailId::try_from(2).unwrap());
+        assert_eq!(recipient_b.name, RecipientName::new("Bee").unwrap());
         assert_eq!(
             recipient_b.fields.get("segment").map(String::as_str),
             Some("bee")
@@ -361,8 +402,14 @@ mod tests {
 
         let recipients_hub2 = repo.list_recent_recipients(2, None).unwrap();
         assert_eq!(recipients_hub2.len(), 1);
-        assert_eq!(recipients_hub2[0].address, "a@example.com");
-        assert_eq!(recipients_hub2[0].name, "Hub2 A");
+        assert_eq!(
+            recipients_hub2[0].address,
+            RecipientEmail::new("a@example.com").unwrap()
+        );
+        assert_eq!(
+            recipients_hub2[0].name,
+            RecipientName::new("Hub2 A").unwrap()
+        );
         assert_eq!(
             recipients_hub2[0].fields.get("segment").map(String::as_str),
             Some("hub2")
@@ -409,6 +456,9 @@ mod tests {
 
         let filtered = repo.list_recent_recipients(1, Some(3)).unwrap();
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].address, "fast@example.com");
+        assert_eq!(
+            filtered[0].address,
+            RecipientEmail::new("fast@example.com").unwrap()
+        );
     }
 }

@@ -5,11 +5,11 @@ use std::{
 
 use actix_multipart::form::{json::Json as MpJson, tempfile::TempFile, text::Text};
 use chrono::{Duration, NaiveDateTime, Utc};
-use pushkind_common::repository::errors::RepositoryResult;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 use pushkind_emailer::{
     domain::email::{Email, EmailRecipient, EmailWithRecipients, NewEmail},
     domain::recipient::{Recipient, Unsubscribe},
-    domain::types::{RecipientEmail, RecipientName},
+    domain::types::{HubId, RecipientEmail, RecipientName},
     forms::main::SendEmailForm,
     repository::{
         EmailListQuery, EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader,
@@ -40,10 +40,16 @@ fn send_email_form_into_new_email_with_attachment() {
 
     let email: NewEmail = form.to_new_email(1, &TestRepository {}).unwrap();
 
-    assert_eq!(email.message, "Hi");
-    assert_eq!(email.subject.as_deref(), Some("Sub"));
-    assert_eq!(email.attachment_name.as_deref(), Some("hello.txt"));
-    assert_eq!(email.attachment_mime.as_deref(), Some("text/plain"));
+    assert_eq!(email.message.as_str(), "Hi");
+    assert_eq!(email.subject.as_ref().map(|s| s.as_str()), Some("Sub"));
+    assert_eq!(
+        email.attachment_name.as_ref().map(|s| s.as_str()),
+        Some("hello.txt")
+    );
+    assert_eq!(
+        email.attachment_mime.as_ref().map(|s| s.as_str()),
+        Some("text/plain")
+    );
     assert_eq!(email.attachment.as_deref().unwrap(), b"hello");
 }
 
@@ -86,7 +92,7 @@ impl CooldownRepository {
                         pushkind_emailer::domain::types::RecipientId::try_from(1).unwrap(),
                         RecipientName::try_from(name.as_str()).unwrap(),
                         RecipientEmail::try_from(address.as_str()).unwrap(),
-                        pushkind_emailer::domain::types::HubId::try_from(self.hub_id).unwrap(),
+                        HubId::try_from(self.hub_id).unwrap(),
                         HashMap::new(),
                         None,
                         None,
@@ -162,23 +168,25 @@ impl EmailRecipientReader for CooldownRepository {
             .iter()
             .enumerate()
             .filter(|(_, entry)| cutoff.map(|cutoff| entry.sent_at > cutoff).unwrap_or(true))
-            .map(|(index, entry)| EmailRecipient {
-                id: index as i32 + 1,
-                email_id: entry.email_id,
-                address: entry.address.clone(),
-                opened: false,
-                updated_at: entry.updated_at,
-                is_sent: entry.is_sent,
-                replied: false,
-                reply: None,
-                name: self
-                    .names
-                    .get(&entry.address)
-                    .cloned()
-                    .unwrap_or_else(|| entry.address.clone()),
-                fields: HashMap::new(),
+            .map(|(index, entry)| {
+                EmailRecipient::try_new(
+                    index as i32 + 1,
+                    entry.email_id,
+                    entry.address.clone(),
+                    false,
+                    entry.updated_at,
+                    entry.is_sent,
+                    false,
+                    None,
+                    self.names
+                        .get(&entry.address)
+                        .cloned()
+                        .unwrap_or_else(|| entry.address.clone()),
+                    HashMap::new(),
+                )
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| RepositoryError::ValidationError(err.to_string()))?;
 
         Ok(recipients)
     }
@@ -198,20 +206,21 @@ impl EmailReader for CooldownRepository {
             .email_created
             .get(&id)
             .map(|created_at| EmailWithRecipients {
-                email: Email {
+                email: Email::try_new(
                     id,
-                    message: String::new(),
-                    created_at: *created_at,
-                    is_sent: true,
-                    subject: None,
-                    attachment: None,
-                    attachment_name: None,
-                    attachment_mime: None,
-                    num_sent: 0,
-                    num_opened: 0,
-                    num_replied: 0,
-                    hub_id: self.hub_id,
-                },
+                    "Message",
+                    *created_at,
+                    true,
+                    None,
+                    None,
+                    None,
+                    None,
+                    0,
+                    0,
+                    0,
+                    self.hub_id,
+                )
+                .unwrap(),
                 recipients: vec![],
             }))
     }
@@ -263,5 +272,8 @@ fn send_email_form_excludes_recent_recipients() {
     let email = form.to_new_email(1, &repo).unwrap();
 
     assert_eq!(email.recipients.len(), 1);
-    assert_eq!(email.recipients[0].address, "stale@example.com");
+    assert_eq!(
+        email.recipients[0].address,
+        RecipientEmail::new("stale@example.com").unwrap()
+    );
 }

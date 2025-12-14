@@ -214,8 +214,8 @@ pub struct CSVExportRecipient {
 impl From<EmailRecipient> for CSVExportRecipient {
     fn from(value: EmailRecipient) -> Self {
         Self {
-            email: value.address,
-            name: value.name,
+            email: value.address.into_inner(),
+            name: value.name.into_inner(),
             opened: value.opened,
             sent: value.is_sent,
             replied: value.replied,
