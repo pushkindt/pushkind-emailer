@@ -2,6 +2,7 @@ use serde::Deserialize;
 use validator::Validate;
 
 use crate::domain::group::NewGroup;
+use crate::domain::types::TypeConstraintError;
 
 /// Form data for creating a new recipient group.
 #[derive(Deserialize, Validate)]
@@ -25,10 +26,7 @@ pub struct AssignGroupRecipientForm {
 }
 
 impl AddGroupForm {
-    pub fn to_new_group(&self, hub_id: i32) -> NewGroup {
-        NewGroup {
-            name: self.name.clone(),
-            hub_id,
-        }
+    pub fn to_new_group(&self, hub_id: i32) -> Result<NewGroup, TypeConstraintError> {
+        NewGroup::try_new(self.name.clone(), hub_id)
     }
 }

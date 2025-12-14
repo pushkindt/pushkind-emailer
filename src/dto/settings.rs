@@ -1,5 +1,5 @@
-use pushkind_common::domain::emailer::email::EmailRecipient;
-use pushkind_common::domain::emailer::hub::Hub;
+use crate::domain::email::EmailRecipient;
+use crate::domain::hub::Hub;
 
 use crate::domain::recipient::Unsubscribe;
 

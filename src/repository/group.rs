@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use pushkind_common::repository::errors::RepositoryResult;
+use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use super::helpers::{apply_pagination, hydrate_recipients};
 use crate::domain::group::{Group as DomainGroup, GroupWithRecipients, NewGroup as DomainNewGroup};
@@ -13,7 +13,7 @@ impl GroupReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<GroupWithRecipients>> {
-        use pushkind_common::schema::emailer::{groups, groups_recipients, recipients};
+        use crate::schema::{groups, groups_recipients, recipients};
         let mut conn = self.conn()?;
 
         // Load group by id
@@ -39,13 +39,14 @@ impl GroupReader for DieselRepository {
         let recipients = hydrate_recipients(&mut conn, hub_id, db_recipients)?;
 
         Ok(Some(GroupWithRecipients {
-            group: DomainGroup::from(db_group),
+            group: DomainGroup::try_from(db_group)
+                .map_err(|err| RepositoryError::ValidationError(err.to_string()))?,
             recipients,
         }))
     }
 
     fn list_groups(&self, query: GroupListQuery) -> RepositoryResult<(usize, Vec<DomainGroup>)> {
-        use pushkind_common::schema::emailer::groups;
+        use crate::schema::groups;
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -65,8 +66,9 @@ impl GroupReader for DieselRepository {
             .order(groups::name.asc())
             .load::<DbGroup>(&mut conn)?
             .into_iter()
-            .map(Into::into)
-            .collect::<Vec<DomainGroup>>();
+            .map(DomainGroup::try_from)
+            .collect::<Result<Vec<DomainGroup>, _>>()
+            .map_err(|err| RepositoryError::ValidationError(err.to_string()))?;
 
         Ok((total, items))
     }
@@ -74,17 +76,18 @@ impl GroupReader for DieselRepository {
 
 impl GroupWriter for DieselRepository {
     fn create_group(&self, group: &DomainNewGroup) -> RepositoryResult<DomainGroup> {
-        use pushkind_common::schema::emailer::groups;
+        use crate::schema::groups;
         let mut conn = self.conn()?;
         let db_new: DbNewGroup = group.into();
         let inserted = diesel::insert_into(groups::table)
             .values(&db_new)
             .get_result::<DbGroup>(&mut conn)?;
-        Ok(inserted.into())
+        DomainGroup::try_from(inserted)
+            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
     }
 
     fn delete_group(&self, id: i32) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::{groups, groups_recipients};
+        use crate::schema::{groups, groups_recipients};
         let mut conn = self.conn()?;
         diesel::delete(groups_recipients::table.filter(groups_recipients::group_id.eq(id)))
             .execute(&mut conn)?;
@@ -93,7 +96,7 @@ impl GroupWriter for DieselRepository {
     }
 
     fn delete_all_groups(&self, hub_id: i32) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::{groups, groups_recipients};
+        use crate::schema::{groups, groups_recipients};
         let mut conn = self.conn()?;
 
         // Step 1: Get IDs of groups belonging to this hub
@@ -119,7 +122,7 @@ impl GroupWriter for DieselRepository {
         group_id: i32,
         recipients: Vec<i32>,
     ) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::groups_recipients;
+        use crate::schema::groups_recipients;
         let mut conn = self.conn()?;
         let new: Vec<GroupRecipient> = recipients
             .iter()

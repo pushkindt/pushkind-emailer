@@ -1,12 +1,10 @@
 use std::collections::HashSet;
 
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
-use pushkind_common::{
-    domain::emailer::email::{NewEmail, NewEmailRecipient},
-    repository::errors::RepositoryResult,
-};
+use pushkind_common::repository::errors::RepositoryResult;
 use serde::Deserialize;
 
+use crate::domain::email::{NewEmail, NewEmailRecipient};
 use crate::{
     repository::{EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader},
     utils::read_attachment_file,

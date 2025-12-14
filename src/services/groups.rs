@@ -46,7 +46,9 @@ where
     form.validate()
         .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-    let new_group = form.to_new_group(user.hub_id);
+    let new_group = form
+        .to_new_group(user.hub_id)
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
     repo.create_group(&new_group)?;
     Ok(())
 }
@@ -66,7 +68,7 @@ where
         .get_group_by_id(form.id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.delete_group(group.group.id)?;
+    repo.delete_group(group.group.id.get())?;
     Ok(())
 }
 
@@ -84,7 +86,7 @@ where
         .get_group_by_id(form.group_id, user.hub_id)?
         .ok_or(ServiceError::NotFound)?;
 
-    repo.assign_recipients_to_group(group.group.id, form.recipient_id)?;
+    repo.assign_recipients_to_group(group.group.id.get(), form.recipient_id)?;
     Ok(())
 }
 

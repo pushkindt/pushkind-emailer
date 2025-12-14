@@ -1,15 +1,15 @@
 use std::collections::HashSet;
 
-use chrono::{Duration, NaiveDateTime, Utc};
-use diesel::prelude::*;
-use pushkind_common::domain::emailer::email::{
+use crate::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
-use pushkind_common::models::emailer::email::{
+use crate::models::email::{
     Email as DbEmail, EmailRecipient as DbEmailRecipient,
     UpdateEmailRecipient as DbUpdateEmailRecipient,
 };
+use chrono::{Duration, NaiveDateTime, Utc};
+use diesel::prelude::*;
 use pushkind_common::repository::errors::RepositoryResult;
 
 use super::helpers::apply_pagination;
@@ -23,7 +23,7 @@ impl EmailReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
 
         let email = emails::table
@@ -52,7 +52,7 @@ impl EmailReader for DieselRepository {
         &self,
         query: EmailListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainEmailWithRecipients>)> {
-        use pushkind_common::schema::emailer::emails;
+        use crate::schema::emails;
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -102,7 +102,7 @@ impl EmailRecipientReader for DieselRepository {
         // after `number_of_days` ago. `None` skips filtering.
         number_of_days: Option<i64>,
     ) -> RepositoryResult<Vec<DomainEmailRecipient>> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
 
         let mut conn = self.conn()?;
 
@@ -157,7 +157,7 @@ impl EmailWriter for DieselRepository {
         recipient_id: i32,
         updates: &DomainUpdateEmailRecipient,
     ) -> RepositoryResult<DomainEmailWithRecipients> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
 
         let mut conn = self.conn()?;
         let email_id: i32 = email_recipients::table
@@ -188,7 +188,7 @@ impl EmailWriter for DieselRepository {
     }
 
     fn delete_email(&self, id: i32) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::{email_recipients, emails};
+        use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
         diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
             .execute(&mut conn)?;

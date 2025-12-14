@@ -1,5 +1,5 @@
+use crate::domain::hub::NewHub;
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::domain::emailer::hub::NewHub;
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 
@@ -22,7 +22,10 @@ where
 
     let hub = match repo.get_hub_by_id(user.hub_id)? {
         Some(hub) => hub,
-        None => repo.create_hub(&NewHub::new(user.hub_id))?,
+        None => repo.create_hub(&NewHub::try_new(user.hub_id).map_err(|err| {
+            log::error!("Invalid hub id: {err}");
+            ServiceError::Internal
+        })?)?,
     };
 
     Ok(SettingsOverviewData { hub })
@@ -92,10 +95,16 @@ where
 
     let hub = match repo.get_hub_by_id(user.hub_id)? {
         Some(hub) => hub,
-        None => repo.create_hub(&NewHub::new(user.hub_id))?,
+        None => repo.create_hub(&NewHub::try_new(user.hub_id).map_err(|err| {
+            log::error!("Invalid hub id: {err}");
+            ServiceError::Internal
+        })?)?,
     };
 
-    repo.update_hub(hub.id, &form.into())?;
+    let updates = form
+        .try_into_update_hub()
+        .map_err(|err| ServiceError::Form(err.to_string()))?;
+    repo.update_hub(hub.id.get(), &updates)?;
     Ok(())
 }
 

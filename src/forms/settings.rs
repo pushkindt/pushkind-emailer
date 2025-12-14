@@ -1,5 +1,10 @@
-use pushkind_common::domain::emailer::hub::UpdateHub;
 use serde::Deserialize;
+
+use crate::domain::hub::UpdateHub;
+use crate::domain::types::{
+    EmailTemplate, HubLogin, HubPassword, HubSenderEmail, ImapPort, ImapServerHost, SmtpPort,
+    SmtpServerHost, TypeConstraintError,
+};
 
 /// Form to create a new hub configuration.
 #[derive(Deserialize)]
@@ -22,20 +27,28 @@ pub struct SaveHubForm {
     pub message: Option<String>,
 }
 
-impl From<SaveHubForm> for UpdateHub {
-    fn from(val: SaveHubForm) -> Self {
-        Self {
-            login: val.login,
-            password: val.password,
-            sender: val.sender,
-            smtp_server: val.smtp_server,
-            smtp_port: val.smtp_port,
-            imap_server: val.imap_server,
-            imap_port: val.imap_port,
-            created_at: val.created_at,
+impl SaveHubForm {
+    pub fn try_into_update_hub(self) -> Result<UpdateHub, TypeConstraintError> {
+        Ok(UpdateHub {
+            login: self.login.map(HubLogin::try_from).transpose()?,
+            password: self.password.map(HubPassword::try_from).transpose()?,
+            sender: self.sender.map(HubSenderEmail::try_from).transpose()?,
+            smtp_server: self.smtp_server.map(SmtpServerHost::try_from).transpose()?,
+            smtp_port: self
+                .smtp_port
+                .filter(|port| *port != 0)
+                .map(SmtpPort::try_from)
+                .transpose()?,
+            imap_server: self.imap_server.map(ImapServerHost::try_from).transpose()?,
+            imap_port: self
+                .imap_port
+                .filter(|port| *port != 0)
+                .map(ImapPort::try_from)
+                .transpose()?,
+            created_at: self.created_at,
             updated_at: Some(chrono::Utc::now().naive_utc()),
-            email_template: val.message,
-        }
+            email_template: self.message.map(EmailTemplate::try_from).transpose()?,
+        })
     }
 }
 

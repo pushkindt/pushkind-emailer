@@ -1,8 +1,6 @@
+use crate::domain::email::{EmailRecipient, EmailWithRecipients, UpdateEmailRecipient};
+use crate::domain::hub::{Hub, NewHub, UpdateHub};
 use pushkind_common::db::{DbConnection, DbPool};
-use pushkind_common::domain::emailer::email::{
-    EmailRecipient, EmailWithRecipients, UpdateEmailRecipient,
-};
-use pushkind_common::domain::emailer::hub::{Hub, NewHub, UpdateHub};
 use pushkind_common::pagination::Pagination;
 use pushkind_common::repository::errors::RepositoryResult;
 

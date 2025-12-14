@@ -1,6 +1,6 @@
+use crate::domain::email::UpdateEmailRecipient;
+use crate::models::zmq::ZMQSendEmailMessage;
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::domain::emailer::email::UpdateEmailRecipient;
-use pushkind_common::models::emailer::zmq::ZMQSendEmailMessage;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
 use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};

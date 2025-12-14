@@ -5,11 +5,9 @@ use std::{
 
 use actix_multipart::form::{json::Json as MpJson, tempfile::TempFile, text::Text};
 use chrono::{Duration, NaiveDateTime, Utc};
-use pushkind_common::{
-    domain::emailer::email::{Email, EmailRecipient, EmailWithRecipients, NewEmail},
-    repository::errors::RepositoryResult,
-};
+use pushkind_common::repository::errors::RepositoryResult;
 use pushkind_emailer::{
+    domain::email::{Email, EmailRecipient, EmailWithRecipients, NewEmail},
     domain::recipient::{Recipient, Unsubscribe},
     forms::main::SendEmailForm,
     repository::{

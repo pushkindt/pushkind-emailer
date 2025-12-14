@@ -29,7 +29,7 @@ pub(super) fn hydrate_recipients(
     hub_id: i32,
     db_recipients: Vec<DbRecipient>,
 ) -> RepositoryResult<Vec<DomainRecipient>> {
-    use pushkind_common::schema::emailer::unsubscribes;
+    use crate::schema::unsubscribes;
 
     if db_recipients.is_empty() {
         return Ok(Vec::new());

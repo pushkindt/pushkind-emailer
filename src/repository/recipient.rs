@@ -7,6 +7,7 @@ use pushkind_common::repository::build_fts_match_query;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use super::helpers::{apply_pagination, hydrate_recipients};
+use crate::domain::group::Group as DomainGroup;
 use crate::domain::recipient::{
     NewRecipient as DomainNewRecipient, Recipient as DomainRecipient, RecipientWithGroups,
     Unsubscribe as DomainUnsubscribe, UpdateRecipient as DomainUpdateRecipient,
@@ -21,7 +22,7 @@ impl RecipientReader for DieselRepository {
         id: i32,
         hub_id: i32,
     ) -> RepositoryResult<Option<RecipientWithGroups>> {
-        use pushkind_common::schema::emailer::{groups, recipients, unsubscribes};
+        use crate::schema::{groups, recipients, unsubscribes};
 
         let mut conn = self.conn()?;
 
@@ -65,7 +66,11 @@ impl RecipientReader for DieselRepository {
                 unsubscribed_at,
                 groups: groups.iter().map(|gr| gr.id).collect(),
             },
-            groups: groups.into_iter().map(|gr| gr.into()).collect(),
+            groups: groups
+                .into_iter()
+                .map(DomainGroup::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|err| RepositoryError::ValidationError(err.to_string()))?,
         }))
     }
 
@@ -73,7 +78,7 @@ impl RecipientReader for DieselRepository {
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<DomainRecipient>)> {
-        use pushkind_common::schema::emailer::{groups_recipients, recipients};
+        use crate::schema::{groups_recipients, recipients};
         let mut conn = self.conn()?;
 
         let query_builder = || {
@@ -173,7 +178,7 @@ impl RecipientReader for DieselRepository {
     }
 
     fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>> {
-        use pushkind_common::schema::emailer::{recipient_fields, recipients};
+        use crate::schema::{recipient_fields, recipients};
 
         let mut conn = self.conn()?;
 
@@ -192,7 +197,7 @@ impl RecipientReader for DieselRepository {
         &self,
         hub_id: i32,
     ) -> RepositoryResult<Vec<DomainUnsubscribe>> {
-        use pushkind_common::schema::emailer::unsubscribes;
+        use crate::schema::unsubscribes;
 
         let mut conn = self.conn()?;
 
@@ -208,9 +213,7 @@ impl RecipientReader for DieselRepository {
 
 impl RecipientWriter for DieselRepository {
     fn create_recipients(&self, recipient: &[DomainNewRecipient]) -> RepositoryResult<usize> {
-        use pushkind_common::schema::emailer::{
-            groups, groups_recipients, recipient_fields, recipients,
-        };
+        use crate::schema::{groups, groups_recipients, recipient_fields, recipients};
 
         let mut conn = self.conn()?;
 
@@ -323,9 +326,7 @@ impl RecipientWriter for DieselRepository {
         id: i32,
         recipient: &DomainUpdateRecipient,
     ) -> RepositoryResult<DomainRecipient> {
-        use pushkind_common::schema::emailer::{
-            groups_recipients, recipient_fields, recipients, unsubscribes,
-        };
+        use crate::schema::{groups_recipients, recipient_fields, recipients, unsubscribes};
         let mut conn = self.conn()?;
 
         // Update basic recipient info
@@ -419,7 +420,7 @@ impl RecipientWriter for DieselRepository {
     }
 
     fn delete_recipient(&self, id: i32) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::{groups_recipients, recipient_fields, recipients};
+        use crate::schema::{groups_recipients, recipient_fields, recipients};
         let mut conn = self.conn()?;
         diesel::delete(groups_recipients::table.filter(groups_recipients::recipient_id.eq(id)))
             .execute(&mut conn)?;
@@ -430,7 +431,7 @@ impl RecipientWriter for DieselRepository {
     }
 
     fn delete_all_recipients(&self, hub_id: i32) -> RepositoryResult<()> {
-        use pushkind_common::schema::emailer::{groups_recipients, recipient_fields, recipients};
+        use crate::schema::{groups_recipients, recipient_fields, recipients};
         let mut conn = self.conn()?;
 
         // Step 1: Find recipient IDs for the given hub

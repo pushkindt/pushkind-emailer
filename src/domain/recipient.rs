@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
-use pushkind_common::domain::emailer::email::EmailRecipient;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::email::EmailRecipient;
 use crate::domain::group::Group;
 
 #[derive(Serialize)]

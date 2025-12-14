@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use pushkind_common::{
-    domain::emailer::email::{EmailRecipient, EmailWithRecipients},
-    repository::errors::RepositoryResult,
-};
+use pushkind_common::repository::errors::RepositoryResult;
 
+use crate::domain::email::{EmailRecipient, EmailWithRecipients};
 use crate::domain::recipient::{Recipient, RecipientWithGroups};
 use crate::repository::{
     EmailListQuery, EmailReader, EmailRecipientReader, RecipientListQuery, RecipientReader,

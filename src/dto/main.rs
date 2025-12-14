@@ -1,4 +1,4 @@
-use pushkind_common::domain::emailer::email::EmailWithRecipients;
+use crate::domain::email::EmailWithRecipients;
 use pushkind_common::pagination::Paginated;
 
 use crate::domain::group::Group;
