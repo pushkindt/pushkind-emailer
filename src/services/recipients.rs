@@ -1,7 +1,6 @@
 //! Business logic for recipient management and importing.
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
-use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
@@ -15,6 +14,8 @@ use crate::forms::recipients::{
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader, RecipientWriter,
 };
+use crate::services::authorization::ensure_emailer;
+use crate::utils::calculate_total_pages;
 
 /// Loads the data required to render the recipients overview page.
 pub fn load_recipients_overview<R>(
@@ -199,20 +200,4 @@ where
 
     repo.create_recipients(&recipients)?;
     Ok(())
-}
-
-fn calculate_total_pages(total_items: usize, per_page: usize) -> usize {
-    if per_page == 0 {
-        return 0;
-    }
-
-    total_items.div_ceil(per_page)
-}
-
-fn ensure_emailer(user: &AuthenticatedUser) -> ServiceResult<()> {
-    if check_role("emailer", &user.roles) {
-        Ok(())
-    } else {
-        Err(ServiceError::Unauthorized)
-    }
 }

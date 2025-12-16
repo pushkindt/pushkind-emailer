@@ -4,48 +4,78 @@
 //! the pushkind emailer service.  The binary in [`main`](../main.rs) builds on
 //! top of these modules to provide an HTTP server and background workers.
 
+#[cfg(feature = "server")]
 use std::sync::Arc;
 
+#[cfg(feature = "server")]
 use actix_files::Files;
+#[cfg(feature = "server")]
 use actix_identity::IdentityMiddleware;
+#[cfg(feature = "server")]
 use actix_session::{SessionMiddleware, storage::CookieSessionStore};
+#[cfg(feature = "server")]
 use actix_web::cookie::Key;
+#[cfg(feature = "server")]
 use actix_web::{App, HttpServer, middleware, web};
+#[cfg(feature = "server")]
 use actix_web_flash_messages::{FlashMessagesFramework, storage::CookieMessageStore};
+#[cfg(feature = "server")]
 use pushkind_common::db::establish_connection_pool;
+#[cfg(feature = "server")]
 use pushkind_common::middleware::RedirectUnauthorized;
+#[cfg(feature = "server")]
 use pushkind_common::models::config::CommonServerConfig;
+#[cfg(feature = "server")]
 use pushkind_common::routes::{logout, not_assigned};
+#[cfg(feature = "server")]
 use pushkind_common::zmq::{ZmqSender, ZmqSenderOptions};
+#[cfg(feature = "server")]
 use tera::Tera;
 
+#[cfg(feature = "server")]
 use crate::models::config::ServerConfig;
+#[cfg(feature = "server")]
 use crate::repository::DieselRepository;
+#[cfg(feature = "server")]
 use crate::routes::groups::{groups_add, groups_assign, groups_delete, groups_modal, groups_show};
+#[cfg(feature = "server")]
 use crate::routes::main::{
     delete_email, export_email_recipients, index, resend_email, send_email, track_email,
 };
+#[cfg(feature = "server")]
 use crate::routes::recipients::{
     recipients_add, recipients_clean, recipients_delete, recipients_modal, recipients_save,
     recipients_show, recipients_source, recipients_upload,
 };
+#[cfg(feature = "server")]
 use crate::routes::settings::{
     history_download, history_show, settings_save, settings_show, unsubscribed_show,
 };
 
+#[cfg(feature = "data")]
 pub mod domain;
+#[cfg(feature = "server")]
 pub mod dto;
+#[cfg(feature = "server")]
 pub mod forms;
+#[cfg(feature = "data")]
 pub mod models;
+#[cfg(feature = "server")]
 pub mod repository;
+#[cfg(feature = "server")]
 pub mod routes;
+#[cfg(feature = "data")]
 pub mod schema;
+#[cfg(feature = "server")]
 pub mod services;
+#[cfg(feature = "server")]
 pub mod utils;
 
 pub const SERVICE_ACCESS_ROLE: &str = "emailer";
+pub const SERVICE_ADMIN_ROLE: &str = "admin";
 
 /// Builds and runs the Actix-Web HTTP server using the provided configuration.
+#[cfg(feature = "server")]
 pub async fn run(server_config: ServerConfig) -> std::io::Result<()> {
     let common_config = CommonServerConfig {
         auth_service_url: server_config.auth_service_url.to_string(),
