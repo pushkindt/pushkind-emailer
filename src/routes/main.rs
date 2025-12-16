@@ -89,7 +89,7 @@ pub async fn send_email(
         Err(ServiceError::Form(message)) => HttpResponse::Ok().body(message),
         Err(err) => {
             log::error!("Failed to queue email: {err}");
-            HttpResponse::InternalServerError().finish()
+            HttpResponse::InternalServerError().body("Ошибка при добавлении сообщения в очередь.")
         }
     }
 }
