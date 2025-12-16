@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::Serialize;
 
 use crate::domain::types::{
-    EmailTemplate, HubId, HubLogin, HubPassword, HubSenderEmail, ImapPort, ImapServerHost, ImapUid,
+    EmailTemplate, HubId, HubLogin, HubPassword, HubSenderName, ImapPort, ImapServerHost, ImapUid,
     SmtpPort, SmtpServerHost, TypeConstraintError,
 };
 
@@ -17,7 +17,7 @@ pub struct Hub {
     /// Optional password for the login.
     pub password: Option<HubPassword>,
     /// Sender address that appears in outgoing emails.
-    pub sender: Option<HubSenderEmail>,
+    pub sender: Option<HubSenderName>,
     /// SMTP server hostname.
     pub smtp_server: Option<SmtpServerHost>,
     /// SMTP server port.
@@ -45,7 +45,7 @@ pub struct NewHub {
     /// Password for the SMTP login.
     pub password: Option<HubPassword>,
     /// Sender address used in outgoing emails.
-    pub sender: Option<HubSenderEmail>,
+    pub sender: Option<HubSenderName>,
     /// SMTP server hostname.
     pub smtp_server: Option<SmtpServerHost>,
     /// SMTP server port.
@@ -69,7 +69,7 @@ pub struct UpdateHub {
     /// New password for the login.
     pub password: Option<HubPassword>,
     /// Updated sender address.
-    pub sender: Option<HubSenderEmail>,
+    pub sender: Option<HubSenderName>,
     /// Updated SMTP server hostname.
     pub smtp_server: Option<SmtpServerHost>,
     /// Updated SMTP port.
@@ -93,7 +93,7 @@ impl Hub {
         id: HubId,
         login: Option<HubLogin>,
         password: Option<HubPassword>,
-        sender: Option<HubSenderEmail>,
+        sender: Option<HubSenderName>,
         smtp_server: Option<SmtpServerHost>,
         smtp_port: Option<SmtpPort>,
         created_at: Option<NaiveDateTime>,

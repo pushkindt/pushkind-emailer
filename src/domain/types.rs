@@ -203,10 +203,6 @@ email_newtype!(
     HubLogin,
     "SMTP/IMAP login; normalized and validated as an email address."
 );
-email_newtype!(
-    HubSenderEmail,
-    "Sender address that appears in outgoing emails; normalized and validated."
-);
 
 /// Wrapper for non-empty, trimmed strings.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -362,6 +358,10 @@ non_empty_string_newtype!(
 non_empty_string_newtype!(
     CustomFieldValue,
     "Custom field value wrapper enforcing non-empty values."
+);
+non_empty_string_newtype!(
+    HubSenderName,
+    "Sender name that appears in outgoing emails; normalized and validated."
 );
 
 /// A secret string used for hub SMTP/IMAP authentication.
