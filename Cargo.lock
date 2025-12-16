@@ -669,9 +669,9 @@ dependencies = [
 
 [[package]]
 name = "cmake"
-version = "0.1.55"
+version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d49d74c227b6cc9f3c51a2c7c667a05b6453f7f0f952a5f8e4493bb9e731d68e"
+checksum = "b042e5d8a74ae91bb0961acd039822472ec99f8ab0948cbf6d1369588f8be586"
 dependencies = [
  "cc",
 ]
@@ -2457,7 +2457,7 @@ dependencies = [
 [[package]]
 name = "pushkind-common"
 version = "0.1.0"
-source = "git+https://github.com/pushkindt/pushkind-common.git?branch=main#701185194a4744717905c9b646455f1d9f5b53c8"
+source = "git+https://github.com/pushkindt/pushkind-common.git?branch=main#c5be44d33b8f2e5562c1d089e34359acc56d60d3"
 dependencies = [
  "actix-identity",
  "actix-web",
