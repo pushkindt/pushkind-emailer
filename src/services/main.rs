@@ -3,7 +3,6 @@ use crate::domain::email::UpdateEmailRecipient;
 use crate::models::zmq::ZMQSendEmailMessage;
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
-use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use pushkind_common::zmq::{ZmqSender, ZmqSenderExt};
 use validator::Validate;
@@ -15,6 +14,8 @@ use crate::repository::{
     EmailListQuery, EmailReader, EmailRecipientReader, EmailWriter, GroupListQuery, GroupReader,
     RecipientListQuery, RecipientReader,
 };
+use crate::services::authorization::ensure_emailer;
+use crate::utils::calculate_total_pages;
 
 /// Loads the data required to render the index page.
 pub fn load_index_page<R>(
@@ -176,20 +177,4 @@ where
         filename: format!("recipients_{email_id}.csv"),
         bytes: data,
     })
-}
-
-fn calculate_total_pages(total_items: usize, per_page: usize) -> usize {
-    if per_page == 0 {
-        return 0;
-    }
-
-    total_items.div_ceil(per_page)
-}
-
-fn ensure_emailer(user: &AuthenticatedUser) -> ServiceResult<()> {
-    if check_role("emailer", &user.roles) {
-        Ok(())
-    } else {
-        Err(ServiceError::Unauthorized)
-    }
 }

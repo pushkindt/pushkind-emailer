@@ -44,6 +44,7 @@ pub mod services;
 pub mod utils;
 
 pub const SERVICE_ACCESS_ROLE: &str = "emailer";
+pub const SERVICE_ADMIN_ROLE: &str = "admin";
 
 /// Builds and runs the Actix-Web HTTP server using the provided configuration.
 pub async fn run(server_config: ServerConfig) -> std::io::Result<()> {

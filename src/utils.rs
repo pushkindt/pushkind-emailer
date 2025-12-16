@@ -30,3 +30,11 @@ pub fn read_attachment_file(
 
     Ok((file_name, file_mime, Some(buf)))
 }
+
+pub(crate) fn calculate_total_pages(total_items: usize, per_page: usize) -> usize {
+    if per_page == 0 {
+        return 0;
+    }
+
+    total_items.div_ceil(per_page)
+}

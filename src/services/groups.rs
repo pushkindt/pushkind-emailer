@@ -1,6 +1,5 @@
 //! Business logic for group management.
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::routes::check_role;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
@@ -10,6 +9,7 @@ use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupFo
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
 };
+use crate::services::authorization::ensure_emailer;
 
 /// Loads the data required to render the groups overview page.
 pub fn load_groups_overview<R>(
@@ -113,12 +113,4 @@ where
         .ok_or(ServiceError::NotFound)?;
 
     Ok(group)
-}
-
-fn ensure_emailer(user: &AuthenticatedUser) -> ServiceResult<()> {
-    if check_role("emailer", &user.roles) {
-        Ok(())
-    } else {
-        Err(ServiceError::Unauthorized)
-    }
 }
