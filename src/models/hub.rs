@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::hub::{Hub as DomainHub, NewHub as DomainNewHub, UpdateHub as DomainUpdateHub};
 use crate::domain::types::{
-    EmailTemplate, HubId, HubLogin, HubPassword, HubSenderEmail, ImapPort, ImapServerHost, ImapUid,
+    EmailTemplate, HubId, HubLogin, HubPassword, HubSenderName, ImapPort, ImapServerHost, ImapUid,
     SmtpPort, SmtpServerHost, TypeConstraintError,
 };
 
@@ -65,7 +65,7 @@ impl TryFrom<Hub> for DomainHub {
             id: HubId::try_from(value.id)?,
             login: value.login.map(HubLogin::try_from).transpose()?,
             password: value.password.map(HubPassword::try_from).transpose()?,
-            sender: value.sender.map(HubSenderEmail::try_from).transpose()?,
+            sender: value.sender.map(HubSenderName::try_from).transpose()?,
             smtp_server: value
                 .smtp_server
                 .map(SmtpServerHost::try_from)

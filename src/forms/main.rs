@@ -45,18 +45,25 @@ impl SendEmailForm {
         R: RecipientReader + EmailRecipientReader + EmailReader,
     {
         let cooldown_days = self.cooldown_days.0;
-        let (attachment_name, attachment_mime, attachment) =
-            if let Some(attachment) = self.attachment.as_mut() {
-                match read_attachment_file(attachment) {
-                    Ok((name, mime, data)) => (name, mime, data),
-                    Err(err) => {
-                        log::error!("error reading file: {err}");
-                        (None, None, None)
-                    }
+        let (attachment_name, attachment_mime, attachment) = if let Some(attachment) =
+            self.attachment.as_mut()
+            && attachment
+                .file_name
+                .as_ref()
+                .filter(|s| !s.trim().is_empty())
+                .is_some()
+            && attachment.content_type.is_some()
+        {
+            match read_attachment_file(attachment) {
+                Ok((name, mime, data)) => (name, mime, data),
+                Err(err) => {
+                    log::error!("error reading file: {err}");
+                    (None, None, None)
                 }
-            } else {
-                (None, None, None)
-            };
+            }
+        } else {
+            (None, None, None)
+        };
 
         let mut emails: Vec<String> = vec![];
         let mut groups: Vec<i32> = vec![];

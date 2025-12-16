@@ -5,7 +5,7 @@ use validator::Validate;
 
 use crate::domain::hub::UpdateHub;
 use crate::domain::types::{
-    EmailTemplate, HubLogin, HubPassword, HubSenderEmail, ImapPort, ImapServerHost, SmtpPort,
+    EmailTemplate, HubLogin, HubPassword, HubSenderName, ImapPort, ImapServerHost, SmtpPort,
     SmtpServerHost, TypeConstraintError,
 };
 
@@ -44,7 +44,7 @@ impl SaveHubForm {
         Ok(UpdateHub {
             login: self.login.map(HubLogin::try_from).transpose()?,
             password: self.password.map(HubPassword::try_from).transpose()?,
-            sender: self.sender.map(HubSenderEmail::try_from).transpose()?,
+            sender: self.sender.map(HubSenderName::try_from).transpose()?,
             smtp_server: self.smtp_server.map(SmtpServerHost::try_from).transpose()?,
             smtp_port: self
                 .smtp_port
