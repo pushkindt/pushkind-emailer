@@ -1,9 +1,10 @@
 //! Repository layer for database I/O, queries, and persistence mapping.
-use crate::domain::email::{EmailRecipient, EmailWithRecipients, UpdateEmailRecipient};
-use crate::domain::hub::{Hub, NewHub, UpdateHub};
 use pushkind_common::db::{DbConnection, DbPool};
 use pushkind_common::pagination::Pagination;
 use pushkind_common::repository::errors::RepositoryResult;
+
+use crate::domain::email::{EmailRecipient, EmailWithRecipients, UpdateEmailRecipient};
+use crate::domain::hub::{Hub, NewHub, UpdateHub};
 
 use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
 use crate::domain::recipient::{

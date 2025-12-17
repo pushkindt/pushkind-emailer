@@ -5,7 +5,7 @@ use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
 use crate::dto::settings::{ExportedHistory, HistoryData, SettingsOverviewData, UnsubscribedData};
-use crate::services::authorization::{ensure_admin, ensure_emailer};
+use crate::services::{ensure_admin, ensure_emailer};
 
 use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::settings::SaveHubForm;

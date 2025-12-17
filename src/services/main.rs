@@ -14,7 +14,7 @@ use crate::repository::{
     EmailListQuery, EmailReader, EmailRecipientReader, EmailWriter, GroupListQuery, GroupReader,
     RecipientListQuery, RecipientReader,
 };
-use crate::services::authorization::ensure_emailer;
+use crate::services::ensure_emailer;
 use crate::utils::calculate_total_pages;
 
 /// Loads the data required to render the index page.

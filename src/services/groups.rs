@@ -9,7 +9,7 @@ use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm, DeleteGroupFo
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
 };
-use crate::services::authorization::ensure_emailer;
+use crate::services::ensure_emailer;
 
 /// Loads the data required to render the groups overview page.
 pub fn load_groups_overview<R>(
