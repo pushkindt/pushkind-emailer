@@ -13,7 +13,7 @@ use crate::forms::recipients::{
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader, RecipientWriter,
 };
-use crate::services::authorization::ensure_emailer;
+use crate::services::ensure_emailer;
 use crate::utils::calculate_total_pages;
 
 /// Loads the data required to render the recipients overview page.

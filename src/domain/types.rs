@@ -4,8 +4,6 @@
 //! normalized/validated email) so that once a value reaches the domain layer it
 //! can be treated as trusted.
 
-use pushkind_common::repository::errors::RepositoryError;
-use pushkind_common::services::errors::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
@@ -32,18 +30,6 @@ pub enum TypeConstraintError {
     /// Provided value failed custom validation.
     #[error("invalid value: {0}")]
     InvalidValue(String),
-}
-
-impl From<TypeConstraintError> for ServiceError {
-    fn from(val: TypeConstraintError) -> Self {
-        ServiceError::TypeConstraint(val.to_string())
-    }
-}
-
-impl From<TypeConstraintError> for RepositoryError {
-    fn from(val: TypeConstraintError) -> Self {
-        RepositoryError::ValidationError(val.to_string())
-    }
 }
 
 /// Normalizes and validates an email string.
