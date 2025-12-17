@@ -1,5 +1,5 @@
 //! Repository helpers used by integration and unit tests.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use pushkind_common::repository::errors::RepositoryResult;
 
@@ -23,7 +23,7 @@ impl RecipientReader for TestRepository {
             "Test",
             "test@test.test",
             hub_id,
-            HashMap::new(),
+            BTreeMap::new(),
             None,
             None,
             None,

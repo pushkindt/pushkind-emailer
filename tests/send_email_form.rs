@@ -1,6 +1,6 @@
 //! Integration tests covering email form validation and handling.
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     io::{Seek, SeekFrom, Write},
 };
 
@@ -94,7 +94,7 @@ impl CooldownRepository {
                         RecipientName::try_from(name.as_str()).unwrap(),
                         RecipientEmail::try_from(address.as_str()).unwrap(),
                         HubId::try_from(self.hub_id).unwrap(),
-                        HashMap::new(),
+                        BTreeMap::new(),
                         None,
                         None,
                         None,
@@ -170,7 +170,7 @@ impl EmailRecipientReader for CooldownRepository {
                         .get(&entry.address)
                         .cloned()
                         .unwrap_or_else(|| entry.address.clone()),
-                    HashMap::new(),
+                    BTreeMap::new(),
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
