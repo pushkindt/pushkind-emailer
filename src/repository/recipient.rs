@@ -68,16 +68,14 @@ impl RecipientReader for DieselRepository {
                 recipient.updated_at,
                 unsubscribed_at,
                 group_ids,
-            )
-            .map_err(|err| RepositoryError::ValidationError(err.to_string()))?;
+            )?;
 
             Ok(Some(RecipientWithGroups {
                 recipient: domain_recipient,
                 groups: groups
                     .into_iter()
                     .map(DomainGroup::try_from)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|err| RepositoryError::ValidationError(err.to_string()))?,
+                    .collect::<Result<Vec<_>, _>>()?,
             }))
         })
     }
@@ -169,11 +167,12 @@ impl RecipientReader for DieselRepository {
             .order(unsubscribes::created_at.desc())
             .load::<Unsubscribe>(&mut conn)?;
 
-        results
+        let recipients = results
             .into_iter()
             .map(DomainUnsubscribe::try_from)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(recipients)
     }
 }
 
@@ -373,7 +372,7 @@ impl RecipientWriter for DieselRepository {
                 .select(groups_recipients::group_id)
                 .load::<i32>(conn)?;
 
-            DomainRecipient::try_new(
+            Ok(DomainRecipient::try_new(
                 rec.id,
                 rec.name,
                 rec.email,
@@ -383,8 +382,7 @@ impl RecipientWriter for DieselRepository {
                 rec.updated_at,
                 unsubscribed_at,
                 group_ids,
-            )
-            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
+            )?)
         })
     }
 

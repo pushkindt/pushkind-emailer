@@ -6,7 +6,7 @@ use diesel::query_dsl::methods::{LimitDsl, OffsetDsl};
 
 use pushkind_common::db::DbConnection;
 use pushkind_common::pagination::Pagination;
-use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
+use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::recipient::Recipient as DomainRecipient;
 use crate::models::group::GroupRecipient;
@@ -92,7 +92,6 @@ pub(super) fn hydrate_recipients(
                 unsubscribed_at,
                 groups,
             )
-            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
         })
         .collect::<Result<Vec<_>, _>>()?;
 

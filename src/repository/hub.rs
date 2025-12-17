@@ -2,7 +2,7 @@
 use crate::domain::hub::{Hub as DomainHub, NewHub as DomainNewHub, UpdateHub as DomainUpdateHub};
 use crate::models::hub::{Hub as DbHub, NewHub as DbNewHub, UpdateHub as DbUpdateHub};
 use diesel::prelude::*;
-use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
+use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::repository::{DieselRepository, HubReader, HubWriter};
 
@@ -14,10 +14,7 @@ impl HubReader for DieselRepository {
             .filter(hubs::id.eq(id))
             .first::<DbHub>(&mut conn)
             .optional()?;
-        result
-            .map(DomainHub::try_from)
-            .transpose()
-            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
+        Ok(result.map(DomainHub::try_from).transpose()?)
     }
 }
 
@@ -28,7 +25,7 @@ impl HubWriter for DieselRepository {
         let result = diesel::insert_into(hubs::table)
             .values(DbNewHub::from(hub))
             .get_result::<DbHub>(&mut conn)?;
-        DomainHub::try_from(result).map_err(|err| RepositoryError::ValidationError(err.to_string()))
+        Ok(DomainHub::try_from(result)?)
     }
 
     fn update_hub(&self, id: i32, hub: &DomainUpdateHub) -> RepositoryResult<DomainHub> {
@@ -37,6 +34,6 @@ impl HubWriter for DieselRepository {
         let result = diesel::update(hubs::table.filter(hubs::id.eq(id)))
             .set(DbUpdateHub::from(hub))
             .get_result::<DbHub>(&mut conn)?;
-        DomainHub::try_from(result).map_err(|err| RepositoryError::ValidationError(err.to_string()))
+        Ok(DomainHub::try_from(result)?)
     }
 }

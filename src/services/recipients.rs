@@ -5,7 +5,6 @@ use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use validator::Validate;
 
 use crate::domain::recipient::NewRecipient;
-use crate::domain::types::TypeConstraintError;
 use crate::dto::recipients::{RecipientModalData, RecipientsOverviewData};
 use crate::forms::recipients::{
     AddRecipientForm, DeleteRecipientForm, SaveRecipientForm, SourceRecipientForm,
@@ -70,11 +69,7 @@ where
     form.validate()
         .map_err(|err| ServiceError::Form(err.to_string()))?;
 
-    let new_recipient = NewRecipient::try_new(form.name, form.email, user.hub_id, None, None)
-        .map_err(|err| {
-            log::error!("Invalid recipient payload: {err}");
-            ServiceError::Form(err.to_string())
-        })?;
+    let new_recipient = NewRecipient::try_new(form.name, form.email, user.hub_id, None, None)?;
     repo.create_recipients(&[new_recipient])?;
     Ok(())
 }
@@ -171,9 +166,7 @@ where
         .ok_or(ServiceError::NotFound)?
         .recipient;
 
-    let updates = form
-        .try_into_update_recipient()
-        .map_err(|err: TypeConstraintError| ServiceError::Form(err.to_string()))?;
+    let updates = form.try_into_update_recipient()?;
     repo.update_recipient(recipient.id.get(), &updates)?;
     Ok(())
 }
