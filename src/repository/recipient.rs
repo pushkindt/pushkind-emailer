@@ -1,5 +1,5 @@
 //! Repository operations for recipients and subscriptions.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use diesel::dsl::exists;
 use diesel::prelude::*;
@@ -364,7 +364,7 @@ impl RecipientWriter for DieselRepository {
             let fields_map = fields_vec
                 .into_iter()
                 .map(|f| (f.field, f.value))
-                .collect::<HashMap<_, _>>();
+                .collect::<BTreeMap<_, _>>();
 
             // Reload group IDs
             let group_ids = groups_recipients::table

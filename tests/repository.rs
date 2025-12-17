@@ -1,7 +1,7 @@
 //! Integration tests covering repository operations.
 mod common;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use diesel::prelude::*;
 use pushkind_emailer::domain::recipient::UpdateRecipient;
@@ -74,7 +74,7 @@ fn update_recipient_is_atomic() {
         (recipient.id, group.id)
     };
 
-    let mut new_fields = HashMap::new();
+    let mut new_fields = BTreeMap::new();
     new_fields.insert("city".to_string(), "London".to_string());
     let invalid_group_id = 999_999;
     let update = UpdateRecipient::try_new(

@@ -1,5 +1,5 @@
 //! Recipient-related form types and input validation.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io::Read;
 
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
@@ -116,7 +116,7 @@ impl UploadRecipientsForm {
 
         for result in rdr.records() {
             let record = result?;
-            let mut optional_fields = HashMap::new();
+            let mut optional_fields = BTreeMap::new();
 
             let mut name = String::new();
             let mut email = String::new();
@@ -196,7 +196,7 @@ impl SourceRecipientForm {
             struct SourceRecipient {
                 name: String,
                 email: Option<String>,
-                fields: Option<HashMap<String, String>>,
+                fields: Option<BTreeMap<String, String>>,
                 groups: Option<Vec<String>>,
             }
 

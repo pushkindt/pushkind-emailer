@@ -1,5 +1,5 @@
 //! Shared Diesel query helpers used by repository implementations.
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use diesel::prelude::*;
 use diesel::query_dsl::methods::{LimitDsl, OffsetDsl};
@@ -80,7 +80,7 @@ pub(super) fn hydrate_recipients(
             let fields = fields
                 .into_iter()
                 .map(|f| (f.field, f.value))
-                .collect::<HashMap<_, _>>();
+                .collect::<BTreeMap<_, _>>();
             DomainRecipient::try_new(
                 r.id,
                 r.name,

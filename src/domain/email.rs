@@ -1,5 +1,5 @@
 //! Domain types for emails and email recipients.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
@@ -128,7 +128,7 @@ pub struct EmailRecipient {
     /// Recipient's name at the moment of sending
     pub name: RecipientName,
     /// Recipient's JSON-encoded fields at the moment of sending
-    pub fields: HashMap<String, String>,
+    pub fields: BTreeMap<String, String>,
 }
 
 impl EmailRecipient {
@@ -144,7 +144,7 @@ impl EmailRecipient {
         replied: bool,
         reply: Option<EmailRecipientReply>,
         name: RecipientName,
-        fields: HashMap<String, String>,
+        fields: BTreeMap<String, String>,
     ) -> Self {
         Self {
             id,
@@ -171,7 +171,7 @@ impl EmailRecipient {
         replied: bool,
         reply: Option<String>,
         name: impl Into<String>,
-        fields: HashMap<String, String>,
+        fields: BTreeMap<String, String>,
     ) -> Result<Self, TypeConstraintError> {
         Ok(Self::new(
             EmailRecipientId::try_from(id)?,
@@ -204,7 +204,7 @@ pub struct NewEmailRecipient {
     /// Recipient's name
     pub name: RecipientName,
     /// Optional recipient fields.
-    pub fields: HashMap<String, String>,
+    pub fields: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize)]

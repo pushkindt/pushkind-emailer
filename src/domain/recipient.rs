@@ -1,5 +1,5 @@
 //! Domain types for recipients and subscriptions.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use chrono::NaiveDateTime;
 use serde::Serialize;
@@ -23,7 +23,7 @@ pub struct Recipient {
     /// Hub this recipient belongs to.
     pub hub_id: HubId,
     /// Additional custom fields associated with the recipient.
-    pub fields: HashMap<String, String>,
+    pub fields: BTreeMap<String, String>,
     /// Time the recipient was created.
     pub created_at: Option<NaiveDateTime>,
     /// Last modification time.
@@ -42,7 +42,7 @@ impl Recipient {
         name: RecipientName,
         email: RecipientEmail,
         hub_id: HubId,
-        fields: HashMap<String, String>,
+        fields: BTreeMap<String, String>,
         created_at: Option<NaiveDateTime>,
         updated_at: Option<NaiveDateTime>,
         unsubscribed_at: Option<NaiveDateTime>,
@@ -67,7 +67,7 @@ impl Recipient {
         name: impl Into<String>,
         email: impl Into<String>,
         hub_id: i32,
-        fields: HashMap<String, String>,
+        fields: BTreeMap<String, String>,
         created_at: Option<NaiveDateTime>,
         updated_at: Option<NaiveDateTime>,
         unsubscribed_at: Option<NaiveDateTime>,
@@ -108,7 +108,7 @@ pub struct NewRecipient {
     /// Hub to associate with the recipient.
     pub hub_id: HubId,
     /// Optional set of custom fields.
-    pub fields: Option<HashMap<String, String>>,
+    pub fields: Option<BTreeMap<String, String>>,
     /// Optional list of group names to subscribe the recipient to.
     pub groups: Option<Vec<String>>,
 }
@@ -119,7 +119,7 @@ impl NewRecipient {
         name: RecipientName,
         email: RecipientEmail,
         hub_id: HubId,
-        fields: Option<HashMap<String, String>>,
+        fields: Option<BTreeMap<String, String>>,
         groups: Option<Vec<String>>,
     ) -> Self {
         Self {
@@ -135,7 +135,7 @@ impl NewRecipient {
         name: impl Into<String>,
         email: impl Into<String>,
         hub_id: i32,
-        fields: Option<HashMap<String, String>>,
+        fields: Option<BTreeMap<String, String>>,
         groups: Option<Vec<String>>,
     ) -> Result<Self, TypeConstraintError> {
         Ok(Self::new(
@@ -155,7 +155,7 @@ pub struct UpdateRecipient {
     /// Updated email address.
     pub email: RecipientEmail,
     /// Updated map of custom fields.
-    pub fields: HashMap<String, String>,
+    pub fields: BTreeMap<String, String>,
     /// Groups the recipient should belong to.
     pub groups: Vec<GroupId>,
 }
@@ -165,7 +165,7 @@ impl UpdateRecipient {
     pub fn new(
         name: RecipientName,
         email: RecipientEmail,
-        fields: HashMap<String, String>,
+        fields: BTreeMap<String, String>,
         groups: Vec<GroupId>,
     ) -> Self {
         Self {
@@ -179,7 +179,7 @@ impl UpdateRecipient {
     pub fn try_new(
         name: impl Into<String>,
         email: impl Into<String>,
-        fields: HashMap<String, String>,
+        fields: BTreeMap<String, String>,
         groups: Vec<i32>,
     ) -> Result<Self, TypeConstraintError> {
         Ok(Self::new(
