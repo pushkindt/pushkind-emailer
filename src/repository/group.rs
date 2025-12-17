@@ -41,8 +41,7 @@ impl GroupReader for DieselRepository {
             let recipients = hydrate_recipients(conn, hub_id, db_recipients)?;
 
             Ok(Some(GroupWithRecipients {
-                group: DomainGroup::try_from(db_group)
-                    .map_err(|err| RepositoryError::ValidationError(err.to_string()))?,
+                group: DomainGroup::try_from(db_group)?,
                 recipients,
             }))
         })
@@ -71,8 +70,7 @@ impl GroupReader for DieselRepository {
                 .load::<DbGroup>(conn)?
                 .into_iter()
                 .map(DomainGroup::try_from)
-                .collect::<Result<Vec<DomainGroup>, _>>()
-                .map_err(|err| RepositoryError::ValidationError(err.to_string()))?;
+                .collect::<Result<Vec<DomainGroup>, _>>()?;
 
             Ok((total, items))
         })
@@ -87,8 +85,7 @@ impl GroupWriter for DieselRepository {
         let inserted = diesel::insert_into(groups::table)
             .values(&db_new)
             .get_result::<DbGroup>(&mut conn)?;
-        DomainGroup::try_from(inserted)
-            .map_err(|err| RepositoryError::ValidationError(err.to_string()))
+        Ok(DomainGroup::try_from(inserted)?)
     }
 
     fn delete_group(&self, id: i32) -> RepositoryResult<()> {

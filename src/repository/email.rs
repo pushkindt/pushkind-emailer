@@ -5,7 +5,6 @@ use crate::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
-use crate::domain::types::TypeConstraintError;
 use crate::models::email::{
     Email as DbEmail, EmailRecipient as DbEmailRecipient,
     UpdateEmailRecipient as DbUpdateEmailRecipient,
@@ -46,16 +45,10 @@ impl EmailReader for DieselRepository {
                 .load::<DbEmailRecipient>(conn)?;
 
             let email = DomainEmailWithRecipients {
-                email: email.try_into().map_err(|err: TypeConstraintError| {
-                    RepositoryError::ValidationError(err.to_string())
-                })?,
+                email: email.try_into()?,
                 recipients: recipients
                     .into_iter()
-                    .map(|recipient| {
-                        recipient.try_into().map_err(|err: TypeConstraintError| {
-                            RepositoryError::ValidationError(err.to_string())
-                        })
-                    })
+                    .map(|recipient| recipient.try_into())
                     .collect::<Result<Vec<_>, _>>()?,
             };
 
@@ -102,16 +95,10 @@ impl EmailReader for DieselRepository {
                 .zip(grouped)
                 .map(|(email, recipients)| {
                     Ok::<_, RepositoryError>(DomainEmailWithRecipients {
-                        email: email.try_into().map_err(|err: TypeConstraintError| {
-                            RepositoryError::ValidationError(err.to_string())
-                        })?,
+                        email: email.try_into()?,
                         recipients: recipients
                             .into_iter()
-                            .map(|recipient| {
-                                recipient.try_into().map_err(|err: TypeConstraintError| {
-                                    RepositoryError::ValidationError(err.to_string())
-                                })
-                            })
+                            .map(|recipient| recipient.try_into())
                             .collect::<Result<Vec<_>, _>>()?,
                     })
                 })
@@ -172,14 +159,12 @@ impl EmailRecipientReader for DieselRepository {
                 .then_with(|| b.0.updated_at.cmp(&a.0.updated_at))
         });
 
-        latest
+        let recipients = latest
             .into_iter()
-            .map(|(recipient, _)| {
-                recipient.try_into().map_err(|err: TypeConstraintError| {
-                    RepositoryError::ValidationError(err.to_string())
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()
+            .map(|(recipient, _)| recipient.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(recipients)
     }
 }
 
@@ -215,16 +200,10 @@ impl EmailWriter for DieselRepository {
                 .load::<DbEmailRecipient>(conn)?;
 
             Ok(DomainEmailWithRecipients {
-                email: email.try_into().map_err(|err: TypeConstraintError| {
-                    RepositoryError::ValidationError(err.to_string())
-                })?,
+                email: email.try_into()?,
                 recipients: recipients
                     .into_iter()
-                    .map(|recipient| {
-                        recipient.try_into().map_err(|err: TypeConstraintError| {
-                            RepositoryError::ValidationError(err.to_string())
-                        })
-                    })
+                    .map(|recipient| recipient.try_into())
                     .collect::<Result<Vec<_>, _>>()?,
             })
         })

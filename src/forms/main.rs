@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile, text::Text};
-use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
+use pushkind_common::repository::errors::RepositoryResult;
 use serde::Deserialize;
 use validator::Validate;
 
@@ -126,7 +126,7 @@ impl SendEmailForm {
             }
         }
 
-        NewEmail::try_new(
+        let email = NewEmail::try_new(
             hub_id,
             ammonia::clean(&self.message.0),
             self.subject.0,
@@ -134,7 +134,8 @@ impl SendEmailForm {
             attachment_name,
             attachment_mime,
             recipients,
-        )
-        .map_err(|err| RepositoryError::ValidationError(err.to_string()))
+        )?;
+
+        Ok(email)
     }
 }

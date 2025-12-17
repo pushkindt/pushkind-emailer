@@ -1,7 +1,7 @@
 //! Repository helpers used by integration and unit tests.
 use std::collections::HashMap;
 
-use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
+use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::email::{EmailRecipient, EmailWithRecipients};
 use crate::domain::recipient::{Recipient, RecipientWithGroups};
@@ -28,8 +28,7 @@ impl RecipientReader for TestRepository {
             None,
             None,
             vec![],
-        )
-        .map_err(|err| RepositoryError::ValidationError(err.to_string()))?;
+        )?;
         Ok(Some(RecipientWithGroups {
             recipient,
             groups: vec![],
