@@ -10,6 +10,7 @@ use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
 use crate::domain::recipient::{
     NewRecipient, Recipient, RecipientWithGroups, Unsubscribe, UpdateRecipient,
 };
+use crate::domain::types::HubId;
 
 mod helpers;
 
@@ -175,12 +176,12 @@ pub trait EmailRecipientReader {
 }
 
 pub trait HubReader {
-    fn get_hub_by_id(&self, id: i32) -> RepositoryResult<Option<Hub>>;
+    fn get_hub_by_id(&self, id: HubId) -> RepositoryResult<Option<Hub>>;
 }
 
 pub trait HubWriter {
     fn create_hub(&self, hub: &NewHub) -> RepositoryResult<Hub>;
-    fn update_hub(&self, id: i32, hub: &UpdateHub) -> RepositoryResult<Hub>;
+    fn update_hub(&self, id: HubId, hub: &UpdateHub) -> RepositoryResult<Hub>;
 }
 
 pub trait RecipientReader {

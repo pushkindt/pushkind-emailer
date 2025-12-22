@@ -56,7 +56,7 @@ use crate::routes::settings::{
 pub mod domain;
 #[cfg(feature = "server")]
 pub mod dto;
-#[cfg(feature = "data")]
+
 mod error_conversions;
 #[cfg(feature = "server")]
 pub mod forms;

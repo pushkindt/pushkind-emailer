@@ -1,14 +1,14 @@
 //! Business logic for application settings and history.
 use crate::domain::hub::NewHub;
+use crate::domain::types::HubId;
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::services::errors::{ServiceError, ServiceResult};
-use validator::Validate;
 
 use crate::dto::settings::{ExportedHistory, HistoryData, SettingsOverviewData, UnsubscribedData};
 use crate::services::{ensure_admin, ensure_emailer};
 
 use crate::domain::recipient::CSVExportRecipient;
-use crate::forms::settings::SaveHubForm;
+use crate::forms::settings::{SaveHubForm, SaveHubPayload};
 use crate::models::config::ServerConfig;
 use crate::repository::{EmailRecipientReader, HubReader, HubWriter, RecipientReader};
 
@@ -21,7 +21,10 @@ where
     R: HubReader + HubWriter,
 {
     ensure_admin(user)?;
-    let hub = load_or_create_hub(repo, user.hub_id)?;
+
+    let hub_id = HubId::new(user.hub_id)?;
+
+    let hub = load_or_create_hub(repo, hub_id)?;
 
     Ok(SettingsOverviewData { hub })
 }
@@ -88,29 +91,25 @@ where
 {
     ensure_admin(user)?;
 
-    form.validate()
-        .map_err(|err| ServiceError::Form(err.to_string()))?;
+    let hub_id = HubId::new(user.hub_id)?;
 
-    let hub = load_or_create_hub(repo, user.hub_id)?;
+    let hub = load_or_create_hub(repo, hub_id)?;
 
-    let updates = form
-        .try_into_update_hub()
-        .map_err(|err| ServiceError::Form(err.to_string()))?;
-    repo.update_hub(hub.id.get(), &updates)?;
+    let payload: SaveHubPayload = form.try_into()?;
+
+    let updates = payload.into_domain();
+    repo.update_hub(hub.id, &updates)?;
     Ok(())
 }
 
-fn load_or_create_hub<R>(repo: &R, hub_id: i32) -> ServiceResult<crate::domain::hub::Hub>
+fn load_or_create_hub<R>(repo: &R, hub_id: HubId) -> ServiceResult<crate::domain::hub::Hub>
 where
     R: HubReader + HubWriter,
 {
     match repo.get_hub_by_id(hub_id)? {
         Some(hub) => Ok(hub),
         None => {
-            let hub = NewHub::try_new(hub_id).map_err(|err| {
-                log::error!("Invalid hub id: {err}");
-                ServiceError::Internal
-            })?;
+            let hub = NewHub::new(hub_id, None, None, None, None, None, None, None, None);
             Ok(repo.create_hub(&hub)?)
         }
     }

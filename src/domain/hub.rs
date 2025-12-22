@@ -1,5 +1,5 @@
 //! Domain types representing hubs.
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use serde::Serialize;
 
 use crate::domain::types::{
@@ -74,8 +74,6 @@ pub struct UpdateHub {
     pub smtp_server: Option<SmtpServerHost>,
     /// Updated SMTP port.
     pub smtp_port: Option<SmtpPort>,
-    /// Updated creation timestamp.
-    pub created_at: Option<NaiveDateTime>,
     /// Updated modification timestamp.
     pub updated_at: Option<NaiveDateTime>,
     /// Updated IMAP server hostname.
@@ -88,8 +86,7 @@ pub struct UpdateHub {
 
 impl Hub {
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub const fn new(
+    pub fn new(
         id: HubId,
         login: Option<HubLogin>,
         password: Option<HubPassword>,
@@ -164,48 +161,106 @@ impl Hub {
 }
 
 impl NewHub {
-    #[must_use]
-    pub const fn new(id: HubId) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        id: HubId,
+        login: Option<HubLogin>,
+        password: Option<HubPassword>,
+        sender: Option<HubSenderName>,
+        smtp_server: Option<SmtpServerHost>,
+        smtp_port: Option<SmtpPort>,
+        imap_server: Option<ImapServerHost>,
+        imap_port: Option<ImapPort>,
+        email_template: Option<EmailTemplate>,
+    ) -> Self {
+        let now = Utc::now().naive_utc();
         Self {
             id,
-            login: None,
-            password: None,
-            sender: None,
-            smtp_server: None,
-            smtp_port: None,
-            created_at: None,
-            updated_at: None,
-            imap_server: None,
-            imap_port: None,
-            email_template: None,
+            login,
+            password,
+            sender,
+            smtp_server,
+            smtp_port,
+            created_at: Some(now),
+            updated_at: Some(now),
+            imap_server,
+            imap_port,
+            email_template,
         }
     }
 
-    pub fn try_new(id: i32) -> Result<Self, TypeConstraintError> {
-        Ok(Self::new(HubId::try_from(id)?))
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new(
+        id: i32,
+        login: Option<impl Into<String>>,
+        password: Option<impl Into<String>>,
+        sender: Option<impl Into<String>>,
+        smtp_server: Option<impl Into<String>>,
+        smtp_port: Option<impl Into<u16>>,
+        imap_server: Option<impl Into<String>>,
+        imap_port: Option<impl Into<u16>>,
+        email_template: Option<impl Into<String>>,
+    ) -> Result<Self, TypeConstraintError> {
+        Ok(Self::new(
+            HubId::new(id)?,
+            login.map(HubLogin::new).transpose()?,
+            password.map(HubPassword::new).transpose()?,
+            sender.map(HubSenderName::new).transpose()?,
+            smtp_server.map(SmtpServerHost::new).transpose()?,
+            smtp_port.map(|x| SmtpPort::new(x.into())).transpose()?,
+            imap_server.map(ImapServerHost::new).transpose()?,
+            imap_port.map(|x| ImapPort::new(x.into())).transpose()?,
+            email_template.map(EmailTemplate::new).transpose()?,
+        ))
     }
 }
 
 impl UpdateHub {
-    #[must_use]
-    pub const fn new() -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        login: Option<HubLogin>,
+        password: Option<HubPassword>,
+        sender: Option<HubSenderName>,
+        smtp_server: Option<SmtpServerHost>,
+        smtp_port: Option<SmtpPort>,
+        imap_server: Option<ImapServerHost>,
+        imap_port: Option<ImapPort>,
+        email_template: Option<EmailTemplate>,
+    ) -> Self {
+        let now = Utc::now().naive_utc();
         Self {
-            login: None,
-            password: None,
-            sender: None,
-            smtp_server: None,
-            smtp_port: None,
-            created_at: None,
-            updated_at: None,
-            imap_server: None,
-            imap_port: None,
-            email_template: None,
+            login,
+            password,
+            sender,
+            smtp_server,
+            smtp_port,
+            updated_at: Some(now),
+            imap_server,
+            imap_port,
+            email_template,
         }
     }
-}
 
-impl Default for UpdateHub {
-    fn default() -> Self {
-        Self::new()
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new(
+        login: Option<impl Into<String>>,
+        password: Option<impl Into<String>>,
+        sender: Option<impl Into<String>>,
+        smtp_server: Option<impl Into<String>>,
+        smtp_port: Option<impl Into<u16>>,
+        imap_server: Option<impl Into<String>>,
+        imap_port: Option<impl Into<u16>>,
+        email_template: Option<impl Into<String>>,
+    ) -> Result<Self, TypeConstraintError> {
+        Ok(Self::new(
+            login.map(HubLogin::new).transpose()?,
+            password.map(HubPassword::new).transpose()?,
+            sender.map(HubSenderName::new).transpose()?,
+            smtp_server.map(SmtpServerHost::new).transpose()?,
+            smtp_port.map(|x| SmtpPort::new(x.into())).transpose()?,
+            imap_server.map(ImapServerHost::new).transpose()?,
+            imap_port.map(|x| ImapPort::new(x.into())).transpose()?,
+            email_template.map(EmailTemplate::new).transpose()?,
+        ))
     }
 }

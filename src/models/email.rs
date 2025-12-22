@@ -110,12 +110,12 @@ pub struct NewEmailRecipient<'a> {
 
 #[derive(AsChangeset)]
 #[diesel(table_name = crate::schema::email_recipients)]
+#[diesel(treat_none_as_null = true)]
 pub struct UpdateEmailRecipient<'a> {
-    opened: Option<bool>,
-    is_sent: Option<bool>,
-    replied: Option<bool>,
+    opened: bool,
+    is_sent: bool,
     reply: Option<&'a str>,
-    updated_at: Option<NaiveDateTime>,
+    updated_at: NaiveDateTime,
 }
 
 impl TryFrom<Email> for DomainEmail {
@@ -184,9 +184,8 @@ impl<'a> From<&'a DomainUpdateEmailRecipient> for UpdateEmailRecipient<'a> {
         Self {
             opened: value.opened,
             is_sent: value.is_sent,
-            replied: value.replied,
             reply: value.reply.as_ref().map(|reply| reply.as_str()),
-            updated_at: Some(chrono::Utc::now().naive_utc()),
+            updated_at: chrono::Utc::now().naive_utc(),
         }
     }
 }

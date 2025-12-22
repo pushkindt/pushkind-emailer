@@ -134,9 +134,8 @@ where
     repo.update_recipient(
         recipient_id,
         &UpdateEmailRecipient {
-            opened: Some(true),
-            is_sent: Some(true),
-            replied: None,
+            opened: true,
+            is_sent: true,
             reply: None,
         },
     )?;

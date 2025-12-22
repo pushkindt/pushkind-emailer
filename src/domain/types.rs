@@ -344,10 +344,6 @@ non_empty_string_newtype!(
     "IMAP server host wrapper enforcing non-empty values."
 );
 non_empty_string_newtype!(
-    EmailTemplate,
-    "Email template wrapper enforcing non-empty values."
-);
-non_empty_string_newtype!(
     UnsubscribeReason,
     "Unsubscribe reason wrapper enforcing non-empty values."
 );
@@ -413,6 +409,57 @@ impl TryFrom<&str> for HubPassword {
 
 impl From<HubPassword> for String {
     fn from(value: HubPassword) -> Self {
+        value.0
+    }
+}
+
+/// Email message template enforcing trimmed, non-empty values.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EmailTemplate(String);
+
+impl EmailTemplate {
+    /// Constructs a sanitized, trimmed, non-empty value.
+    pub fn new<S: Into<String>>(value: S) -> Result<Self, TypeConstraintError> {
+        let sanitized = ammonia::clean(&value.into());
+        let inner = NonEmptyString::new(sanitized)?;
+        Ok(Self(inner.into_inner()))
+    }
+
+    /// Borrow the value as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the owned string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Display for EmailTemplate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for EmailTemplate {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for EmailTemplate {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<EmailTemplate> for String {
+    fn from(value: EmailTemplate) -> Self {
         value.0
     }
 }

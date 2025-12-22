@@ -263,11 +263,9 @@ pub struct UpdateEmail {
 /// Changes to apply to an [`EmailRecipient`] record.
 pub struct UpdateEmailRecipient {
     /// Updated open status.
-    pub opened: Option<bool>,
+    pub opened: bool,
     /// Updated sent status.
-    pub is_sent: Option<bool>,
-    /// Updated reply status.
-    pub replied: Option<bool>,
+    pub is_sent: bool,
     /// Optional recipient's reply
     pub reply: Option<EmailRecipientReply>,
 }
