@@ -222,7 +222,7 @@ impl From<EmailRecipient> for CSVExportRecipient {
             name: value.name.into_inner(),
             opened: value.opened,
             sent: value.is_sent,
-            replied: value.replied,
+            replied: value.reply.is_some(),
             updated_at: value.updated_at,
         }
     }

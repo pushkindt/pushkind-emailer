@@ -50,7 +50,7 @@ impl Email {
 
         let num_replied = email_recipients::table
             .filter(email_recipients::email_id.eq(email_id))
-            .filter(email_recipients::replied.eq(true))
+            .filter(email_recipients::reply.is_not_null())
             .count()
             .get_result::<i64>(conn)? as i32;
 
@@ -89,7 +89,6 @@ pub struct EmailRecipient {
     pub opened: bool,
     pub updated_at: NaiveDateTime,
     pub is_sent: bool,
-    pub replied: bool,
     pub reply: Option<String>,
     pub name: String,
     pub fields: String,
@@ -103,7 +102,6 @@ pub struct NewEmailRecipient<'a> {
     pub opened: bool,
     pub updated_at: NaiveDateTime,
     pub is_sent: bool,
-    pub replied: bool,
     pub name: &'a str,
     pub fields: &'a str,
 }
@@ -149,7 +147,6 @@ impl TryFrom<EmailRecipient> for DomainEmailRecipient {
             value.opened,
             value.updated_at,
             value.is_sent,
-            value.replied,
             value.reply,
             value.name,
             serde_json::from_str(&value.fields).unwrap_or_default(),

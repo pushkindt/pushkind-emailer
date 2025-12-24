@@ -468,7 +468,6 @@ mod tests {
                         false,
                         Utc::now().naive_utc(),
                         true,
-                        false,
                         None,
                         "Recent",
                         BTreeMap::new(),

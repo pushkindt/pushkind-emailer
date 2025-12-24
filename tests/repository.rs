@@ -162,7 +162,6 @@ fn insert_email_recipient(
     updated_at: chrono::NaiveDateTime,
     name: &str,
     fields: &str,
-    replied: bool,
 ) {
     let new_recipient = DbNewEmailRecipient {
         email_id,
@@ -170,7 +169,6 @@ fn insert_email_recipient(
         opened: false,
         updated_at,
         is_sent: true,
-        replied,
         name,
         fields,
     };
@@ -245,7 +243,6 @@ fn list_recent_email_recipients_returns_latest_snapshot() {
         created_1,
         "Old A",
         r#"{"segment":"old"}"#,
-        false,
     );
     insert_email_recipient(
         &mut conn,
@@ -254,7 +251,6 @@ fn list_recent_email_recipients_returns_latest_snapshot() {
         created_2,
         "New A",
         r#"{"segment":"new"}"#,
-        true,
     );
     insert_email_recipient(
         &mut conn,
@@ -263,7 +259,6 @@ fn list_recent_email_recipients_returns_latest_snapshot() {
         created_2,
         "Bee",
         r#"{"segment":"bee"}"#,
-        false,
     );
     insert_email_recipient(
         &mut conn,
@@ -272,7 +267,6 @@ fn list_recent_email_recipients_returns_latest_snapshot() {
         created_3,
         "Hub2 A",
         r#"{"segment":"hub2"}"#,
-        false,
     );
 
     let recipients = repo
@@ -288,7 +282,7 @@ fn list_recent_email_recipients_returns_latest_snapshot() {
         recipient_a.email_id,
         EmailId::new(email_2).expect("invalid email id")
     );
-    assert!(recipient_a.replied);
+
     assert_eq!(recipient_a.name, RecipientName::new("New A").unwrap());
     assert_eq!(
         recipient_a.fields.get("segment").map(String::as_str),
@@ -355,15 +349,7 @@ fn list_recent_email_recipients_applies_number_of_days_filter() {
     let email_old = insert_email(&mut conn, 1, old);
     let email_recent = insert_email(&mut conn, 1, recent);
 
-    insert_email_recipient(
-        &mut conn,
-        email_old,
-        "slow@example.com",
-        old,
-        "Slow",
-        "{}",
-        false,
-    );
+    insert_email_recipient(&mut conn, email_old, "slow@example.com", old, "Slow", "{}");
     insert_email_recipient(
         &mut conn,
         email_recent,
@@ -371,7 +357,6 @@ fn list_recent_email_recipients_applies_number_of_days_filter() {
         recent,
         "Fast",
         "{}",
-        false,
     );
 
     let all = repo

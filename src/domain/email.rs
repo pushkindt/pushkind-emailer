@@ -120,8 +120,6 @@ pub struct EmailRecipient {
     pub updated_at: NaiveDateTime,
     /// Flag indicating the email was sent to this recipient.
     pub is_sent: bool,
-    /// Whether the recipient replied.
-    pub replied: bool,
     /// Optional recipient's reply
     pub reply: Option<EmailRecipientReply>,
     /// Recipient's name at the moment of sending
@@ -139,7 +137,6 @@ impl EmailRecipient {
         opened: bool,
         updated_at: NaiveDateTime,
         is_sent: bool,
-        replied: bool,
         reply: Option<EmailRecipientReply>,
         name: RecipientName,
         fields: BTreeMap<String, String>,
@@ -151,7 +148,6 @@ impl EmailRecipient {
             opened,
             updated_at,
             is_sent,
-            replied,
             reply,
             name,
             fields,
@@ -166,7 +162,6 @@ impl EmailRecipient {
         opened: bool,
         updated_at: NaiveDateTime,
         is_sent: bool,
-        replied: bool,
         reply: Option<String>,
         name: impl Into<String>,
         fields: BTreeMap<String, String>,
@@ -178,7 +173,6 @@ impl EmailRecipient {
             opened,
             updated_at,
             is_sent,
-            replied,
             reply.map(EmailRecipientReply::try_from).transpose()?,
             RecipientName::new(name.into())?,
             fields,

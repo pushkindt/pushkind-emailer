@@ -54,7 +54,7 @@
                             <div class="ms-2 me-auto">
                                 <div class="fw-bold">
                                     <a class="
-                                        {% if recipient.replied %}
+                                        {% if recipient.reply %}
                                             link-success
                                         {% elif recipient.opened %}
                                             link-warning
@@ -66,7 +66,7 @@
                                 </div>
                                 <div>{{recipient.reply | safe }}</div>
                             </div>
-                            {% if recipient.is_sent or recipient.opened or recipient.replied %}
+                            {% if recipient.is_sent or recipient.opened or recipient.reply %}
                             <span class="badge text-bg-primary rounded-pill">
                                 {% if recipient.is_sent %}
                                 <i class="bi bi-envelope-check-fill" title="Сообщение отправлено"></i>
@@ -74,7 +74,7 @@
                                 {% if recipient.opened %}
                                 <i class="bi bi-envelope-open-fill" title="Сообщение просмотрено"></i>
                                 {% endif %}
-                                {% if recipient.replied %}
+                                {% if recipient.reply %}
                                 <i class="bi bi-reply-fill" title="Получен ответ на сообщение"></i>
                                 {% endif %}
                             </span>
