@@ -140,8 +140,8 @@ where
     ensure_emailer(user)?;
 
     let hub_id = HubId::new(user.hub_id)?;
-    let retry_email = match params.retry {
-        Some(id) => repo.get_email_by_id(EmailId::new(id)?, hub_id)?,
+    let retry_email = match params.retry.and_then(|id| EmailId::new(id).ok()) {
+        Some(email_id) => repo.get_email_by_id(email_id, hub_id)?,
         None => None,
     };
 
@@ -302,9 +302,14 @@ mod tests {
     use crate::domain::email::EmailRecipient;
     use crate::domain::recipient::Recipient;
     use crate::domain::types::{GroupId, HubId, RecipientEmail, RecipientId, RecipientName};
+    use crate::dto::main::IndexQueryParams;
     use crate::forms::main::SendEmailForm;
-    use crate::repository::RecipientListQuery;
+    use crate::repository::{EmailListQuery, GroupListQuery, RecipientListQuery};
     use crate::repository::mock::MockRepository;
+    use crate::services::main::load_index_page;
+    use crate::SERVICE_ACCESS_ROLE;
+    use pushkind_common::domain::auth::AuthenticatedUser;
+    use pushkind_common::pagination::DEFAULT_ITEMS_PER_PAGE;
 
     fn build_recipient(id: i32, email: &str, name: &str, hub_id: HubId) -> Recipient {
         Recipient::new(
@@ -483,5 +488,62 @@ mod tests {
             email.recipients[0].address,
             RecipientEmail::new("stale@example.com").unwrap()
         );
+    }
+
+    #[test]
+    fn load_index_page_ignores_invalid_retry_id() {
+        let user = AuthenticatedUser {
+            sub: "1".to_string(),
+            email: "user@example.com".to_string(),
+            hub_id: 1,
+            name: "User".to_string(),
+            roles: vec![SERVICE_ACCESS_ROLE.to_string()],
+            exp: 0,
+        };
+        let hub_id = HubId::new(user.hub_id).unwrap();
+        let params = IndexQueryParams {
+            retry: Some(0),
+            page: None,
+        };
+
+        let mut repo = MockRepository::new();
+
+        repo.expect_get_email_by_id().times(0);
+
+        let hub_id_match = hub_id;
+        repo.expect_list_recipients()
+            .withf(move |query: &RecipientListQuery| query.hub_id == hub_id_match)
+            .times(1)
+            .returning(|_| Ok((0, vec![])));
+
+        let hub_id_match = hub_id;
+        repo.expect_list_groups()
+            .withf(move |query: &GroupListQuery| query.hub_id == hub_id_match)
+            .times(1)
+            .returning(|_| Ok((0, vec![])));
+
+        let hub_id_match = hub_id;
+        repo.expect_list_emails()
+            .withf(move |query: &EmailListQuery| {
+                query.hub_id == hub_id_match
+                    && query
+                        .pagination
+                        .as_ref()
+                        .map(|pagination| {
+                            pagination.page == 1 && pagination.per_page == DEFAULT_ITEMS_PER_PAGE
+                        })
+                        .unwrap_or(false)
+            })
+            .times(1)
+            .returning(|_| Ok((0, vec![])));
+
+        let hub_id_match = hub_id;
+        repo.expect_list_custom_fields()
+            .withf(move |hub| *hub == hub_id_match)
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let data = load_index_page(params, &user, &repo).unwrap();
+        assert!(data.retry_email.is_none());
     }
 }
