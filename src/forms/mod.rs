@@ -5,7 +5,6 @@
 use thiserror::Error;
 use validator::ValidationErrors;
 
-pub mod files;
 pub mod groups;
 pub mod main;
 pub mod recipients;

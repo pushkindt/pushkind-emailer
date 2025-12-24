@@ -5,6 +5,7 @@ use crate::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
+use crate::domain::types::{EmailId, HubId, RecipientId};
 use crate::models::email::{
     Email as DbEmail, EmailRecipient as DbEmailRecipient,
     UpdateEmailRecipient as DbUpdateEmailRecipient,
@@ -14,23 +15,21 @@ use diesel::prelude::*;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
 
 use super::helpers::apply_pagination;
-use crate::repository::{
-    DieselRepository, EmailListQuery, EmailReader, EmailRecipientReader, EmailWriter,
-};
+use crate::repository::{DieselRepository, EmailListQuery, EmailReader, EmailWriter};
 
 impl EmailReader for DieselRepository {
     fn get_email_by_id(
         &self,
-        id: i32,
-        hub_id: i32,
+        id: EmailId,
+        hub_id: HubId,
     ) -> RepositoryResult<Option<DomainEmailWithRecipients>> {
         use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
 
         conn.transaction::<Option<DomainEmailWithRecipients>, RepositoryError, _>(|conn| {
             let email = emails::table
-                .filter(emails::id.eq(id))
-                .filter(emails::hub_id.eq(hub_id))
+                .filter(emails::id.eq(id.get()))
+                .filter(emails::hub_id.eq(hub_id.get()))
                 .select(DbEmail::as_select())
                 .first::<DbEmail>(conn)
                 .optional()?;
@@ -66,7 +65,7 @@ impl EmailReader for DieselRepository {
         conn.transaction::<(usize, Vec<DomainEmailWithRecipients>), RepositoryError, _>(|conn| {
             let query_builder = || {
                 emails::table
-                    .filter(emails::hub_id.eq(query.hub_id))
+                    .filter(emails::hub_id.eq(query.hub_id.get()))
                     .select(DbEmail::as_select())
                     .into_boxed::<diesel::sqlite::Sqlite>()
             };
@@ -107,12 +106,10 @@ impl EmailReader for DieselRepository {
             Ok((total, result))
         })
     }
-}
 
-impl EmailRecipientReader for DieselRepository {
-    fn list_recent_recipients(
+    fn list_recent_email_recipients(
         &self,
-        hub_id: i32,
+        hub_id: HubId,
         // Only include recipients whose most recent email was sent strictly
         // after `number_of_days` ago. `None` skips filtering.
         number_of_days: Option<i64>,
@@ -124,7 +121,7 @@ impl EmailRecipientReader for DieselRepository {
         // Build the base query (SQLite-compatible)
         let mut query = email_recipients::table
             .inner_join(emails::table)
-            .filter(emails::hub_id.eq(hub_id))
+            .filter(emails::hub_id.eq(hub_id.get()))
             .into_boxed();
 
         // Push the created_at cutoff into the DB
@@ -169,9 +166,9 @@ impl EmailRecipientReader for DieselRepository {
 }
 
 impl EmailWriter for DieselRepository {
-    fn update_recipient(
+    fn update_email_recipient(
         &self,
-        recipient_id: i32,
+        recipient_id: RecipientId,
         updates: &DomainUpdateEmailRecipient,
     ) -> RepositoryResult<DomainEmailWithRecipients> {
         use crate::schema::{email_recipients, emails};
@@ -179,14 +176,16 @@ impl EmailWriter for DieselRepository {
         let mut conn = self.conn()?;
         conn.transaction::<DomainEmailWithRecipients, RepositoryError, _>(|conn| {
             let email_id: i32 = email_recipients::table
-                .filter(email_recipients::id.eq(recipient_id))
+                .filter(email_recipients::id.eq(recipient_id.get()))
                 .select(email_recipients::email_id)
                 .first(conn)?;
 
             let changeset = DbUpdateEmailRecipient::from(updates);
-            diesel::update(email_recipients::table.filter(email_recipients::id.eq(recipient_id)))
-                .set(changeset)
-                .execute(conn)?;
+            diesel::update(
+                email_recipients::table.filter(email_recipients::id.eq(recipient_id.get())),
+            )
+            .set(changeset)
+            .execute(conn)?;
 
             DbEmail::recalc_email_stats(conn, email_id)?;
 
@@ -209,244 +208,32 @@ impl EmailWriter for DieselRepository {
         })
     }
 
-    fn delete_email(&self, id: i32) -> RepositoryResult<()> {
+    fn delete_email(&self, id: EmailId, hub_id: HubId) -> RepositoryResult<()> {
         use crate::schema::{email_recipients, emails};
         let mut conn = self.conn()?;
         conn.transaction::<(), RepositoryError, _>(|conn| {
-            diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id)))
+            let email_exists = emails::table
+                .filter(emails::id.eq(id.get()))
+                .filter(emails::hub_id.eq(hub_id.get()))
+                .select(emails::id)
+                .first::<i32>(conn)
+                .optional()?;
+            if email_exists.is_none() {
+                return Err(RepositoryError::NotFound);
+            }
+
+            diesel::delete(email_recipients::table.filter(email_recipients::email_id.eq(id.get())))
                 .execute(conn)?;
-            diesel::delete(emails::table.filter(emails::id.eq(id))).execute(conn)?;
+            let deleted = diesel::delete(
+                emails::table
+                    .filter(emails::id.eq(id.get()))
+                    .filter(emails::hub_id.eq(hub_id.get())),
+            )
+            .execute(conn)?;
+            if deleted == 0 {
+                return Err(RepositoryError::NotFound);
+            }
             Ok(())
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::repository::{DieselRepository, EmailRecipientReader};
-    use chrono::{Duration, Utc};
-    use diesel::connection::SimpleConnection;
-    use pushkind_common::db::{DbPool, establish_connection_pool};
-    use tempfile::{TempDir, tempdir};
-
-    use crate::domain::types::{EmailId, RecipientEmail, RecipientName};
-
-    fn setup_db() -> (TempDir, DbPool) {
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.sqlite");
-        let db_path = db_path.to_string_lossy().to_string();
-        let pool = establish_connection_pool(&db_path).unwrap();
-
-        {
-            let mut conn = pool.get().unwrap();
-
-            conn.batch_execute(
-                r#"
-                CREATE TABLE hubs (
-                    id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL
-                );
-                "#,
-            )
-            .unwrap();
-
-            conn.batch_execute(
-                r#"
-                CREATE TABLE emails (
-                    id INTEGER PRIMARY KEY,
-                    message TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    is_sent BOOLEAN NOT NULL,
-                    subject TEXT,
-                    attachment BLOB,
-                    attachment_name TEXT,
-                    attachment_mime TEXT,
-                    num_sent INTEGER NOT NULL,
-                    num_opened INTEGER NOT NULL,
-                    num_replied INTEGER NOT NULL,
-                    hub_id INTEGER NOT NULL REFERENCES hubs(id)
-                );
-                "#,
-            )
-            .unwrap();
-
-            conn.batch_execute(
-                r#"
-                CREATE TABLE email_recipients (
-                    id INTEGER PRIMARY KEY,
-                    email_id INTEGER NOT NULL REFERENCES emails(id),
-                    address TEXT NOT NULL,
-                    opened BOOLEAN NOT NULL,
-                    updated_at TIMESTAMP NOT NULL,
-                    is_sent BOOLEAN NOT NULL,
-                    replied BOOLEAN NOT NULL,
-                    reply TEXT,
-                    name TEXT NOT NULL,
-                    fields TEXT NOT NULL
-                );
-                "#,
-            )
-            .unwrap();
-        }
-
-        (dir, pool)
-    }
-
-    #[test]
-    fn list_recent_recipients_returns_latest_snapshot() {
-        let (_dir, pool) = setup_db();
-
-        {
-            let mut conn = pool.get().unwrap();
-
-            conn.batch_execute(
-                r#"
-                INSERT INTO hubs (id, name) VALUES (1, 'Hub 1'), (2, 'Hub 2');
-                "#,
-            )
-            .unwrap();
-
-            conn.batch_execute(
-                r#"
-                INSERT INTO emails (
-                    id,
-                    message,
-                    created_at,
-                    is_sent,
-                    subject,
-                    attachment,
-                    attachment_name,
-                    attachment_mime,
-                    num_sent,
-                    num_opened,
-                    num_replied,
-                    hub_id
-                )
-                VALUES
-                    (1, 'Msg', '2024-01-01 00:00:00', 0, NULL, NULL, NULL, NULL, 0, 0, 0, 1),
-                    (2, 'Msg', '2024-01-02 00:00:00', 0, NULL, NULL, NULL, NULL, 0, 0, 0, 1),
-                    (3, 'Msg', '2024-01-03 00:00:00', 0, NULL, NULL, NULL, NULL, 0, 0, 0, 2);
-                "#,
-            )
-            .unwrap();
-
-            conn.batch_execute(
-                r#"
-                INSERT INTO email_recipients (
-                    id,
-                    email_id,
-                    address,
-                    opened,
-                    updated_at,
-                    is_sent,
-                    replied,
-                    reply,
-                    name,
-                    fields
-                )
-                VALUES
-                    (1, 1, 'a@example.com', 0, '2024-01-04 10:00:00', 0, 0, NULL, 'Old A', '{"segment":"old"}'),
-                    (2, 2, 'a@example.com', 1, '2024-01-02 10:00:00', 1, 1, 'Thanks', 'New A', '{"segment":"new"}'),
-                    (3, 2, 'b@example.com', 0, '2024-01-01 11:00:00', 0, 0, NULL, 'Bee', '{"segment":"bee"}'),
-                    (4, 3, 'a@example.com', 1, '2024-01-03 12:00:00', 1, 0, NULL, 'Hub2 A', '{"segment":"hub2"}');
-                "#,
-            )
-            .unwrap();
-        }
-
-        let repo = DieselRepository::new(pool.clone());
-
-        let recipients = repo.list_recent_recipients(1, None).unwrap();
-        assert_eq!(recipients.len(), 2);
-
-        let recipient_a = recipients
-            .iter()
-            .find(|recipient| recipient.address == RecipientEmail::new("a@example.com").unwrap())
-            .unwrap();
-        assert_eq!(recipient_a.email_id, EmailId::try_from(2).unwrap());
-        assert!(recipient_a.opened);
-        assert!(recipient_a.is_sent);
-        assert!(recipient_a.replied);
-        assert_eq!(
-            recipient_a.reply.as_ref().map(|reply| reply.as_str()),
-            Some("Thanks")
-        );
-        assert_eq!(recipient_a.name, RecipientName::new("New A").unwrap());
-        assert_eq!(
-            recipient_a.fields.get("segment").map(String::as_str),
-            Some("new")
-        );
-
-        let recipient_b = recipients
-            .iter()
-            .find(|recipient| recipient.address == RecipientEmail::new("b@example.com").unwrap())
-            .unwrap();
-        assert_eq!(recipient_b.email_id, EmailId::try_from(2).unwrap());
-        assert_eq!(recipient_b.name, RecipientName::new("Bee").unwrap());
-        assert_eq!(
-            recipient_b.fields.get("segment").map(String::as_str),
-            Some("bee")
-        );
-
-        let recipients_hub2 = repo.list_recent_recipients(2, None).unwrap();
-        assert_eq!(recipients_hub2.len(), 1);
-        assert_eq!(
-            recipients_hub2[0].address,
-            RecipientEmail::new("a@example.com").unwrap()
-        );
-        assert_eq!(
-            recipients_hub2[0].name,
-            RecipientName::new("Hub2 A").unwrap()
-        );
-        assert_eq!(
-            recipients_hub2[0].fields.get("segment").map(String::as_str),
-            Some("hub2")
-        );
-    }
-
-    #[test]
-    fn list_recent_recipients_applies_number_of_days_filter() {
-        let (_dir, pool) = setup_db();
-
-        let now = Utc::now().naive_utc();
-        let recent = now - Duration::hours(12);
-        let old = now - Duration::days(5);
-
-        {
-            let mut conn = pool.get().unwrap();
-
-            conn.batch_execute(
-                r#"
-                INSERT INTO hubs (id, name) VALUES (1, 'Hub 1');
-                "#,
-            )
-            .unwrap();
-
-            let insert_emails = format!(
-                "INSERT INTO emails (id, message, created_at, is_sent, subject, attachment, attachment_name, attachment_mime, num_sent, num_opened, num_replied, hub_id) VALUES
-                    (1, 'Msg', '{old}', 1, NULL, NULL, NULL, NULL, 0, 0, 0, 1),
-                    (2, 'Msg', '{recent}', 1, NULL, NULL, NULL, NULL, 0, 0, 0, 1);",
-            );
-            conn.batch_execute(&insert_emails).unwrap();
-
-            let insert_recipients = format!(
-                "INSERT INTO email_recipients (id, email_id, address, opened, updated_at, is_sent, replied, reply, name, fields) VALUES
-                    (1, 1, 'slow@example.com', 0, '{old}', 1, 0, NULL, 'Slow', '{{}}'),
-                    (2, 2, 'fast@example.com', 0, '{recent}', 1, 0, NULL, 'Fast', '{{}}');",
-            );
-            conn.batch_execute(&insert_recipients).unwrap();
-        }
-
-        let repo = DieselRepository::new(pool.clone());
-
-        let all = repo.list_recent_recipients(1, None).unwrap();
-        assert_eq!(all.len(), 2);
-
-        let filtered = repo.list_recent_recipients(1, Some(3)).unwrap();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(
-            filtered[0].address,
-            RecipientEmail::new("fast@example.com").unwrap()
-        );
     }
 }

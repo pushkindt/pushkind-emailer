@@ -1,6 +1,6 @@
 //! Integration tests for recipient uploads.
 use actix_multipart::form::tempfile::TempFile;
-use pushkind_emailer::domain::types::{HubId, RecipientEmail, RecipientName};
+use pushkind_emailer::domain::types::{GroupName, HubId, RecipientEmail, RecipientName};
 use pushkind_emailer::forms::recipients::UploadRecipientsForm;
 use std::collections::BTreeMap;
 use std::io::{Seek, SeekFrom, Write};
@@ -28,7 +28,10 @@ fn upload_recipients_parse() {
         RecipientEmail::new("john@example.com").unwrap()
     );
     assert_eq!(res[0].hub_id, HubId::try_from(42).unwrap());
-    assert_eq!(res[0].groups.as_ref().unwrap(), &vec!["group1".to_string()]);
+    assert_eq!(
+        res[0].groups.as_ref().unwrap(),
+        &vec![GroupName::new("group1").unwrap()]
+    );
     let mut fields = BTreeMap::new();
     fields.insert("foo".to_string(), "bar".to_string());
     assert_eq!(res[0].fields.as_ref().unwrap(), &fields);
@@ -38,7 +41,10 @@ fn upload_recipients_parse() {
         res[1].email,
         RecipientEmail::new("jane@example.com").unwrap()
     );
-    assert_eq!(res[1].groups.as_ref().unwrap(), &vec!["group1".to_string()]);
+    assert_eq!(
+        res[1].groups.as_ref().unwrap(),
+        &vec![GroupName::new("group1").unwrap()]
+    );
     let mut fields2 = BTreeMap::new();
     fields2.insert("foo".to_string(), "bar2".to_string());
     assert_eq!(res[1].fields.as_ref().unwrap(), &fields2);

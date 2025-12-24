@@ -3,7 +3,7 @@ use crate::models::hub::Hub;
 use diesel::prelude::*;
 
 use crate::domain::group::{Group as DomainGroup, NewGroup as DomainNewGroup};
-use crate::domain::types::{GroupId, HubId, NonEmptyString, TypeConstraintError};
+use crate::domain::types::{GroupId, GroupName, HubId, TypeConstraintError};
 use crate::models::recipient::Recipient;
 
 #[derive(Queryable, Selectable, Identifiable, Associations, Clone, QueryableByName)]
@@ -41,7 +41,7 @@ impl TryFrom<Group> for DomainGroup {
     fn try_from(value: Group) -> Result<Self, Self::Error> {
         Ok(Self {
             id: GroupId::try_from(value.id)?,
-            name: NonEmptyString::try_from(value.name)?,
+            name: GroupName::try_from(value.name)?,
             hub_id: HubId::try_from(value.hub_id)?,
             created_at: value.created_at,
             updated_at: value.updated_at,

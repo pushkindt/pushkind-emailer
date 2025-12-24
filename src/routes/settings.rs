@@ -23,7 +23,7 @@ pub async fn settings_show(
     server_config: web::Data<CommonServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    let data = match load_settings_overview(repo.get_ref(), &user) {
+    let data = match load_settings_overview(&user, repo.get_ref()) {
         Ok(data) => data,
         Err(ServiceError::Unauthorized) => {
             FlashMessage::error("Недостаточно прав.").send();
@@ -54,7 +54,7 @@ pub async fn unsubscribed_show(
     server_config: web::Data<CommonServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    let data = match load_unsubscribed(repo.get_ref(), &user) {
+    let data = match load_unsubscribed(&user, repo.get_ref()) {
         Ok(data) => data,
         Err(ServiceError::Unauthorized) => {
             FlashMessage::error("Недостаточно прав.").send();
@@ -86,7 +86,7 @@ pub async fn history_show(
     server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    let data = match load_history(repo.get_ref(), &user, &server_config) {
+    let data = match load_history(&user, repo.get_ref(), &server_config) {
         Ok(data) => data,
         Err(ServiceError::Unauthorized) => {
             FlashMessage::error("Недостаточно прав.").send();
@@ -115,7 +115,7 @@ pub async fn history_download(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
-    match export_history(repo.get_ref(), &user) {
+    match export_history(&user, repo.get_ref()) {
         Ok(ExportedHistory { bytes }) => HttpResponse::Ok()
             .content_type("text/csv")
             .append_header((
@@ -136,11 +136,11 @@ pub async fn history_download(
 
 #[post("/settings/save")]
 pub async fn settings_save(
+    web::Form(form): web::Form<SaveHubForm>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<SaveHubForm>,
 ) -> impl Responder {
-    match save_hub(repo.get_ref(), &user, form) {
+    match save_hub(form, &user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Хаб сохранён.").send();
             redirect("/settings")

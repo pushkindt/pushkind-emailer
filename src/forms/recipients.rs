@@ -9,7 +9,8 @@ use thiserror::Error;
 use validator::Validate;
 
 use crate::domain::recipient::{NewRecipient, UpdateRecipient};
-use crate::domain::types::TypeConstraintError;
+use crate::domain::types::{GroupId, HubId, RecipientEmail, RecipientName, RecipientSourceUrl};
+use crate::forms::FormError;
 
 /// Form for adding a single recipient manually.
 #[derive(Deserialize, Validate)]
@@ -20,6 +21,11 @@ pub struct AddRecipientForm {
     pub email: String,
 }
 
+pub struct AddRecipientPayload {
+    pub name: RecipientName,
+    pub email: RecipientEmail,
+}
+
 /// Form specifying an external source to load recipients from.
 #[derive(Deserialize, Validate)]
 pub struct SourceRecipientForm {
@@ -27,11 +33,8 @@ pub struct SourceRecipientForm {
     pub source: String, // URL of the service to fetch a JSON array of NewRecipient
 }
 
-/// Form used to delete a recipient by identifier.
-#[derive(Deserialize, Validate)]
-pub struct DeleteRecipientForm {
-    #[validate(range(min = 1))]
-    pub id: i32,
+pub struct SourceRecipientPayload {
+    pub source: RecipientSourceUrl,
 }
 
 /// Form for uploading a CSV file containing recipients.
@@ -44,8 +47,6 @@ pub struct UploadRecipientsForm {
 /// Form data for updating an existing recipient.
 #[derive(Deserialize, Validate)]
 pub struct SaveRecipientForm {
-    #[validate(range(min = 1))]
-    pub id: i32,
     #[validate(length(min = 1))]
     pub name: String,
     #[validate(email)]
@@ -58,16 +59,148 @@ pub struct SaveRecipientForm {
     pub value: Vec<String>,
 }
 
-impl SaveRecipientForm {
-    pub fn try_into_update_recipient(self) -> Result<UpdateRecipient, TypeConstraintError> {
-        let fields = self
-            .field
-            .iter()
-            .cloned()
-            .zip(self.value.iter().cloned())
-            .collect();
+pub struct SaveRecipientPayload {
+    pub name: RecipientName,
+    pub email: RecipientEmail,
+    pub groups: Vec<GroupId>,
+    pub fields: BTreeMap<String, String>,
+}
 
-        UpdateRecipient::try_new(self.name, self.email, fields, self.groups)
+impl TryFrom<AddRecipientForm> for AddRecipientPayload {
+    type Error = FormError;
+
+    fn try_from(form: AddRecipientForm) -> Result<Self, Self::Error> {
+        form.validate().map_err(FormError::Validation)?;
+        Ok(Self {
+            name: RecipientName::new(form.name).map_err(|_| FormError::InvalidName)?,
+            email: RecipientEmail::new(form.email).map_err(|_| FormError::InvalidEmail)?,
+        })
+    }
+}
+
+impl AddRecipientPayload {
+    pub fn into_domain(self, hub_id: HubId) -> NewRecipient {
+        NewRecipient {
+            name: self.name,
+            email: self.email,
+            hub_id,
+            fields: None,
+            groups: None,
+        }
+    }
+}
+
+impl TryFrom<SaveRecipientForm> for SaveRecipientPayload {
+    type Error = FormError;
+
+    fn try_from(form: SaveRecipientForm) -> Result<Self, Self::Error> {
+        form.validate().map_err(FormError::Validation)?;
+
+        if form.field.len() != form.value.len() {
+            return Err(FormError::InvalidField);
+        }
+
+        let fields = form.field.into_iter().zip(form.value).collect();
+
+        Ok(Self {
+            name: RecipientName::new(form.name).map_err(|_| FormError::InvalidName)?,
+            email: RecipientEmail::new(form.email).map_err(|_| FormError::InvalidEmail)?,
+            groups: form
+                .groups
+                .into_iter()
+                .map(GroupId::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| FormError::InvalidGroupId)?,
+            fields,
+        })
+    }
+}
+
+impl SaveRecipientPayload {
+    pub fn into_domain(self) -> UpdateRecipient {
+        UpdateRecipient {
+            name: self.name,
+            email: self.email,
+            fields: self.fields,
+            groups: self.groups,
+        }
+    }
+}
+
+impl TryFrom<SourceRecipientForm> for SourceRecipientPayload {
+    type Error = FormError;
+
+    fn try_from(form: SourceRecipientForm) -> Result<Self, Self::Error> {
+        form.validate().map_err(FormError::Validation)?;
+
+        Ok(Self {
+            source: RecipientSourceUrl::new(form.source).map_err(|_| FormError::InvalidSource)?,
+        })
+    }
+}
+
+/// Errors returned when loading recipients from a remote service.
+#[derive(Debug, Error)]
+pub enum SourceRecipientFormError {
+    #[error("Error reading API")]
+    RequestError,
+    #[error("Error parsing API")]
+    DeserializeError,
+    #[error("Recipient validation failed: {0}")]
+    ValidationError(String),
+}
+
+impl From<reqwest::Error> for SourceRecipientFormError {
+    fn from(_: reqwest::Error) -> Self {
+        Self::RequestError
+    }
+}
+
+impl SourceRecipientPayload {
+    /// Loads recipients from the external service specified in [`SourceRecipientForm`].
+    ///
+    /// The `id_value` is sent as a cookie named `id` with the request.
+    pub async fn load(
+        &self,
+        id_value: &str,
+        hub_id: HubId,
+    ) -> Result<Vec<NewRecipient>, SourceRecipientFormError> {
+        let client = reqwest::Client::new();
+        let response = client
+            .get(self.source.as_str())
+            .header(COOKIE, format!("id={id_value}"))
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            #[derive(Deserialize)]
+            struct SourceRecipient {
+                name: String,
+                email: Option<String>,
+                fields: Option<BTreeMap<String, String>>,
+                groups: Option<Vec<String>>,
+            }
+
+            let recipients: Vec<SourceRecipient> = response.json().await?;
+            let recipients = recipients
+                .into_iter()
+                .filter(|r| r.email.is_some())
+                .filter(|r| !r.email.as_ref().unwrap().trim().is_empty())
+                .map(|r| {
+                    NewRecipient::try_new(
+                        r.name,
+                        r.email.unwrap(),
+                        hub_id.get(),
+                        r.fields,
+                        r.groups,
+                    )
+                    .map_err(|err| SourceRecipientFormError::ValidationError(err.to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(recipients)
+        } else {
+            Err(SourceRecipientFormError::RequestError)
+        }
     }
 }
 
@@ -158,61 +291,21 @@ impl UploadRecipientsForm {
     }
 }
 
-/// Errors returned when loading recipients from a remote service.
-#[derive(Debug, Error)]
-pub enum SourceRecipientFormError {
-    #[error("Error reading API")]
-    RequestError,
-    #[error("Error parsing API")]
-    DeserializeError,
-    #[error("Recipient validation failed: {0}")]
-    ValidationError(String),
-}
+#[cfg(test)]
+mod tests {
+    use super::{SaveRecipientForm, SaveRecipientPayload};
 
-impl From<reqwest::Error> for SourceRecipientFormError {
-    fn from(_: reqwest::Error) -> Self {
-        Self::RequestError
-    }
-}
+    #[test]
+    fn save_recipient_rejects_mismatched_fields() {
+        let form = SaveRecipientForm {
+            name: "Jane".to_string(),
+            email: "jane@example.com".to_string(),
+            groups: vec![],
+            field: vec!["city".to_string(), "role".to_string()],
+            value: vec!["Paris".to_string()],
+        };
 
-impl SourceRecipientForm {
-    /// Loads recipients from the external service specified in [`SourceRecipientForm`].
-    ///
-    /// The `id_value` is sent as a cookie named `id` with the request.
-    pub async fn load(
-        &self,
-        id_value: &str,
-        hub_id: i32,
-    ) -> Result<Vec<NewRecipient>, SourceRecipientFormError> {
-        let client = reqwest::Client::new();
-        let response = client
-            .get(&self.source)
-            .header(COOKIE, format!("id={id_value}"))
-            .send()
-            .await?;
-
-        if response.status().is_success() {
-            #[derive(Deserialize)]
-            struct SourceRecipient {
-                name: String,
-                email: Option<String>,
-                fields: Option<BTreeMap<String, String>>,
-                groups: Option<Vec<String>>,
-            }
-
-            let recipients: Vec<SourceRecipient> = response.json().await?;
-            let recipients = recipients
-                .into_iter()
-                .filter(|r| r.email.is_some())
-                .filter(|r| !r.email.as_ref().unwrap().trim().is_empty())
-                .map(|r| {
-                    NewRecipient::try_new(r.name, r.email.unwrap(), hub_id, r.fields, r.groups)
-                        .map_err(|err| SourceRecipientFormError::ValidationError(err.to_string()))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(recipients)
-        } else {
-            Err(SourceRecipientFormError::RequestError)
-        }
+        let result: Result<SaveRecipientPayload, _> = form.try_into();
+        assert!(result.is_err());
     }
 }

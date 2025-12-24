@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::Serialize;
 
 use crate::domain::recipient::Recipient;
-use crate::domain::types::{GroupId, HubId, NonEmptyString, TypeConstraintError};
+use crate::domain::types::{GroupId, GroupName, HubId, TypeConstraintError};
 
 #[derive(Serialize, Debug)]
 /// A named collection of recipients within a hub.
@@ -11,7 +11,7 @@ pub struct Group {
     /// Identifier of the group.
     pub id: GroupId,
     /// Display name of the group.
-    pub name: NonEmptyString,
+    pub name: GroupName,
     /// Hub that owns the group.
     pub hub_id: HubId,
     /// Time the group was created.
@@ -21,10 +21,9 @@ pub struct Group {
 }
 
 impl Group {
-    #[must_use]
-    pub const fn new(
+    pub fn new(
         id: GroupId,
-        name: NonEmptyString,
+        name: GroupName,
         hub_id: HubId,
         created_at: Option<NaiveDateTime>,
         updated_at: Option<NaiveDateTime>,
@@ -47,7 +46,7 @@ impl Group {
     ) -> Result<Self, TypeConstraintError> {
         Ok(Self {
             id: GroupId::try_from(id)?,
-            name: NonEmptyString::new(name.into())?,
+            name: GroupName::new(name.into())?,
             hub_id: HubId::try_from(hub_id)?,
             created_at,
             updated_at,
@@ -67,20 +66,19 @@ pub struct GroupWithRecipients {
 /// Parameters to create a new [`Group`].
 pub struct NewGroup {
     /// Name of the group.
-    pub name: NonEmptyString,
+    pub name: GroupName,
     /// Hub that will own the group.
     pub hub_id: HubId,
 }
 
 impl NewGroup {
-    #[must_use]
-    pub const fn new(name: NonEmptyString, hub_id: HubId) -> Self {
+    pub fn new(name: GroupName, hub_id: HubId) -> Self {
         Self { name, hub_id }
     }
 
     pub fn try_new(name: impl Into<String>, hub_id: i32) -> Result<Self, TypeConstraintError> {
         Ok(Self {
-            name: NonEmptyString::new(name.into())?,
+            name: GroupName::new(name.into())?,
             hub_id: HubId::try_from(hub_id)?,
         })
     }

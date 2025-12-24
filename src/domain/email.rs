@@ -41,7 +41,6 @@ pub struct Email {
 
 impl Email {
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
     pub fn new(
         id: EmailId,
         message: EmailBody,
@@ -133,7 +132,6 @@ pub struct EmailRecipient {
 
 impl EmailRecipient {
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
     pub fn new(
         id: EmailRecipientId,
         email_id: EmailId,
@@ -266,6 +264,4 @@ pub struct UpdateEmailRecipient {
     pub opened: bool,
     /// Updated sent status.
     pub is_sent: bool,
-    /// Optional recipient's reply
-    pub reply: Option<EmailRecipientReply>,
 }

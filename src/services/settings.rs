@@ -10,12 +10,12 @@ use crate::services::{ensure_admin, ensure_emailer};
 use crate::domain::recipient::CSVExportRecipient;
 use crate::forms::settings::{SaveHubForm, SaveHubPayload};
 use crate::models::config::ServerConfig;
-use crate::repository::{EmailRecipientReader, HubReader, HubWriter, RecipientReader};
+use crate::repository::{EmailReader, HubReader, HubWriter, RecipientReader};
 
 /// Loads the hub configuration, creating it if necessary.
 pub fn load_settings_overview<R>(
-    repo: &R,
     user: &AuthenticatedUser,
+    repo: &R,
 ) -> ServiceResult<SettingsOverviewData>
 where
     R: HubReader + HubWriter,
@@ -24,34 +24,38 @@ where
 
     let hub_id = HubId::new(user.hub_id)?;
 
-    let hub = load_or_create_hub(repo, hub_id)?;
+    let hub = load_or_create_hub(hub_id, repo)?;
 
     Ok(SettingsOverviewData { hub })
 }
 
 /// Lists unsubscribed recipients for the hub.
-pub fn load_unsubscribed<R>(repo: &R, user: &AuthenticatedUser) -> ServiceResult<UnsubscribedData>
+pub fn load_unsubscribed<R>(user: &AuthenticatedUser, repo: &R) -> ServiceResult<UnsubscribedData>
 where
     R: RecipientReader,
 {
     ensure_emailer(user)?;
 
-    let unsubscribed = repo.list_unsubscribed_recipients(user.hub_id)?;
+    let hub_id = HubId::new(user.hub_id)?;
+
+    let unsubscribed = repo.list_unsubscribed_recipients(hub_id)?;
     Ok(UnsubscribedData { unsubscribed })
 }
 
 /// Lists email history recipients for the hub.
 pub fn load_history<R>(
-    repo: &R,
     user: &AuthenticatedUser,
+    repo: &R,
     server_config: &ServerConfig,
 ) -> ServiceResult<HistoryData>
 where
-    R: EmailRecipientReader,
+    R: EmailReader,
 {
     ensure_emailer(user)?;
 
-    let history = repo.list_recent_recipients(user.hub_id, None)?;
+    let hub_id = HubId::new(user.hub_id)?;
+
+    let history = repo.list_recent_email_recipients(hub_id, None)?;
     Ok(HistoryData {
         history,
         crm_service_url: server_config.crm_service_url.clone(),
@@ -59,13 +63,15 @@ where
 }
 
 /// Exports the email recipient history as CSV.
-pub fn export_history<R>(repo: &R, user: &AuthenticatedUser) -> ServiceResult<ExportedHistory>
+pub fn export_history<R>(user: &AuthenticatedUser, repo: &R) -> ServiceResult<ExportedHistory>
 where
-    R: EmailRecipientReader,
+    R: EmailReader,
 {
     ensure_emailer(user)?;
 
-    let history = repo.list_recent_recipients(user.hub_id, None)?;
+    let hub_id = HubId::new(user.hub_id)?;
+
+    let history = repo.list_recent_email_recipients(hub_id, None)?;
 
     let mut writer = csv::Writer::from_writer(vec![]);
     for recipient in history {
@@ -85,7 +91,7 @@ where
 }
 
 /// Persists the hub configuration changes.
-pub fn save_hub<R>(repo: &R, user: &AuthenticatedUser, form: SaveHubForm) -> ServiceResult<()>
+pub fn save_hub<R>(form: SaveHubForm, user: &AuthenticatedUser, repo: &R) -> ServiceResult<()>
 where
     R: HubReader + HubWriter,
 {
@@ -93,7 +99,7 @@ where
 
     let hub_id = HubId::new(user.hub_id)?;
 
-    let hub = load_or_create_hub(repo, hub_id)?;
+    let hub = load_or_create_hub(hub_id, repo)?;
 
     let payload: SaveHubPayload = form.try_into()?;
 
@@ -102,7 +108,7 @@ where
     Ok(())
 }
 
-fn load_or_create_hub<R>(repo: &R, hub_id: HubId) -> ServiceResult<crate::domain::hub::Hub>
+fn load_or_create_hub<R>(hub_id: HubId, repo: &R) -> ServiceResult<crate::domain::hub::Hub>
 where
     R: HubReader + HubWriter,
 {

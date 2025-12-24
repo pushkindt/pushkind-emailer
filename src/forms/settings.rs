@@ -21,12 +21,12 @@ pub struct SaveHubForm {
     pub sender: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub smtp_server: Option<String>,
+    #[validate(range(min = 0))]
     pub smtp_port: Option<i32>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub imap_server: Option<String>,
     #[validate(range(min = 0))]
     pub imap_port: Option<i32>,
-    pub created_at: Option<chrono::NaiveDateTime>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub message: Option<String>,
 }

@@ -2,8 +2,13 @@
 use serde::Deserialize;
 use validator::Validate;
 
-use crate::domain::group::NewGroup;
-use crate::domain::types::TypeConstraintError;
+use crate::{
+    domain::{
+        group::NewGroup,
+        types::{GroupName, HubId, RecipientId, TypeConstraintError},
+    },
+    forms::FormError,
+};
 
 /// Form data for creating a new recipient group.
 #[derive(Deserialize, Validate)]
@@ -12,11 +17,8 @@ pub struct AddGroupForm {
     pub name: String,
 }
 
-/// Form data to delete an existing group by identifier.
-#[derive(Deserialize, Validate)]
-pub struct DeleteGroupForm {
-    #[validate(range(min = 1))]
-    pub id: i32,
+pub struct AddGroupPayload {
+    pub name: GroupName,
 }
 
 /// Assigns a recipient to a group.
@@ -24,12 +26,46 @@ pub struct DeleteGroupForm {
 pub struct AssignGroupRecipientForm {
     #[serde(default)]
     pub recipient_id: Vec<i32>,
-    #[validate(range(min = 1))]
-    pub group_id: i32,
 }
 
-impl AddGroupForm {
-    pub fn to_new_group(&self, hub_id: i32) -> Result<NewGroup, TypeConstraintError> {
-        NewGroup::try_new(self.name.clone(), hub_id)
+pub struct AssignGroupRecipientPayload {
+    pub recipient_id: Vec<RecipientId>,
+}
+
+impl TryFrom<AddGroupForm> for AddGroupPayload {
+    type Error = FormError;
+
+    fn try_from(form: AddGroupForm) -> Result<Self, Self::Error> {
+        form.validate().map_err(FormError::Validation)?;
+
+        Ok(Self {
+            name: GroupName::new(form.name).map_err(|_| FormError::InvalidName)?,
+        })
+    }
+}
+
+impl AddGroupPayload {
+    pub fn into_domain(self, hub_id: HubId) -> NewGroup {
+        NewGroup {
+            name: self.name,
+            hub_id,
+        }
+    }
+}
+
+impl TryFrom<AssignGroupRecipientForm> for AssignGroupRecipientPayload {
+    type Error = FormError;
+
+    fn try_from(form: AssignGroupRecipientForm) -> Result<Self, Self::Error> {
+        form.validate().map_err(FormError::Validation)?;
+
+        Ok(Self {
+            recipient_id: form
+                .recipient_id
+                .into_iter()
+                .map(RecipientId::new)
+                .collect::<Result<Vec<RecipientId>, TypeConstraintError>>()
+                .map_err(|_| FormError::InvalidRecipientId)?,
+        })
     }
 }

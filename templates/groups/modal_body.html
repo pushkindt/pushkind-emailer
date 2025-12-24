@@ -1,9 +1,8 @@
 <div class="modal-body">
     <h5>{{group.group.name}} ({{group.recipients | length}} получателей)</h5>
-    <form method="POST" action="/groups/assign" id="recipients-assign-form">
+    <form method="POST" action="/group/{{group.group.id}}/assign" id="recipients-assign-form">
         <div class="row mb-3">
             <div class="col-lg">
-                <input type="hidden" name="group_id" value="{{group.group.id}}">
                 <select class="form-select my-1" name="recipient_id" id="recipients-assign-form-recipient-id" multiple>
                     {% for recipient in group.recipients %}
                     <option selected value="{{recipient.id}}">{{recipient.name}}</option>
@@ -17,8 +16,7 @@
     </form>
 </div>
 
-<form action="/groups/delete" method="POST">
-    <input type="hidden" value="{{group.group.id}}" name="id" required>
+<form action="/group/{{group.group.id}}/delete" method="POST">
     <div class="modal-footer">
         <button class="btn btn-danger" type="submit" onclick="return confirm('Удалить?')">Удалить</button>
     </div>

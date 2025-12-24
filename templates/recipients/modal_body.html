@@ -1,6 +1,5 @@
 <div class="modal-body">
-    <form action="/recipients/save" method="POST">
-        <input type="hidden" value="{{recipient.recipient.id}}" name="id" required>
+    <form action="/recipient/{{recipient.recipient.id}}/save" method="POST">
         <div class="row mb-3">
             <label for="modalUserName" class="col-md-2 col-form-label">Имя</label>
             <div class="col-md-10">
@@ -66,8 +65,7 @@
     </form>
 </div>
 
-<form action="/recipients/delete" method="POST">
-    <input type="hidden" value="{{recipient.recipient.id}}" name="id" required>
+<form action="/recipient/{{recipient.recipient.id}}/delete" method="POST">
     <div class="modal-footer">
         <button class="btn btn-danger" type="submit" onclick="return confirm('Удалить?')">Удалить</button>
     </div>
