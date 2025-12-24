@@ -6,11 +6,11 @@ use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::models::config::CommonServerConfig;
 use pushkind_common::routes::{base_context, redirect, render_template};
 use pushkind_common::services::errors::ServiceError;
-use serde::Deserialize;
 use tera::{Context, Tera};
 
+use crate::dto::recipients::RecipientsQueryParams;
 use crate::forms::recipients::{
-    AddRecipientForm, DeleteRecipientForm, SourceRecipientForm, UploadRecipientsForm,
+    AddRecipientForm, SaveRecipientForm, SourceRecipientForm, UploadRecipientsForm,
 };
 use crate::models::config::ServerConfig;
 use crate::repository::DieselRepository;
@@ -18,12 +18,6 @@ use crate::services::recipients::{
     clean_recipients, create_recipient, delete_recipient, import_recipients_from_source,
     load_recipient_modal, load_recipients_overview, save_recipient, upload_recipients,
 };
-
-#[derive(Deserialize)]
-struct RecipientsQueryParams {
-    q: Option<String>,
-    page: Option<usize>,
-}
 
 #[get("/recipients")]
 pub async fn recipients_show(
@@ -35,8 +29,7 @@ pub async fn recipients_show(
     server_config: web::Data<ServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    let page = params.page.unwrap_or(1);
-    let data = match load_recipients_overview(repo.get_ref(), &user, page, params.q.clone()) {
+    let data = match load_recipients_overview(params.into_inner(), &user, repo.get_ref()) {
         Ok(data) => data,
         Err(ServiceError::Unauthorized) => {
             FlashMessage::error("Недостаточно прав.").send();
@@ -63,13 +56,13 @@ pub async fn recipients_show(
     render_template(&tera, "recipients/recipients.html", &context)
 }
 
-#[post("/recipients/add")]
-pub async fn recipients_add(
+#[post("/recipient/add")]
+pub async fn recipient_add(
+    web::Form(form): web::Form<AddRecipientForm>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<AddRecipientForm>,
 ) -> impl Responder {
-    match create_recipient(repo.get_ref(), &user, form) {
+    match create_recipient(form, &user, repo.get_ref()) {
         Ok(_) => FlashMessage::success("Получатель успешно добавлен.").send(),
         Err(ServiceError::Form(_)) => {
             FlashMessage::error("Ошибка при добавлении получателя.").send();
@@ -87,13 +80,13 @@ pub async fn recipients_add(
     redirect("/recipients")
 }
 
-#[post("/recipients/delete")]
+#[post("/recipient/{recipient_id}/delete")]
 pub async fn recipients_delete(
+    recipient_id: web::Path<i32>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<DeleteRecipientForm>,
 ) -> impl Responder {
-    match delete_recipient(repo.get_ref(), &user, form) {
+    match delete_recipient(recipient_id.into_inner(), &user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Получатель удален.").send();
             redirect("/recipients")
@@ -116,7 +109,7 @@ pub async fn recipients_clean(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
-    match clean_recipients(repo.get_ref(), &user) {
+    match clean_recipients(&user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Все группы удалены.").send();
             FlashMessage::success("Все получатели удалены.").send();
@@ -137,10 +130,10 @@ pub async fn recipients_clean(
 #[post("/recipients/upload")]
 pub async fn recipients_upload(
     user: AuthenticatedUser,
-    repo: web::Data<DieselRepository>,
     MultipartForm(form): MultipartForm<UploadRecipientsForm>,
+    repo: web::Data<DieselRepository>,
 ) -> impl Responder {
-    match upload_recipients(repo.get_ref(), &user, form) {
+    match upload_recipients(form, &user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Получатели добавлены.").send();
             redirect("/recipients")
@@ -161,14 +154,14 @@ pub async fn recipients_upload(
     }
 }
 
-#[post("/recipients/modal/{recipient_id}")]
-pub async fn recipients_modal(
+#[post("/recipient/{recipient_id}/modal")]
+pub async fn recipient_modal(
     recipient_id: web::Path<i32>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    let data = match load_recipient_modal(repo.get_ref(), &user, recipient_id.into_inner()) {
+    let data = match load_recipient_modal(recipient_id.into_inner(), &user, repo.get_ref()) {
         Ok(data) => data,
         Err(ServiceError::Unauthorized) => {
             FlashMessage::error("Недостаточно прав.").send();
@@ -188,13 +181,23 @@ pub async fn recipients_modal(
     render_template(&tera, "recipients/modal_body.html", &context)
 }
 
-#[post("/recipients/save")]
-pub async fn recipients_save(
+#[post("/recipient/{recipient_id}/save")]
+pub async fn recipient_save(
+    recipient_id: web::Path<i32>,
+    form: web::Bytes,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    form: web::Bytes,
 ) -> impl Responder {
-    match save_recipient(repo.get_ref(), &user, &form) {
+    let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {
+        Ok(form) => form,
+        Err(err) => {
+            log::error!("Error parsing form: {err}");
+            FlashMessage::error("Ошибка при обработке формы.").send();
+            return redirect("/recipients");
+        }
+    };
+
+    match save_recipient(recipient_id.into_inner(), form, &user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Получатель сохранён.").send();
             redirect("/recipients")
@@ -218,10 +221,10 @@ pub async fn recipients_save(
 
 #[post("/recipients/source")]
 pub async fn recipients_source(
-    req: HttpRequest,
+    web::Form(form): web::Form<SourceRecipientForm>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<SourceRecipientForm>,
+    req: HttpRequest,
 ) -> impl Responder {
     let id_cookie = match req.cookie("id") {
         Some(cookie) => cookie,
@@ -231,7 +234,7 @@ pub async fn recipients_source(
         }
     };
 
-    match import_recipients_from_source(repo.get_ref(), &user, form, id_cookie.value()).await {
+    match import_recipients_from_source(form, &user, repo.get_ref(), id_cookie.value()).await {
         Ok(_) => {
             FlashMessage::success("Получатели успешно добавлены.").send();
             redirect("/recipients")

@@ -9,6 +9,7 @@ use pushkind_common::pagination::Pagination;
 use pushkind_common::repository::errors::RepositoryResult;
 
 use crate::domain::recipient::Recipient as DomainRecipient;
+use crate::domain::types::HubId;
 use crate::models::group::GroupRecipient;
 use crate::models::recipient::{Recipient as DbRecipient, RecipientField};
 
@@ -27,7 +28,7 @@ where
 
 pub(super) fn hydrate_recipients(
     conn: &mut DbConnection,
-    hub_id: i32,
+    hub_id: HubId,
     db_recipients: Vec<DbRecipient>,
 ) -> RepositoryResult<Vec<DomainRecipient>> {
     use crate::schema::unsubscribes;
@@ -45,7 +46,7 @@ pub(super) fn hydrate_recipients(
         HashMap::new()
     } else {
         unsubscribes::table
-            .filter(unsubscribes::hub_id.eq(hub_id))
+            .filter(unsubscribes::hub_id.eq(hub_id.get()))
             .filter(unsubscribes::email.eq_any(&recipient_emails))
             .select((unsubscribes::email, unsubscribes::created_at))
             .load::<(String, chrono::NaiveDateTime)>(conn)?

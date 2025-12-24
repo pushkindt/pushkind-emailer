@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::domain::email::EmailRecipient;
 use crate::domain::group::Group;
 use crate::domain::types::{
-    GroupId, HubId, RecipientEmail, RecipientId, RecipientName, TypeConstraintError,
+    GroupId, GroupName, HubId, RecipientEmail, RecipientId, RecipientName, TypeConstraintError,
     UnsubscribeReason,
 };
 
@@ -35,7 +35,6 @@ pub struct Recipient {
 }
 
 impl Recipient {
-    #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: RecipientId,
@@ -110,17 +109,16 @@ pub struct NewRecipient {
     /// Optional set of custom fields.
     pub fields: Option<BTreeMap<String, String>>,
     /// Optional list of group names to subscribe the recipient to.
-    pub groups: Option<Vec<String>>,
+    pub groups: Option<Vec<GroupName>>,
 }
 
 impl NewRecipient {
-    #[must_use]
     pub fn new(
         name: RecipientName,
         email: RecipientEmail,
         hub_id: HubId,
         fields: Option<BTreeMap<String, String>>,
-        groups: Option<Vec<String>>,
+        groups: Option<Vec<GroupName>>,
     ) -> Self {
         Self {
             name,
@@ -143,7 +141,13 @@ impl NewRecipient {
             RecipientEmail::new(email.into())?,
             HubId::try_from(hub_id)?,
             fields,
-            groups,
+            groups
+                .map(|vec| {
+                    vec.into_iter()
+                        .map(GroupName::new)
+                        .collect::<Result<Vec<GroupName>, TypeConstraintError>>()
+                })
+                .transpose()?,
         ))
     }
 }
@@ -161,7 +165,6 @@ pub struct UpdateRecipient {
 }
 
 impl UpdateRecipient {
-    #[must_use]
     pub fn new(
         name: RecipientName,
         email: RecipientEmail,
@@ -219,7 +222,7 @@ impl From<EmailRecipient> for CSVExportRecipient {
             name: value.name.into_inner(),
             opened: value.opened,
             sent: value.is_sent,
-            replied: value.replied,
+            replied: value.reply.is_some(),
             updated_at: value.updated_at,
         }
     }

@@ -14,7 +14,7 @@
     <div class="row">
         <div class="col-lg-6">
             <h5>Получатели</h5>
-            <form method="POST" action="/recipients/add">
+            <form method="POST" action="/recipient/add">
                 <div class="row my-1">
                     <div class="col-lg">
                         <input class="form-control" type="text" name="name" placeholder="Имя" required>
@@ -98,7 +98,7 @@
     <div id="items">
         {% for recipient in recipients.items %}
         <div class="row mb-3 border-bottom selectable" data-bs-toggle="modal" data-bs-target="#recipientModal"
-            hx-post="/recipients/modal/{{recipient.id}}" hx-swap="innerHTML" hx-target="#recipientModalBody">
+            hx-post="/recipient/{{recipient.id}}/modal" hx-swap="innerHTML" hx-target="#recipientModalBody">
             <div class="col overflow-hidden {% if recipient.unsubscribed_at %}text-decoration-line-through{%endif%}">
                 {{recipient.name}}
             </div>

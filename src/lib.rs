@@ -37,14 +37,14 @@ use crate::models::config::ServerConfig;
 #[cfg(feature = "server")]
 use crate::repository::DieselRepository;
 #[cfg(feature = "server")]
-use crate::routes::groups::{groups_add, groups_assign, groups_delete, groups_modal, groups_show};
+use crate::routes::groups::{group_add, group_assign, group_delete, group_modal, groups_show};
 #[cfg(feature = "server")]
 use crate::routes::main::{
     delete_email, export_email_recipients, index, resend_email, send_email, track_email,
 };
 #[cfg(feature = "server")]
 use crate::routes::recipients::{
-    recipients_add, recipients_clean, recipients_delete, recipients_modal, recipients_save,
+    recipient_add, recipient_modal, recipient_save, recipients_clean, recipients_delete,
     recipients_show, recipients_source, recipients_upload,
 };
 #[cfg(feature = "server")]
@@ -56,7 +56,7 @@ use crate::routes::settings::{
 pub mod domain;
 #[cfg(feature = "server")]
 pub mod dto;
-#[cfg(feature = "data")]
+
 mod error_conversions;
 #[cfg(feature = "server")]
 pub mod forms;
@@ -137,18 +137,18 @@ pub async fn run(server_config: ServerConfig) -> std::io::Result<()> {
                     .service(settings_show)
                     .service(settings_save)
                     .service(recipients_show)
-                    .service(recipients_add)
+                    .service(recipient_add)
                     .service(recipients_delete)
                     .service(recipients_clean)
                     .service(recipients_upload)
-                    .service(recipients_modal)
-                    .service(recipients_save)
+                    .service(recipient_modal)
+                    .service(recipient_save)
                     .service(recipients_source)
                     .service(groups_show)
-                    .service(groups_add)
-                    .service(groups_delete)
-                    .service(groups_assign)
-                    .service(groups_modal)
+                    .service(group_add)
+                    .service(group_delete)
+                    .service(group_assign)
+                    .service(group_modal)
                     .service(unsubscribed_show)
                     .service(history_show)
                     .service(history_download),

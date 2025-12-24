@@ -10,14 +10,18 @@ use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
 use crate::domain::recipient::{
     NewRecipient, Recipient, RecipientWithGroups, Unsubscribe, UpdateRecipient,
 };
+use crate::domain::types::{
+    EmailId, EmailRecipientId, GroupId, HubId, RecipientEmail, RecipientId,
+};
 
 mod helpers;
 
 pub mod email;
 pub mod group;
 pub mod hub;
+#[cfg(test)]
+pub mod mock;
 pub mod recipient;
-pub mod test;
 
 #[derive(Clone)]
 pub struct DieselRepository {
@@ -38,7 +42,7 @@ impl DieselRepository {
 #[derive(Debug, Clone)]
 pub struct EmailListQuery {
     /// Filter by hub identifier.
-    pub hub_id: i32,
+    pub hub_id: HubId,
     /// Full-text search string.
     pub search: Option<String>,
     /// Pagination parameters.
@@ -46,7 +50,7 @@ pub struct EmailListQuery {
 }
 
 impl EmailListQuery {
-    pub fn new(hub_id: i32) -> Self {
+    pub fn new(hub_id: HubId) -> Self {
         Self {
             hub_id,
             search: None,
@@ -68,11 +72,11 @@ impl EmailListQuery {
 #[derive(Debug, Clone)]
 pub struct RecipientListQuery {
     /// Filter by hub identifier.
-    pub hub_id: i32,
+    pub hub_id: HubId,
     /// Filter by group identifier.
-    pub group_ids: Option<Vec<i32>>,
+    pub group_ids: Option<Vec<GroupId>>,
     /// Filter by email address.
-    pub emails: Option<Vec<String>>,
+    pub emails: Option<Vec<RecipientEmail>>,
     /// Full-text search string.
     pub search: Option<String>,
     /// Pagination parameters.
@@ -80,7 +84,7 @@ pub struct RecipientListQuery {
 }
 
 impl RecipientListQuery {
-    pub fn new(hub_id: i32) -> Self {
+    pub fn new(hub_id: HubId) -> Self {
         Self {
             hub_id,
             group_ids: None,
@@ -90,12 +94,12 @@ impl RecipientListQuery {
         }
     }
 
-    pub fn group_ids(mut self, group_ids: Vec<i32>) -> Self {
+    pub fn group_ids(mut self, group_ids: Vec<GroupId>) -> Self {
         self.group_ids = Some(group_ids);
         self
     }
 
-    pub fn emails(mut self, emails: Vec<String>) -> Self {
+    pub fn emails(mut self, emails: Vec<RecipientEmail>) -> Self {
         self.emails = Some(emails);
         self
     }
@@ -114,7 +118,7 @@ impl RecipientListQuery {
 #[derive(Debug, Clone)]
 pub struct GroupListQuery {
     /// Filter by hub identifier.
-    pub hub_id: i32,
+    pub hub_id: HubId,
     /// Full-text search string.
     pub search: Option<String>,
     /// Pagination parameters.
@@ -122,7 +126,7 @@ pub struct GroupListQuery {
 }
 
 impl GroupListQuery {
-    pub fn new(hub_id: i32) -> Self {
+    pub fn new(hub_id: HubId) -> Self {
         Self {
             hub_id,
             search: None,
@@ -142,83 +146,80 @@ impl GroupListQuery {
 pub trait EmailReader {
     fn get_email_by_id(
         &self,
-        id: i32,
-        hub_id: i32,
+        id: EmailId,
+        hub_id: HubId,
     ) -> RepositoryResult<Option<EmailWithRecipients>>;
     fn list_emails(
         &self,
         query: EmailListQuery,
     ) -> RepositoryResult<(usize, Vec<EmailWithRecipients>)>;
-}
-pub trait EmailWriter {
-    fn update_recipient(
+    fn list_recent_email_recipients(
         &self,
-        recipient_id: i32,
-        updates: &UpdateEmailRecipient,
-    ) -> RepositoryResult<EmailWithRecipients>;
-    fn delete_email(&self, id: i32) -> RepositoryResult<()>;
-}
-
-pub trait EmailRecipientReader {
-    /// Return recipients grouped by email address for the provided hub.
-    ///
-    /// When the same email address received multiple emails within the hub,
-    /// the record belonging to the most recently created email is returned so
-    /// that callers always get the latest snapshot of the recipient data.
-    fn list_recent_recipients(
-        &self,
-        hub_id: i32,
+        hub_id: HubId,
         // Only include recipients whose most recent email was sent strictly
         // after `number_of_days` ago. `None` skips filtering.
         number_of_days: Option<i64>,
     ) -> RepositoryResult<Vec<EmailRecipient>>;
 }
+pub trait EmailWriter {
+    fn update_email_recipient(
+        &self,
+        recipient_id: EmailRecipientId,
+        updates: &UpdateEmailRecipient,
+    ) -> RepositoryResult<EmailWithRecipients>;
+    fn delete_email(&self, id: EmailId, hub_id: HubId) -> RepositoryResult<()>;
+}
 
 pub trait HubReader {
-    fn get_hub_by_id(&self, id: i32) -> RepositoryResult<Option<Hub>>;
+    fn get_hub_by_id(&self, id: HubId) -> RepositoryResult<Option<Hub>>;
 }
 
 pub trait HubWriter {
     fn create_hub(&self, hub: &NewHub) -> RepositoryResult<Hub>;
-    fn update_hub(&self, id: i32, hub: &UpdateHub) -> RepositoryResult<Hub>;
+    fn update_hub(&self, id: HubId, hub: &UpdateHub) -> RepositoryResult<Hub>;
 }
 
 pub trait RecipientReader {
     fn get_recipient_by_id(
         &self,
-        id: i32,
-        hub_id: i32,
+        id: RecipientId,
+        hub_id: HubId,
     ) -> RepositoryResult<Option<RecipientWithGroups>>;
     fn list_recipients(
         &self,
         query: RecipientListQuery,
     ) -> RepositoryResult<(usize, Vec<Recipient>)>;
-    fn list_custom_fields(&self, hub_id: i32) -> RepositoryResult<Vec<String>>;
-    fn list_unsubscribed_recipients(&self, hub_id: i32) -> RepositoryResult<Vec<Unsubscribe>>;
+    fn list_custom_fields(&self, hub_id: HubId) -> RepositoryResult<Vec<String>>;
+    fn list_unsubscribed_recipients(&self, hub_id: HubId) -> RepositoryResult<Vec<Unsubscribe>>;
 }
 pub trait RecipientWriter {
     fn create_recipients(&self, recipient: &[NewRecipient]) -> RepositoryResult<usize>;
-    fn update_recipient(&self, id: i32, recipient: &UpdateRecipient)
-    -> RepositoryResult<Recipient>;
-    fn delete_recipient(&self, id: i32) -> RepositoryResult<()>;
-    fn delete_all_recipients(&self, hub_id: i32) -> RepositoryResult<()>;
+    fn update_recipient(
+        &self,
+        id: RecipientId,
+        hub_id: HubId,
+        recipient: &UpdateRecipient,
+    ) -> RepositoryResult<Recipient>;
+    fn delete_recipient(&self, id: RecipientId, hub_id: HubId) -> RepositoryResult<()>;
+    fn delete_all_recipients(&self, hub_id: HubId) -> RepositoryResult<()>;
 }
 
 pub trait GroupReader {
     fn list_groups(&self, query: GroupListQuery) -> RepositoryResult<(usize, Vec<Group>)>;
     fn get_group_by_id(
         &self,
-        id: i32,
-        hub_id: i32,
+        id: GroupId,
+        hub_id: HubId,
     ) -> RepositoryResult<Option<GroupWithRecipients>>;
 }
 pub trait GroupWriter {
     fn create_group(&self, group: &NewGroup) -> RepositoryResult<Group>;
-    fn delete_group(&self, id: i32) -> RepositoryResult<()>;
-    fn delete_all_groups(&self, hub_id: i32) -> RepositoryResult<()>;
+    fn delete_group(&self, id: GroupId, hub_id: HubId) -> RepositoryResult<()>;
+    fn delete_all_groups(&self, hub_id: HubId) -> RepositoryResult<()>;
     fn assign_recipients_to_group(
         &self,
-        group_id: i32,
-        recipients: Vec<i32>,
+        group_id: GroupId,
+        recipients: Vec<RecipientId>,
+        hub_id: HubId,
     ) -> RepositoryResult<()>;
 }

@@ -50,7 +50,7 @@ impl Email {
 
         let num_replied = email_recipients::table
             .filter(email_recipients::email_id.eq(email_id))
-            .filter(email_recipients::replied.eq(true))
+            .filter(email_recipients::reply.is_not_null())
             .count()
             .get_result::<i64>(conn)? as i32;
 
@@ -89,7 +89,6 @@ pub struct EmailRecipient {
     pub opened: bool,
     pub updated_at: NaiveDateTime,
     pub is_sent: bool,
-    pub replied: bool,
     pub reply: Option<String>,
     pub name: String,
     pub fields: String,
@@ -103,19 +102,17 @@ pub struct NewEmailRecipient<'a> {
     pub opened: bool,
     pub updated_at: NaiveDateTime,
     pub is_sent: bool,
-    pub replied: bool,
     pub name: &'a str,
     pub fields: &'a str,
 }
 
 #[derive(AsChangeset)]
 #[diesel(table_name = crate::schema::email_recipients)]
-pub struct UpdateEmailRecipient<'a> {
-    opened: Option<bool>,
-    is_sent: Option<bool>,
-    replied: Option<bool>,
-    reply: Option<&'a str>,
-    updated_at: Option<NaiveDateTime>,
+#[diesel(treat_none_as_null = true)]
+pub struct UpdateEmailRecipient {
+    opened: bool,
+    is_sent: bool,
+    updated_at: NaiveDateTime,
 }
 
 impl TryFrom<Email> for DomainEmail {
@@ -150,7 +147,6 @@ impl TryFrom<EmailRecipient> for DomainEmailRecipient {
             value.opened,
             value.updated_at,
             value.is_sent,
-            value.replied,
             value.reply,
             value.name,
             serde_json::from_str(&value.fields).unwrap_or_default(),
@@ -179,14 +175,12 @@ impl<'a> From<&'a DomainNewEmail> for NewEmail<'a> {
     }
 }
 
-impl<'a> From<&'a DomainUpdateEmailRecipient> for UpdateEmailRecipient<'a> {
-    fn from(value: &'a DomainUpdateEmailRecipient) -> Self {
+impl From<&DomainUpdateEmailRecipient> for UpdateEmailRecipient {
+    fn from(value: &DomainUpdateEmailRecipient) -> Self {
         Self {
             opened: value.opened,
             is_sent: value.is_sent,
-            replied: value.replied,
-            reply: value.reply.as_ref().map(|reply| reply.as_str()),
-            updated_at: Some(chrono::Utc::now().naive_utc()),
+            updated_at: chrono::Utc::now().naive_utc(),
         }
     }
 }

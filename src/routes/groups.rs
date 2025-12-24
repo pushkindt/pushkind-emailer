@@ -7,6 +7,7 @@ use pushkind_common::routes::{base_context, redirect, render_template};
 use pushkind_common::services::errors::ServiceError;
 use tera::{Context, Tera};
 
+use crate::forms::groups::{AddGroupForm, AssignGroupRecipientForm};
 use crate::repository::DieselRepository;
 use crate::services::groups::{
     assign_recipients, create_group, delete_group, load_group_modal, load_groups_overview,
@@ -20,7 +21,7 @@ pub async fn groups_show(
     server_config: web::Data<CommonServerConfig>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
-    let data = match load_groups_overview(repo.get_ref(), &user) {
+    let data = match load_groups_overview(&user, repo.get_ref()) {
         Ok(data) => data,
         Err(ServiceError::Unauthorized) => {
             FlashMessage::error("Недостаточно прав.").send();
@@ -45,13 +46,13 @@ pub async fn groups_show(
     render_template(&tera, "groups/groups.html", &context)
 }
 
-#[post("/groups/add")]
-pub async fn groups_add(
+#[post("/group/add")]
+pub async fn group_add(
+    web::Form(form): web::Form<AddGroupForm>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<crate::forms::groups::AddGroupForm>,
 ) -> impl Responder {
-    match create_group(repo.get_ref(), &user, form) {
+    match create_group(form, &user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Группа успешно добавлена.").send();
         }
@@ -71,13 +72,13 @@ pub async fn groups_add(
     redirect("/groups")
 }
 
-#[post("/groups/delete")]
-pub async fn groups_delete(
+#[post("/group/{group_id}/delete")]
+pub async fn group_delete(
+    group_id: web::Path<i32>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    web::Form(form): web::Form<crate::forms::groups::DeleteGroupForm>,
 ) -> impl Responder {
-    match delete_group(repo.get_ref(), &user, form) {
+    match delete_group(group_id.into_inner(), &user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Группа удалена.").send();
             redirect("/groups")
@@ -95,13 +96,23 @@ pub async fn groups_delete(
     }
 }
 
-#[post("/groups/assign")]
-pub async fn groups_assign(
+#[post("/group/{group_id}/assign")]
+pub async fn group_assign(
+    group_id: web::Path<i32>,
+    form: web::Bytes,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
-    form: web::Bytes,
 ) -> impl Responder {
-    match assign_recipients(repo.get_ref(), &user, &form) {
+    let form: AssignGroupRecipientForm = match serde_html_form::from_bytes(&form) {
+        Ok(form) => form,
+        Err(err) => {
+            log::error!("Error parsing form: {err}");
+            FlashMessage::error("Ошибка при обработке формы.").send();
+            return redirect("/groups");
+        }
+    };
+
+    match assign_recipients(group_id.into_inner(), form, &user, repo.get_ref()) {
         Ok(_) => {
             FlashMessage::success("Группа назначена получателю.").send();
             redirect("/groups")
@@ -123,15 +134,15 @@ pub async fn groups_assign(
     }
 }
 
-#[post("/groups/modal/{group_id}")]
-pub async fn groups_modal(
+#[post("/group/{group_id}/modal")]
+pub async fn group_modal(
     group_id: web::Path<i32>,
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
     tera: web::Data<Tera>,
 ) -> impl Responder {
     let group_id = group_id.into_inner();
-    let group = match load_group_modal(repo.get_ref(), &user, group_id) {
+    let group = match load_group_modal(group_id, &user, repo.get_ref()) {
         Ok(group) => group,
         Err(ServiceError::NotFound) => return HttpResponse::NotFound().finish(),
         Err(ServiceError::Unauthorized) => return HttpResponse::Unauthorized().finish(),

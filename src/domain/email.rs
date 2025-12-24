@@ -41,7 +41,6 @@ pub struct Email {
 
 impl Email {
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
     pub fn new(
         id: EmailId,
         message: EmailBody,
@@ -121,8 +120,6 @@ pub struct EmailRecipient {
     pub updated_at: NaiveDateTime,
     /// Flag indicating the email was sent to this recipient.
     pub is_sent: bool,
-    /// Whether the recipient replied.
-    pub replied: bool,
     /// Optional recipient's reply
     pub reply: Option<EmailRecipientReply>,
     /// Recipient's name at the moment of sending
@@ -133,7 +130,6 @@ pub struct EmailRecipient {
 
 impl EmailRecipient {
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
     pub fn new(
         id: EmailRecipientId,
         email_id: EmailId,
@@ -141,7 +137,6 @@ impl EmailRecipient {
         opened: bool,
         updated_at: NaiveDateTime,
         is_sent: bool,
-        replied: bool,
         reply: Option<EmailRecipientReply>,
         name: RecipientName,
         fields: BTreeMap<String, String>,
@@ -153,7 +148,6 @@ impl EmailRecipient {
             opened,
             updated_at,
             is_sent,
-            replied,
             reply,
             name,
             fields,
@@ -168,7 +162,6 @@ impl EmailRecipient {
         opened: bool,
         updated_at: NaiveDateTime,
         is_sent: bool,
-        replied: bool,
         reply: Option<String>,
         name: impl Into<String>,
         fields: BTreeMap<String, String>,
@@ -180,7 +173,6 @@ impl EmailRecipient {
             opened,
             updated_at,
             is_sent,
-            replied,
             reply.map(EmailRecipientReply::try_from).transpose()?,
             RecipientName::new(name.into())?,
             fields,
@@ -263,11 +255,7 @@ pub struct UpdateEmail {
 /// Changes to apply to an [`EmailRecipient`] record.
 pub struct UpdateEmailRecipient {
     /// Updated open status.
-    pub opened: Option<bool>,
+    pub opened: bool,
     /// Updated sent status.
-    pub is_sent: Option<bool>,
-    /// Updated reply status.
-    pub replied: Option<bool>,
-    /// Optional recipient's reply
-    pub reply: Option<EmailRecipientReply>,
+    pub is_sent: bool,
 }

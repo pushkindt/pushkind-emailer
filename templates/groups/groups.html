@@ -17,7 +17,7 @@
 <div class="container my-2">
     <div class="row">
         <div class="col">
-            <form method="POST" action="/groups/add">
+            <form method="POST" action="/group/add">
                 <div class="row">
                     <div class="col">
                         <input class="form-control my-1" type="text" name="name" placeholder="Название" required>
@@ -46,7 +46,7 @@
             <ul class="list-group" id="items">
                 {% for group in groups %}
                 <li class="list-group-item selectable" data-bs-toggle="modal" data-bs-target="#groupModal"
-                    hx-post="/groups/modal/{{group.id}}" hx-swap="innerHTML" hx-target="#groupModalBody">
+                    hx-post="/group/{{group.id}}/modal" hx-swap="innerHTML" hx-target="#groupModalBody">
                     <strong>{{ group.name }}</strong>
                     <br>
                     <small class="text-muted">{{ group.created_at | date(format="%Y-%m-%d %H:%M") }}</small>

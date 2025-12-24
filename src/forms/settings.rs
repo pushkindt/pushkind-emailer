@@ -6,21 +6,13 @@ use validator::Validate;
 use crate::domain::hub::UpdateHub;
 use crate::domain::types::{
     EmailTemplate, HubLogin, HubPassword, HubSenderName, ImapPort, ImapServerHost, SmtpPort,
-    SmtpServerHost, TypeConstraintError,
+    SmtpServerHost,
 };
-
-/// Form to create a new hub configuration.
-#[derive(Deserialize, Validate)]
-pub struct AddHubForm {
-    #[validate(length(min = 1))]
-    pub hub_name: String,
-}
+use crate::forms::FormError;
 
 /// Form for updating hub configuration details.
 #[derive(Deserialize, Validate)]
 pub struct SaveHubForm {
-    #[validate(range(min = 1))]
-    pub id: i32,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub login: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
@@ -29,44 +21,91 @@ pub struct SaveHubForm {
     pub sender: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub smtp_server: Option<String>,
+    #[validate(range(min = 0))]
     pub smtp_port: Option<i32>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub imap_server: Option<String>,
     #[validate(range(min = 0))]
     pub imap_port: Option<i32>,
-    pub created_at: Option<chrono::NaiveDateTime>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub message: Option<String>,
 }
 
-impl SaveHubForm {
-    pub fn try_into_update_hub(self) -> Result<UpdateHub, TypeConstraintError> {
-        Ok(UpdateHub {
-            login: self.login.map(HubLogin::try_from).transpose()?,
-            password: self.password.map(HubPassword::try_from).transpose()?,
-            sender: self.sender.map(HubSenderName::try_from).transpose()?,
-            smtp_server: self.smtp_server.map(SmtpServerHost::try_from).transpose()?,
-            smtp_port: self
+pub struct SaveHubPayload {
+    pub login: Option<HubLogin>,
+    pub password: Option<HubPassword>,
+    pub sender: Option<HubSenderName>,
+    pub smtp_server: Option<SmtpServerHost>,
+    pub smtp_port: Option<SmtpPort>,
+    pub imap_server: Option<ImapServerHost>,
+    pub imap_port: Option<ImapPort>,
+    pub email_template: Option<EmailTemplate>,
+}
+
+impl TryFrom<SaveHubForm> for SaveHubPayload {
+    type Error = FormError;
+
+    fn try_from(form: SaveHubForm) -> Result<Self, Self::Error> {
+        form.validate().map_err(FormError::Validation)?;
+
+        Ok(Self {
+            login: form
+                .login
+                .map(HubLogin::try_from)
+                .transpose()
+                .map_err(|_| FormError::InvalidLogin)?,
+            password: form
+                .password
+                .map(HubPassword::try_from)
+                .transpose()
+                .map_err(|_| FormError::InvalidPassword)?,
+            sender: form
+                .sender
+                .map(HubSenderName::try_from)
+                .transpose()
+                .map_err(|_| FormError::InvalidSender)?,
+            smtp_server: form
+                .smtp_server
+                .map(SmtpServerHost::try_from)
+                .transpose()
+                .map_err(|_| FormError::InvalidSmtpServer)?,
+            smtp_port: form
                 .smtp_port
                 .filter(|port| *port != 0)
                 .map(SmtpPort::try_from)
-                .transpose()?,
-            imap_server: self.imap_server.map(ImapServerHost::try_from).transpose()?,
-            imap_port: self
+                .transpose()
+                .map_err(|_| FormError::InvalidSmtpPort)?,
+            imap_server: form
+                .imap_server
+                .map(ImapServerHost::try_from)
+                .transpose()
+                .map_err(|_| FormError::InvalidImapServer)?,
+            imap_port: form
                 .imap_port
                 .filter(|port| *port != 0)
                 .map(ImapPort::try_from)
-                .transpose()?,
-            created_at: self.created_at,
-            updated_at: Some(chrono::Utc::now().naive_utc()),
-            email_template: self.message.map(EmailTemplate::try_from).transpose()?,
+                .transpose()
+                .map_err(|_| FormError::InvalidImapPort)?,
+            email_template: form
+                .message
+                .map(EmailTemplate::try_from)
+                .transpose()
+                .map_err(|_| FormError::InvalidMessage)?,
         })
     }
 }
 
-/// Form to remove a hub from the system.
-#[derive(Deserialize, Validate)]
-pub struct DeleteHubForm {
-    #[validate(range(min = 1))]
-    pub id: i32,
+impl SaveHubPayload {
+    pub fn into_domain(self) -> UpdateHub {
+        UpdateHub::new(
+            self.login,
+            self.password,
+            self.sender,
+            self.smtp_server,
+            self.smtp_port,
+            self.imap_server,
+            self.imap_port,
+            self.email_template,
+        )
+    }
 }

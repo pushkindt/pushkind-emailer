@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
-use validator::ValidateEmail;
+use validator::{ValidateEmail, ValidateUrl};
 
 /// Errors produced when attempting to construct a constrained value object.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -30,6 +30,9 @@ pub enum TypeConstraintError {
     /// Provided value failed custom validation.
     #[error("invalid value: {0}")]
     InvalidValue(String),
+    /// Provided url failed format validation.
+    #[error("invalid url address")]
+    InvalidUrl,
 }
 
 /// Normalizes and validates an email string.
@@ -344,10 +347,6 @@ non_empty_string_newtype!(
     "IMAP server host wrapper enforcing non-empty values."
 );
 non_empty_string_newtype!(
-    EmailTemplate,
-    "Email template wrapper enforcing non-empty values."
-);
-non_empty_string_newtype!(
     UnsubscribeReason,
     "Unsubscribe reason wrapper enforcing non-empty values."
 );
@@ -413,6 +412,57 @@ impl TryFrom<&str> for HubPassword {
 
 impl From<HubPassword> for String {
     fn from(value: HubPassword) -> Self {
+        value.0
+    }
+}
+
+/// Email message template enforcing trimmed, non-empty values.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EmailTemplate(String);
+
+impl EmailTemplate {
+    /// Constructs a sanitized, trimmed, non-empty value.
+    pub fn new<S: Into<String>>(value: S) -> Result<Self, TypeConstraintError> {
+        let sanitized = ammonia::clean(&value.into());
+        let inner = NonEmptyString::new(sanitized)?;
+        Ok(Self(inner.into_inner()))
+    }
+
+    /// Borrow the value as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the owned string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Display for EmailTemplate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for EmailTemplate {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for EmailTemplate {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<EmailTemplate> for String {
+    fn from(value: EmailTemplate) -> Self {
         value.0
     }
 }
@@ -521,6 +571,61 @@ non_negative_i32_newtype!(
     EmailRepliedCount,
     "Number of recipients that replied to an email."
 );
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// Non-empty, trimmed menu URL.
+pub struct RecipientSourceUrl(String);
+
+impl RecipientSourceUrl {
+    /// Ensures a trimmed menu URL is non-empty before wrapping.
+    pub fn new<S: Into<String>>(value: S) -> Result<Self, TypeConstraintError> {
+        let url = NonEmptyString::new(value)?;
+
+        if !url.as_str().validate_url() {
+            Err(TypeConstraintError::InvalidUrl)
+        } else {
+            Ok(Self(url.into_inner()))
+        }
+    }
+
+    /// Borrow the menu URL.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Extract the owned menu URL.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Display for RecipientSourceUrl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for RecipientSourceUrl {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for RecipientSourceUrl {
+    type Error = TypeConstraintError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<RecipientSourceUrl> for String {
+    fn from(value: RecipientSourceUrl) -> Self {
+        value.0
+    }
+}
 
 #[cfg(test)]
 mod tests {
