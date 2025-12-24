@@ -310,8 +310,8 @@ impl RecipientWriter for DieselRepository {
             .set((
                 recipients::name.eq(recipient.name.as_str()),
                 recipients::email.eq(recipient.email.as_str()),
-                ))
-                .execute(conn)?;
+            ))
+            .execute(conn)?;
             if updated == 0 {
                 return Err(RepositoryError::NotFound);
             }

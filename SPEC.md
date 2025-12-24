@@ -42,12 +42,13 @@ exports delivery history.
 ### Retry / Delete Email
 
 - Retry: enqueue a retry command for an existing email id.
+- Prefill: `GET /?retry={email_id}` loads an existing email into the composer (copy/edit/send).
 - Delete: remove an email and its associated snapshot data.
 
 ### Track Opens
 
-- Pixel endpoint `/track/{recipient_id}` marks `opened=true` on the
-  email recipient snapshot and returns a placeholder image.
+- Pixel endpoint `/track/{email_recipient_id}` marks `opened=true` on the
+  email recipient snapshot (`email_recipients.id`) and returns a placeholder image.
 
 ### Manage Recipients
 
@@ -71,10 +72,11 @@ exports delivery history.
 ## HTTP Routes (Actix)
 
 - `GET /` index page and email composer.
+- `GET /?retry={email_id}` prefill composer from an existing email.
 - `POST /email/send` queue a new email.
 - `POST /email/{email_id}/delete` delete an email.
 - `POST /email/{email_id}/resend` retry an email.
-- `GET /track/{recipient_id}` open tracking pixel.
+- `GET /track/{email_recipient_id}` open tracking pixel.
 - `GET /email/{email_id}/recipients/export` export recipients CSV.
 - `GET /recipients` recipients list.
 - `POST /recipient/add` add a recipient.
@@ -107,7 +109,7 @@ exports delivery history.
 
 ## Authorization Rules
 
-- `/track/{recipient_id}` bypasses auth and must be reachable anonymously.
+- `/track/{email_recipient_id}` bypasses auth and must be reachable anonymously.
 - All other routes require a hub-scoped authenticated user.
 - `GET /settings` and `POST /settings/save` require admin role.
 - All other authenticated routes require emailer role.
@@ -130,19 +132,19 @@ and validation failures (AJAX pattern).
 
 Pixel endpoint semantics:
 
-- `GET /track/{recipient_id}` returns a redirect to `/assets/placeholder.png`.
+- `GET /track/{email_recipient_id}` returns a redirect to `/assets/placeholder.png`.
 - Response headers do not set explicit cache control; clients may cache per default behavior.
-- `404` for unknown recipient id, `500` for unexpected failures.
+- `404` for unknown email recipient id, `500` for unexpected failures.
 
 ## Data Model (SQLite via Diesel)
 
 - `hubs`: hub SMTP/IMAP settings, template, last IMAP UID.
-- `recipients`: recipient identity and JSON-encoded custom fields.
-- `recipient_fields`: normalized custom fields.
+- `recipients`: recipient identity plus a denormalized `fields` string used for search.
+- `recipient_fields`: normalized custom fields (key/value per recipient).
 - `groups`: recipient group metadata (hub-scoped).
 - `groups_recipients`: join table for group membership.
 - `emails`: outbound email metadata, attachment info, counters.
-- `email_recipients`: snapshot of recipients per email (opened/sent/replied).
+- `email_recipients`: snapshot of recipients per email (opened/sent/replied + name + JSON fields).
 - `unsubscribes`: email_address per hub with optional reason.
 - `recipient_fts*`: FTS tables for search.
 
@@ -172,7 +174,7 @@ to domain types via `From` implementations.
 
 - Pushkind auth service for authentication and role checks.
 - Pushkind CRM for recipient quick links.
-- Pushkind files service for file storage links.
+- Pushkind files service (configured in `ServerConfig`, not used by the web UI today).
 - ZeroMQ to enqueue email delivery and retry commands.
 
 ## Error Handling

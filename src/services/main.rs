@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 
 use crate::domain::email::{NewEmail, NewEmailRecipient, UpdateEmailRecipient};
-use crate::domain::types::{EmailId, GroupId, HubId, RecipientEmail, RecipientId};
+use crate::domain::types::{EmailId, EmailRecipientId, GroupId, HubId, RecipientEmail};
 use crate::models::zmq::ZMQSendEmailMessage;
 use pushkind_common::domain::auth::AuthenticatedUser;
 use pushkind_common::pagination::{DEFAULT_ITEMS_PER_PAGE, Paginated};
@@ -237,7 +237,7 @@ pub fn mark_email_opened<R>(recipient_id: i32, repo: &R) -> ServiceResult<()>
 where
     R: EmailWriter,
 {
-    let recipient_id = RecipientId::new(recipient_id)?;
+    let recipient_id = EmailRecipientId::new(recipient_id)?;
 
     repo.update_email_recipient(
         recipient_id,

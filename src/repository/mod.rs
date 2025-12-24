@@ -10,7 +10,9 @@ use crate::domain::group::{Group, GroupWithRecipients, NewGroup};
 use crate::domain::recipient::{
     NewRecipient, Recipient, RecipientWithGroups, Unsubscribe, UpdateRecipient,
 };
-use crate::domain::types::{EmailId, GroupId, HubId, RecipientEmail, RecipientId};
+use crate::domain::types::{
+    EmailId, EmailRecipientId, GroupId, HubId, RecipientEmail, RecipientId,
+};
 
 mod helpers;
 
@@ -162,7 +164,7 @@ pub trait EmailReader {
 pub trait EmailWriter {
     fn update_email_recipient(
         &self,
-        recipient_id: RecipientId,
+        recipient_id: EmailRecipientId,
         updates: &UpdateEmailRecipient,
     ) -> RepositoryResult<EmailWithRecipients>;
     fn delete_email(&self, id: EmailId, hub_id: HubId) -> RepositoryResult<()>;

@@ -9,7 +9,7 @@ use crate::domain::hub::{Hub, NewHub, UpdateHub};
 use crate::domain::recipient::{
     NewRecipient, Recipient, RecipientWithGroups, Unsubscribe, UpdateRecipient,
 };
-use crate::domain::types::{EmailId, GroupId, HubId, RecipientId};
+use crate::domain::types::{EmailId, EmailRecipientId, GroupId, HubId, RecipientId};
 use crate::repository::{
     EmailListQuery, EmailReader, EmailWriter, GroupListQuery, GroupReader, GroupWriter, HubReader,
     HubWriter, RecipientListQuery, RecipientReader, RecipientWriter,
@@ -38,7 +38,7 @@ mock! {
     impl EmailWriter for Repository {
         fn update_email_recipient(
             &self,
-            recipient_id: RecipientId,
+            recipient_id: EmailRecipientId,
             updates: &UpdateEmailRecipient,
         ) -> RepositoryResult<EmailWithRecipients>;
         fn delete_email(&self, id: EmailId, hub_id: HubId) -> RepositoryResult<()>;

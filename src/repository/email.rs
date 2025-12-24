@@ -5,7 +5,7 @@ use crate::domain::email::{
     EmailRecipient as DomainEmailRecipient, EmailWithRecipients as DomainEmailWithRecipients,
     UpdateEmailRecipient as DomainUpdateEmailRecipient,
 };
-use crate::domain::types::{EmailId, HubId, RecipientId};
+use crate::domain::types::{EmailId, EmailRecipientId, HubId};
 use crate::models::email::{
     Email as DbEmail, EmailRecipient as DbEmailRecipient,
     UpdateEmailRecipient as DbUpdateEmailRecipient,
@@ -168,7 +168,7 @@ impl EmailReader for DieselRepository {
 impl EmailWriter for DieselRepository {
     fn update_email_recipient(
         &self,
-        recipient_id: RecipientId,
+        recipient_id: EmailRecipientId,
         updates: &DomainUpdateEmailRecipient,
     ) -> RepositoryResult<DomainEmailWithRecipients> {
         use crate::schema::{email_recipients, emails};

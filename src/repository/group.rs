@@ -1,7 +1,7 @@
 //! Repository operations for recipient groups.
 use diesel::prelude::*;
-use std::collections::BTreeSet;
 use pushkind_common::repository::errors::{RepositoryError, RepositoryResult};
+use std::collections::BTreeSet;
 
 use super::helpers::{apply_pagination, hydrate_recipients};
 use crate::domain::group::{Group as DomainGroup, GroupWithRecipients, NewGroup as DomainNewGroup};
