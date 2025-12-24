@@ -299,15 +299,15 @@ mod tests {
     use mockall::Sequence;
     use tempfile::NamedTempFile;
 
+    use crate::SERVICE_ACCESS_ROLE;
     use crate::domain::email::EmailRecipient;
     use crate::domain::recipient::Recipient;
     use crate::domain::types::{GroupId, HubId, RecipientEmail, RecipientId, RecipientName};
     use crate::dto::main::IndexQueryParams;
     use crate::forms::main::SendEmailForm;
-    use crate::repository::{EmailListQuery, GroupListQuery, RecipientListQuery};
     use crate::repository::mock::MockRepository;
+    use crate::repository::{EmailListQuery, GroupListQuery, RecipientListQuery};
     use crate::services::main::load_index_page;
-    use crate::SERVICE_ACCESS_ROLE;
     use pushkind_common::domain::auth::AuthenticatedUser;
     use pushkind_common::pagination::DEFAULT_ITEMS_PER_PAGE;
 
