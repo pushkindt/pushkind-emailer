@@ -6,7 +6,9 @@ edition = "2024"
 [features]
 default = ["server"]
 # Compile only the reusable persistence/domain layer (`domain`, `models`, `schema`).
-data = []
+data = [
+    "dep:ammonia",
+]
 # Build the full Actix-web application (HTTP routes, services, templates, etc).
 server = [
     "data",
@@ -48,7 +50,7 @@ actix-web = { version = "4.12.1", optional = true }
 lazy_static = { version = "1.5.0", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 tera = { version = "1.20.1", features = ["builtins"], optional = true }
-diesel = { version = "2.3.4", features = [
+diesel = { version = "2.3.5", features = [
     "sqlite",
     "r2d2",
     "chrono",
@@ -73,15 +75,15 @@ pushkind-common = { git = "https://github.com/pushkindt/pushkind-common.git", br
     "db",
 ], default-features = false }
 validator = { version = "0.20.0", features = ["derive"] }
-reqwest = { version = "0.12.26", features = ["json"], optional = true }
-serde_json = "1.0.145"
+reqwest = { version = "0.12.28", features = ["json"], optional = true }
+serde_json = "1.0.147"
 ammonia = { version = "4.1.2", optional = true }
 config = { version = "0.15.19", default-features = false, features = [
     "yaml",
 ], optional = true }
 
 [dev-dependencies]
-tempfile = "3.23.0"
+tempfile = "3.24.0"
 mime = "0.3.17"
 diesel_migrations = "2.3.1"
 mockall = "0.14.0"
