@@ -1,5 +1,7 @@
-domain: pushkind.com
-port: 9005
-auth_service_url: https://users.pushkind.com
-crm_service_url: https://crm.pushkind.com
-files_service_url: https://images.pushkind.com
+server:
+  port: 9005
+app:
+  domain: pushkind.com
+  auth_service_url: https://users.pushkind.com
+  crm_service_url: https://crm.pushkind.com
+  files_service_url: https://images.pushkind.com

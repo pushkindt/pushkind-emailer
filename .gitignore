@@ -2,3 +2,6 @@
 .env
 app.db*
 upload
+frontend/node_modules/
+assets/dist/
+.codex

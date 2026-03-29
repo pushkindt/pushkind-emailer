@@ -1,0 +1,210 @@
+:root {
+  color: #1f2937;
+  background: #f8fafc;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f8f9fa;
+}
+
+.logo {
+  height: 24px;
+}
+
+code {
+  font-family:
+    "SFMono-Regular", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
+    monospace;
+}
+
+.foundation-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.14), transparent 36%),
+    linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+}
+
+.foundation-shell-page {
+  min-height: calc(100vh - 72px);
+}
+
+.emailer-multiselect-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  background: #f8f9fa;
+  color: #495057;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.emailer-multiselect-placeholder {
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.emailer-dropdown-field {
+  width: 100%;
+}
+
+.emailer-dropdown-multiselect {
+  position: relative;
+}
+
+.emailer-dropdown-multiselect-surface {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-height: calc(1.5em + 0.75rem + 2px);
+  padding: 0.375rem 0.75rem;
+  background: #fff;
+}
+
+.emailer-dropdown-multiselect-surface:focus-within {
+  border-color: #86b7fe;
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.emailer-dropdown-multiselect-toggle {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.emailer-dropdown-multiselect-value {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.emailer-dropdown-multiselect-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.emailer-dropdown-multiselect-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #6c757d;
+}
+
+.emailer-dropdown-multiselect-clear:hover {
+  background: #f1f3f5;
+  color: #212529;
+}
+
+.emailer-dropdown-multiselect-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+}
+
+.emailer-dropdown-multiselect-clear:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.emailer-dropdown-multiselect-menu {
+  max-width: 100%;
+}
+
+.emailer-dropdown-multiselect-options {
+  overflow-y: auto;
+}
+
+.emailer-dropdown-multiselect-options-sm {
+  max-height: 16rem;
+}
+
+.emailer-dropdown-multiselect-options-lg {
+  max-height: 22rem;
+}
+
+.emailer-dropdown-multiselect-option {
+  white-space: normal;
+}
+
+.emailer-dropdown-multiselect-option.active,
+.emailer-dropdown-multiselect-option:active {
+  background: #e7f1ff;
+  color: #212529;
+}
+
+.emailer-selectable-row {
+  cursor: pointer;
+}
+
+.emailer-selectable-row:hover {
+  background: #f8f9fa;
+}
+
+.emailer-email-stats {
+  align-items: flex-start;
+}
+
+.emailer-markdown-preview {
+  min-height: 240px;
+  background: #fff;
+}
+
+.foundation-card {
+  width: min(100%, 40rem);
+  padding: 2rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.08);
+}
+
+.foundation-eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+.foundation-title {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  line-height: 1.1;
+}
+
+.foundation-copy {
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: #475569;
+}

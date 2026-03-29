@@ -8,8 +8,8 @@ use crate::dto::settings::{ExportedHistory, HistoryData, SettingsOverviewData, U
 use crate::services::{ensure_admin, ensure_emailer};
 
 use crate::domain::recipient::CSVExportRecipient;
-use crate::forms::settings::{SaveHubForm, SaveHubPayload};
-use crate::models::config::ServerConfig;
+use crate::forms::settings::SaveHubPayload;
+use crate::models::config::AppConfig;
 use crate::repository::{EmailReader, HubReader, HubWriter, RecipientReader};
 
 /// Loads the hub configuration, creating it if necessary.
@@ -46,7 +46,7 @@ where
 pub fn load_history<R>(
     user: &AuthenticatedUser,
     repo: &R,
-    server_config: &ServerConfig,
+    app_config: &AppConfig,
 ) -> ServiceResult<HistoryData>
 where
     R: EmailReader,
@@ -58,7 +58,7 @@ where
     let history = repo.list_recent_email_recipients(hub_id, None)?;
     Ok(HistoryData {
         history,
-        crm_service_url: server_config.crm_service_url.clone(),
+        crm_service_url: app_config.crm_service_url.clone(),
     })
 }
 
@@ -91,7 +91,7 @@ where
 }
 
 /// Persists the hub configuration changes.
-pub fn save_hub<R>(form: SaveHubForm, user: &AuthenticatedUser, repo: &R) -> ServiceResult<()>
+pub fn save_hub<R>(payload: SaveHubPayload, user: &AuthenticatedUser, repo: &R) -> ServiceResult<()>
 where
     R: HubReader + HubWriter,
 {
@@ -100,8 +100,6 @@ where
     let hub_id = HubId::new(user.hub_id)?;
 
     let hub = load_or_create_hub(hub_id, repo)?;
-
-    let payload: SaveHubPayload = form.try_into()?;
 
     let updates = payload.into_domain();
     repo.update_hub(hub.id, &updates)?;

@@ -97,6 +97,23 @@ exports delivery history.
 - `GET /history` view delivery history.
 - `GET /history/download` export history CSV.
 
+## React Client Data APIs
+
+React-owned pages fetch typed JSON under `/api/v1/` using resource-style
+endpoints rather than page-named bootstrap routes.
+
+- `GET /api/v1/iam` shared shell data for current user, navigation, and menu items.
+- `GET /api/v1/emails` email collection data for the index page, including retry-prefill,
+  recipient/group options, custom fields, and paginated recent emails.
+- `GET /api/v1/recipients` recipient collection data.
+- `GET /api/v1/recipients/{recipient_id}` recipient details for the edit modal.
+- `GET /api/v1/groups` group collection data.
+- `GET /api/v1/groups/{group_id}` group details for the assignment modal.
+- `GET /api/v1/hub-settings` hub SMTP/IMAP/template settings data.
+- `GET /api/v1/unsubscribed-recipients` unsubscribed recipient collection data.
+- `GET /api/v1/email-history` email history collection data.
+- `GET /api/v1/no-access` no-access page data.
+
 ## Invariants
 
 - Recipient email addresses are unique per hub.

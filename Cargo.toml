@@ -6,9 +6,7 @@ edition = "2024"
 [features]
 default = ["server"]
 # Compile only the reusable persistence/domain layer (`domain`, `models`, `schema`).
-data = [
-    "dep:ammonia",
-]
+data = ["dep:ammonia"]
 # Build the full Actix-web application (HTTP routes, services, templates, etc).
 server = [
     "data",
@@ -17,7 +15,6 @@ server = [
     "dep:actix-multipart",
     "dep:actix-session",
     "dep:actix-web",
-    "dep:actix-web-flash-messages",
     "dep:ammonia",
     "dep:config",
     "dep:csv",
@@ -28,7 +25,6 @@ server = [
     "dep:log",
     "dep:reqwest",
     "dep:serde_html_form",
-    "dep:tera",
     "dep:uuid",
     "dep:zmq",
     "pushkind-common/actix",
@@ -46,44 +42,45 @@ actix-session = { version = "0.11.0", features = [
     "cookie-session",
 ], optional = true }
 actix-identity = { version = "0.9.0", optional = true }
-actix-web = { version = "4.12.1", optional = true }
+actix-web = { version = "4.13.0", optional = true }
 lazy_static = { version = "1.5.0", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
-tera = { version = "1.20.1", features = ["builtins"], optional = true }
-diesel = { version = "2.3.5", features = [
+diesel = { version = "2.3.7", features = [
     "sqlite",
     "r2d2",
     "chrono",
     "returning_clauses_for_sqlite_3_35",
 ] }
 dotenvy = { version = "0.15.7", optional = true }
-env_logger = { version = "0.11.8", optional = true }
-actix-files = { version = "0.6.9", optional = true }
-chrono = { version = "0.4.42", features = ["serde"] }
+env_logger = { version = "0.11.10", optional = true }
+actix-files = { version = "0.6.10", optional = true }
+chrono = { version = "0.4.44", features = ["serde"] }
 log = { version = "0.4.29", optional = true }
 actix-multipart = { version = "0.7.2", optional = true }
 csv = { version = "1.4.0", optional = true }
 zmq = { version = "0.10.0", optional = true }
-serde_html_form = { version = "0.2.8", optional = true }
-thiserror = "2.0.17"
-uuid = { version = "1.19.0", features = ["v4"], optional = true }
-jsonwebtoken = { version = "10.2.0", optional = true }
-actix-web-flash-messages = { version = "0.5.0", features = [
-    "cookies",
-], optional = true }
+serde_html_form = { version = "0.4.0", optional = true }
+thiserror = "2.0.18"
+uuid = { version = "1.23.0", features = ["v4"], optional = true }
+jsonwebtoken = { version = "10.3.0", optional = true }
 pushkind-common = { git = "https://github.com/pushkindt/pushkind-common.git", branch = "main", features = [
     "db",
 ], default-features = false }
 validator = { version = "0.20.0", features = ["derive"] }
-reqwest = { version = "0.12.28", features = ["json"], optional = true }
-serde_json = "1.0.147"
+reqwest = { version = "0.13.2", features = ["json"], optional = true }
+serde_json = "1.0.149"
 ammonia = { version = "4.1.2", optional = true }
-config = { version = "0.15.19", default-features = false, features = [
+config = { version = "0.15.22", default-features = false, features = [
     "yaml",
 ], optional = true }
 
 [dev-dependencies]
-tempfile = "3.24.0"
+tempfile = "3.27.0"
 mime = "0.3.17"
 diesel_migrations = "2.3.1"
 mockall = "0.14.0"
+reqwest = { version = "0.13.2", default-features = false, features = [
+    "cookies",
+    "json",
+    "multipart",
+] }

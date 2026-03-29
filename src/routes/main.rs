@@ -2,62 +2,39 @@
 use std::error::Error;
 use std::sync::Arc;
 
+use actix_files::NamedFile;
 use actix_multipart::form::MultipartForm;
-use actix_web::{HttpResponse, Responder, get, post, web};
-use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use actix_web::{Either, HttpResponse, Responder, get, post, web};
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{base_context, redirect, render_template};
+use pushkind_common::routes::{check_role, redirect};
 use pushkind_common::services::errors::ServiceError;
 use pushkind_common::zmq::ZmqSender;
-use tera::Tera;
 
-use crate::dto::main::{ExportedEmailRecipients, IndexQueryParams};
+use crate::SERVICE_ACCESS_ROLE;
+use crate::dto::api::{ApiMutationErrorDto, ApiMutationSuccessDto};
+use crate::dto::main::ExportedEmailRecipients;
 use crate::forms::main::SendEmailForm;
-use crate::models::config::ServerConfig;
+use crate::frontend::open_frontend_html;
 use crate::repository::DieselRepository;
 use crate::services::main::{
     delete_email as delete_email_service,
-    export_email_recipients as export_email_recipients_service, load_index_page, mark_email_opened,
+    export_email_recipients as export_email_recipients_service, mark_email_opened,
     queue_email_retry, queue_new_email,
 };
 
 #[get("/")]
-pub async fn index(
-    params: web::Query<IndexQueryParams>,
-    user: AuthenticatedUser,
-    repo: web::Data<DieselRepository>,
-    flash_messages: IncomingFlashMessages,
-    common_config: web::Data<CommonServerConfig>,
-    server_config: web::Data<ServerConfig>,
-    tera: web::Data<Tera>,
-) -> impl Responder {
-    let data = match load_index_page(params.into_inner(), &user, repo.get_ref()) {
-        Ok(data) => data,
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            return redirect("/na");
-        }
+pub async fn index(user: AuthenticatedUser) -> Either<NamedFile, HttpResponse> {
+    if !check_role(SERVICE_ACCESS_ROLE, &user.roles) {
+        return Either::Right(redirect("/na"));
+    }
+
+    match open_frontend_html("assets/dist/app/index.html").await {
+        Ok(file) => Either::Left(file),
         Err(err) => {
-            log::error!("Failed to load index page: {err}");
-            return HttpResponse::InternalServerError().finish();
+            log::error!("Failed to open Emailer index document: {err}");
+            Either::Right(HttpResponse::InternalServerError().finish())
         }
-    };
-
-    let mut context = base_context(
-        &flash_messages,
-        &user,
-        "index",
-        &common_config.auth_service_url,
-    );
-    context.insert("retry", &data.retry_email);
-    context.insert("recipients", &data.recipients);
-    context.insert("groups", &data.groups);
-    context.insert("emails", &data.emails);
-    context.insert("custom_fields", &data.custom_fields);
-    context.insert("crm_service_url", &server_config.crm_service_url);
-
-    render_template(&tera, "main/index.html", &context)
+    }
 }
 
 #[post("/email/send")]
@@ -69,19 +46,33 @@ pub async fn send_email(
 ) -> impl Responder {
     let form = match form {
         Ok(form) => form.0,
-        Err(err) => return HttpResponse::Ok().body(format!("Ошибка при обработке формы: {err}")),
+        Err(err) => {
+            return HttpResponse::BadRequest().json(ApiMutationErrorDto {
+                message: format!("Ошибка при обработке формы: {err}"),
+                field_errors: Vec::new(),
+            });
+        }
     };
 
     match queue_new_email(form, &user, repo.get_ref(), zmq_sender.as_ref()).await {
-        Ok(_) => HttpResponse::Ok().body("Сообщение добавлено в очередь."),
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
-        Err(ServiceError::Form(message)) => HttpResponse::Ok().body(message),
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Сообщение добавлено в очередь.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
+        Err(ServiceError::Form(message)) => HttpResponse::BadRequest().json(ApiMutationErrorDto {
+            message,
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to queue email: {err}");
-            HttpResponse::InternalServerError().body("Ошибка при добавлении сообщения в очередь.")
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при добавлении сообщения в очередь.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
 }
@@ -93,22 +84,24 @@ pub async fn delete_email(
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
     match delete_email_service(email_id.into_inner(), &user, repo.get_ref()) {
-        Ok(_) => {
-            FlashMessage::success("Сообщение удалено.").send();
-            redirect("/")
-        }
-        Err(ServiceError::NotFound) => {
-            FlashMessage::error("Сообщение не найдено.").send();
-            redirect("/")
-        }
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Сообщение удалено.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().json(ApiMutationErrorDto {
+            message: "Сообщение не найдено.".into(),
+            field_errors: Vec::new(),
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to delete email: {err}");
-            FlashMessage::error("Ошибка при удалении сообщения.").send();
-            redirect("/")
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при удалении сообщения.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
 }
@@ -128,21 +121,24 @@ pub async fn resend_email(
     )
     .await
     {
-        Ok(_) => {
-            FlashMessage::success("Сообщение добавлено в очередь.").send();
-            redirect("/")
-        }
-        Err(ServiceError::NotFound) => {
-            FlashMessage::error("Сообщение не найдено.").send();
-            redirect("/")
-        }
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Сообщение добавлено в очередь.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().json(ApiMutationErrorDto {
+            message: "Сообщение не найдено.".into(),
+            field_errors: Vec::new(),
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to queue retry: {err}");
-            HttpResponse::InternalServerError().finish()
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при повторной отправке сообщения.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
 }
@@ -181,10 +177,7 @@ pub async fn export_email_recipients(
             ))
             .body(bytes),
         Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+        Err(ServiceError::Unauthorized) => redirect("/na"),
         Err(err) => {
             log::error!("Failed to export recipients: {err}");
             HttpResponse::InternalServerError().finish()

@@ -21,11 +21,11 @@ pub struct SaveHubForm {
     pub sender: Option<String>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub smtp_server: Option<String>,
-    #[validate(range(min = 0))]
+    #[validate(range(min = 0, message = "Укажите корректный SMTP порт."))]
     pub smtp_port: Option<i32>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub imap_server: Option<String>,
-    #[validate(range(min = 0))]
+    #[validate(range(min = 0, message = "Укажите корректный IMAP порт."))]
     pub imap_port: Option<i32>,
     #[serde(default, deserialize_with = "empty_string_as_none")]
     pub message: Option<String>,

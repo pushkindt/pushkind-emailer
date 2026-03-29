@@ -13,7 +13,7 @@ use crate::{
 /// Form data for creating a new recipient group.
 #[derive(Deserialize, Validate)]
 pub struct AddGroupForm {
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, message = "Укажите название группы."))]
     pub name: String,
 }
 
@@ -25,6 +25,7 @@ pub struct AddGroupPayload {
 #[derive(Deserialize, Validate)]
 pub struct AssignGroupRecipientForm {
     #[serde(default)]
+    #[validate(length(min = 1, message = "Выберите получателей."))]
     pub recipient_id: Vec<i32>,
 }
 

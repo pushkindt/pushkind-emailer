@@ -6,8 +6,7 @@ use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use crate::domain::types::{HubId, RecipientId};
 use crate::dto::recipients::{RecipientModalData, RecipientsOverviewData, RecipientsQueryParams};
 use crate::forms::recipients::{
-    AddRecipientForm, AddRecipientPayload, SaveRecipientForm, SaveRecipientPayload,
-    SourceRecipientForm, SourceRecipientPayload, UploadRecipientsForm,
+    AddRecipientPayload, SaveRecipientPayload, SourceRecipientPayload, UploadRecipientsForm,
 };
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader, RecipientWriter,
@@ -50,7 +49,7 @@ where
 
 /// Creates a new recipient from the provided form.
 pub fn create_recipient<R>(
-    form: AddRecipientForm,
+    payload: AddRecipientPayload,
     user: &AuthenticatedUser,
     repo: &R,
 ) -> ServiceResult<()>
@@ -60,8 +59,6 @@ where
     ensure_emailer(user)?;
 
     let hub_id = HubId::new(user.hub_id)?;
-
-    let payload: AddRecipientPayload = form.try_into()?;
 
     let new_recipient = payload.into_domain(hub_id);
     repo.create_recipients(&[new_recipient])?;
@@ -148,7 +145,7 @@ where
 /// Saves recipient changes from an HTML form payload.
 pub fn save_recipient<R>(
     recipient_id: i32,
-    form: SaveRecipientForm,
+    payload: SaveRecipientPayload,
     user: &AuthenticatedUser,
     repo: &R,
 ) -> ServiceResult<()>
@@ -156,8 +153,6 @@ where
     R: RecipientReader + RecipientWriter,
 {
     ensure_emailer(user)?;
-
-    let payload: SaveRecipientPayload = form.try_into()?;
 
     let hub_id = HubId::new(user.hub_id)?;
     let recipient_id = RecipientId::new(recipient_id)?;
@@ -169,7 +164,7 @@ where
 
 /// Loads recipients from an external source and persists them.
 pub async fn import_recipients_from_source<R>(
-    form: SourceRecipientForm,
+    payload: SourceRecipientPayload,
     user: &AuthenticatedUser,
     repo: &R,
     cookie_value: &str,
@@ -180,8 +175,6 @@ where
     ensure_emailer(user)?;
 
     let hub_id = HubId::new(user.hub_id)?;
-
-    let payload: SourceRecipientPayload = form.try_into()?;
 
     let recipients = payload
         .load(cookie_value, hub_id)
