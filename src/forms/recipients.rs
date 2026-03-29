@@ -15,9 +15,9 @@ use crate::forms::FormError;
 /// Form for adding a single recipient manually.
 #[derive(Deserialize, Validate)]
 pub struct AddRecipientForm {
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, message = "Укажите имя."))]
     pub name: String,
-    #[validate(email)]
+    #[validate(email(message = "Укажите корректный электронный адрес."))]
     pub email: String,
 }
 
@@ -29,7 +29,7 @@ pub struct AddRecipientPayload {
 /// Form specifying an external source to load recipients from.
 #[derive(Deserialize, Validate)]
 pub struct SourceRecipientForm {
-    #[validate(url)]
+    #[validate(url(message = "Укажите корректный URL."))]
     pub source: String, // URL of the service to fetch a JSON array of NewRecipient
 }
 
@@ -47,9 +47,9 @@ pub struct UploadRecipientsForm {
 /// Form data for updating an existing recipient.
 #[derive(Deserialize, Validate)]
 pub struct SaveRecipientForm {
-    #[validate(length(min = 1))]
+    #[validate(length(min = 1, message = "Укажите имя."))]
     pub name: String,
-    #[validate(email)]
+    #[validate(email(message = "Укажите корректный электронный адрес."))]
     pub email: String,
     #[serde(default)]
     pub groups: Vec<i32>,
@@ -142,11 +142,11 @@ impl TryFrom<SourceRecipientForm> for SourceRecipientPayload {
 /// Errors returned when loading recipients from a remote service.
 #[derive(Debug, Error)]
 pub enum SourceRecipientFormError {
-    #[error("Error reading API")]
+    #[error("Ошибка при обращении к API.")]
     RequestError,
-    #[error("Error parsing API")]
+    #[error("Ошибка при разборе ответа API.")]
     DeserializeError,
-    #[error("Recipient validation failed: {0}")]
+    #[error("Ошибка валидации получателей: {0}")]
     ValidationError(String),
 }
 
@@ -207,11 +207,11 @@ impl SourceRecipientPayload {
 /// Errors that can occur while processing an uploaded CSV of recipients.
 #[derive(Debug, Error)]
 pub enum UploadRecipientsFormError {
-    #[error("Error reading CSV file")]
+    #[error("Ошибка при чтении CSV файла.")]
     FileReadError,
-    #[error("Error parsing CSV file")]
+    #[error("Ошибка при разборе CSV файла.")]
     CsvParseError,
-    #[error("Recipient validation failed: {0}")]
+    #[error("Ошибка валидации получателей: {0}")]
     ValidationError(String),
 }
 

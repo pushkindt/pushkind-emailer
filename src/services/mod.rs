@@ -6,6 +6,7 @@ use pushkind_common::services::errors::{ServiceError, ServiceResult};
 
 use crate::{SERVICE_ACCESS_ROLE, SERVICE_ADMIN_ROLE};
 
+pub mod api;
 pub mod groups;
 pub mod main;
 pub mod recipients;

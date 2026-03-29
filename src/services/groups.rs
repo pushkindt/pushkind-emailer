@@ -5,9 +5,7 @@ use pushkind_common::services::errors::{ServiceError, ServiceResult};
 use crate::domain::group::GroupWithRecipients;
 use crate::domain::types::{GroupId, HubId};
 use crate::dto::groups::GroupsOverviewData;
-use crate::forms::groups::{
-    AddGroupForm, AddGroupPayload, AssignGroupRecipientForm, AssignGroupRecipientPayload,
-};
+use crate::forms::groups::{AddGroupPayload, AssignGroupRecipientPayload};
 use crate::repository::{
     GroupListQuery, GroupReader, GroupWriter, RecipientListQuery, RecipientReader,
 };
@@ -41,15 +39,17 @@ where
 }
 
 /// Creates a new group.
-pub fn create_group<R>(form: AddGroupForm, user: &AuthenticatedUser, repo: &R) -> ServiceResult<()>
+pub fn create_group<R>(
+    payload: AddGroupPayload,
+    user: &AuthenticatedUser,
+    repo: &R,
+) -> ServiceResult<()>
 where
     R: GroupWriter,
 {
     ensure_emailer(user)?;
 
     let hub_id = HubId::new(user.hub_id)?;
-
-    let payload: AddGroupPayload = form.try_into()?;
 
     let new_group = payload.into_domain(hub_id);
     repo.create_group(&new_group)?;
@@ -73,7 +73,7 @@ where
 /// Assigns recipients to a group.
 pub fn assign_recipients<R>(
     group_id: i32,
-    form: AssignGroupRecipientForm,
+    payload: AssignGroupRecipientPayload,
     user: &AuthenticatedUser,
     repo: &R,
 ) -> ServiceResult<()>
@@ -81,8 +81,6 @@ where
     R: GroupReader + GroupWriter,
 {
     ensure_emailer(user)?;
-
-    let payload: AssignGroupRecipientPayload = form.try_into()?;
 
     let hub_id = HubId::new(user.hub_id)?;
     let group_id = GroupId::new(group_id)?;

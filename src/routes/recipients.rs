@@ -1,59 +1,37 @@
 //! Recipient-related HTTP handlers.
+use actix_files::NamedFile;
 use actix_multipart::form::MultipartForm;
-use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
-use actix_web_flash_messages::{FlashMessage, IncomingFlashMessages};
+use actix_web::{Either, HttpRequest, HttpResponse, Responder, get, post, web};
 use pushkind_common::domain::auth::AuthenticatedUser;
-use pushkind_common::models::config::CommonServerConfig;
-use pushkind_common::routes::{base_context, redirect, render_template};
+use pushkind_common::routes::{check_role, redirect};
 use pushkind_common::services::errors::ServiceError;
-use tera::{Context, Tera};
 
-use crate::dto::recipients::RecipientsQueryParams;
+use crate::SERVICE_ACCESS_ROLE;
+use crate::dto::api::{ApiMutationErrorDto, ApiMutationSuccessDto};
 use crate::forms::recipients::{
-    AddRecipientForm, SaveRecipientForm, SourceRecipientForm, UploadRecipientsForm,
+    AddRecipientForm, AddRecipientPayload, SaveRecipientForm, SaveRecipientPayload,
+    SourceRecipientForm, SourceRecipientPayload, UploadRecipientsForm,
 };
-use crate::models::config::ServerConfig;
+use crate::frontend::open_frontend_html;
 use crate::repository::DieselRepository;
 use crate::services::recipients::{
     clean_recipients, create_recipient, delete_recipient, import_recipients_from_source,
-    load_recipient_modal, load_recipients_overview, save_recipient, upload_recipients,
+    save_recipient, upload_recipients,
 };
 
 #[get("/recipients")]
-pub async fn recipients_show(
-    params: web::Query<RecipientsQueryParams>,
-    user: AuthenticatedUser,
-    flash_messages: IncomingFlashMessages,
-    repo: web::Data<DieselRepository>,
-    common_config: web::Data<CommonServerConfig>,
-    server_config: web::Data<ServerConfig>,
-    tera: web::Data<Tera>,
-) -> impl Responder {
-    let data = match load_recipients_overview(params.into_inner(), &user, repo.get_ref()) {
-        Ok(data) => data,
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            return redirect("/na");
-        }
-        Err(err) => {
-            log::error!("Failed to get recipients: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let mut context = base_context(
-        &flash_messages,
-        &user,
-        "recipients",
-        &common_config.auth_service_url,
-    );
-    context.insert("crm_service_url", &server_config.crm_service_url);
-    context.insert("recipients", &data.recipients);
-    if let Some(search) = data.search_query {
-        context.insert("search_query", &search);
+pub async fn recipients_show(user: AuthenticatedUser) -> Either<NamedFile, HttpResponse> {
+    if !check_role(SERVICE_ACCESS_ROLE, &user.roles) {
+        return Either::Right(redirect("/na"));
     }
 
-    render_template(&tera, "recipients/recipients.html", &context)
+    match open_frontend_html("assets/dist/app/recipients.html").await {
+        Ok(file) => Either::Left(file),
+        Err(err) => {
+            log::error!("Failed to open Emailer recipients document: {err}");
+            Either::Right(HttpResponse::InternalServerError().finish())
+        }
+    }
 }
 
 #[post("/recipient/add")]
@@ -62,22 +40,30 @@ pub async fn recipient_add(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
-    match create_recipient(form, &user, repo.get_ref()) {
-        Ok(_) => FlashMessage::success("Получатель успешно добавлен.").send(),
-        Err(ServiceError::Form(_)) => {
-            FlashMessage::error("Ошибка при добавлении получателя.").send();
+    let payload: AddRecipientPayload = match form.try_into() {
+        Ok(payload) => payload,
+        Err(err) => {
+            return HttpResponse::BadRequest().json(ApiMutationErrorDto::from(&err));
         }
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            return redirect("/na");
-        }
+    };
+
+    match create_recipient(payload, &user, repo.get_ref()) {
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Получатель успешно добавлен.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to create recipient: {err}");
-            FlashMessage::error("Ошибка при создании получателя.").send();
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при создании получателя.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
-
-    redirect("/recipients")
 }
 
 #[post("/recipient/{recipient_id}/delete")]
@@ -87,19 +73,24 @@ pub async fn recipients_delete(
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
     match delete_recipient(recipient_id.into_inner(), &user, repo.get_ref()) {
-        Ok(_) => {
-            FlashMessage::success("Получатель удален.").send();
-            redirect("/recipients")
-        }
-        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Получатель удалён.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().json(ApiMutationErrorDto {
+            message: "Получатель не найден.".into(),
+            field_errors: Vec::new(),
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to delete recipient: {err}");
-            FlashMessage::error("Ошибка при удалении получателя.").send();
-            redirect("/recipients")
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при удалении получателя.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
 }
@@ -110,19 +101,20 @@ pub async fn recipients_clean(
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
     match clean_recipients(&user, repo.get_ref()) {
-        Ok(_) => {
-            FlashMessage::success("Все группы удалены.").send();
-            FlashMessage::success("Все получатели удалены.").send();
-            redirect("/recipients")
-        }
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Все получатели и группы удалены.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to clean recipients: {err}");
-            FlashMessage::error("Ошибка при удалении получателей.").send();
-            redirect("/recipients")
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при удалении получателей.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
 }
@@ -134,51 +126,26 @@ pub async fn recipients_upload(
     repo: web::Data<DieselRepository>,
 ) -> impl Responder {
     match upload_recipients(form, &user, repo.get_ref()) {
-        Ok(_) => {
-            FlashMessage::success("Получатели добавлены.").send();
-            redirect("/recipients")
-        }
-        Err(ServiceError::Form(message)) => {
-            FlashMessage::error(format!("Ошибка при парсинге получателей: {message}")).send();
-            redirect("/recipients")
-        }
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Получатели добавлены.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::Form(message)) => HttpResponse::BadRequest().json(ApiMutationErrorDto {
+            message: format!("Ошибка при парсинге получателей: {message}"),
+            field_errors: Vec::new(),
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to add recipients: {err}");
-            FlashMessage::error("Ошибка при добавлении получателей.").send();
-            redirect("/recipients")
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при добавлении получателей.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
-}
-
-#[post("/recipient/{recipient_id}/modal")]
-pub async fn recipient_modal(
-    recipient_id: web::Path<i32>,
-    user: AuthenticatedUser,
-    repo: web::Data<DieselRepository>,
-    tera: web::Data<Tera>,
-) -> impl Responder {
-    let data = match load_recipient_modal(recipient_id.into_inner(), &user, repo.get_ref()) {
-        Ok(data) => data,
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            return redirect("/na");
-        }
-        Err(ServiceError::NotFound) => return HttpResponse::NotFound().finish(),
-        Err(err) => {
-            log::error!("Error retrieving recipient: {err}");
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    let mut context = Context::new();
-    context.insert("recipient", &data.recipient);
-    context.insert("groups", &data.groups);
-
-    render_template(&tera, "recipients/modal_body.html", &context)
 }
 
 #[post("/recipient/{recipient_id}/save")]
@@ -191,30 +158,40 @@ pub async fn recipient_save(
     let form: SaveRecipientForm = match serde_html_form::from_bytes(&form) {
         Ok(form) => form,
         Err(err) => {
-            log::error!("Error parsing form: {err}");
-            FlashMessage::error("Ошибка при обработке формы.").send();
-            return redirect("/recipients");
+            log::error!("Error parsing recipient save form: {err}");
+            return HttpResponse::BadRequest().json(ApiMutationErrorDto {
+                message: "Ошибка при обработке формы.".into(),
+                field_errors: Vec::new(),
+            });
         }
     };
 
-    match save_recipient(recipient_id.into_inner(), form, &user, repo.get_ref()) {
-        Ok(_) => {
-            FlashMessage::success("Получатель сохранён.").send();
-            redirect("/recipients")
+    let payload: SaveRecipientPayload = match form.try_into() {
+        Ok(payload) => payload,
+        Err(err) => {
+            return HttpResponse::BadRequest().json(ApiMutationErrorDto::from(&err));
         }
-        Err(ServiceError::Form(_)) => {
-            FlashMessage::error("Ошибка при обработке формы.").send();
-            redirect("/recipients")
-        }
-        Err(ServiceError::NotFound) => HttpResponse::NotFound().finish(),
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+    };
+
+    match save_recipient(recipient_id.into_inner(), payload, &user, repo.get_ref()) {
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Получатель сохранён.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::NotFound) => HttpResponse::NotFound().json(ApiMutationErrorDto {
+            message: "Получатель не найден.".into(),
+            field_errors: Vec::new(),
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Error saving recipient: {err}");
-            FlashMessage::error("Ошибка при сохранении получателя.").send();
-            redirect("/recipients")
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при сохранении получателя.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
 }
@@ -226,31 +203,43 @@ pub async fn recipients_source(
     repo: web::Data<DieselRepository>,
     req: HttpRequest,
 ) -> impl Responder {
+    let payload: SourceRecipientPayload = match form.try_into() {
+        Ok(payload) => payload,
+        Err(err) => {
+            return HttpResponse::BadRequest().json(ApiMutationErrorDto::from(&err));
+        }
+    };
+
     let id_cookie = match req.cookie("id") {
         Some(cookie) => cookie,
         None => {
             log::error!("No id cookie found");
-            return redirect("/recipients");
+            return HttpResponse::BadRequest().json(ApiMutationErrorDto {
+                message: "Не удалось получить данные текущей сессии.".into(),
+                field_errors: Vec::new(),
+            });
         }
     };
 
-    match import_recipients_from_source(form, &user, repo.get_ref(), id_cookie.value()).await {
-        Ok(_) => {
-            FlashMessage::success("Получатели успешно добавлены.").send();
-            redirect("/recipients")
-        }
-        Err(ServiceError::Form(message)) => {
-            FlashMessage::error(format!("Ошибка при загрузке получателей: {message}")).send();
-            redirect("/recipients")
-        }
-        Err(ServiceError::Unauthorized) => {
-            FlashMessage::error("Недостаточно прав.").send();
-            redirect("/na")
-        }
+    match import_recipients_from_source(payload, &user, repo.get_ref(), id_cookie.value()).await {
+        Ok(_) => HttpResponse::Ok().json(ApiMutationSuccessDto {
+            message: "Получатели успешно добавлены.".into(),
+            redirect_to: None,
+        }),
+        Err(ServiceError::Form(message)) => HttpResponse::BadRequest().json(ApiMutationErrorDto {
+            message: format!("Ошибка при загрузке получателей: {message}"),
+            field_errors: Vec::new(),
+        }),
+        Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().json(ApiMutationErrorDto {
+            message: "Недостаточно прав.".into(),
+            field_errors: Vec::new(),
+        }),
         Err(err) => {
             log::error!("Failed to create recipients: {err}");
-            FlashMessage::error("Ошибка при добавлении получателя.").send();
-            redirect("/recipients")
+            HttpResponse::InternalServerError().json(ApiMutationErrorDto {
+                message: "Ошибка при добавлении получателей.".into(),
+                field_errors: Vec::new(),
+            })
         }
     }
 }

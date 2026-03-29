@@ -9,10 +9,9 @@ outbound emails across the Pushkind platform.
 ## Technology Stack
 
 - Rust 2024 edition
-- [Actix Web](https://actix.rs/) with identity, session, and flash message
-  middleware
+- [Actix Web](https://actix.rs/) with identity and session middleware
 - [Diesel](https://diesel.rs/) ORM with SQLite and connection pooling via r2d2
-- [Tera](https://tera.netlify.app/) templates styled with Bootstrap 5.3
+- React + TypeScript + Vite for the server-routed frontend
 - [`pushkind-common`](https://github.com/pushkindt/pushkind-common) shared crate
   for authentication guards, configuration, database helpers, and reusable
   patterns
@@ -24,6 +23,7 @@ outbound emails across the Pushkind platform.
 ### Prerequisites
 
 - Rust toolchain (install via [rustup](https://www.rust-lang.org/tools/install))
+- Node.js and `npm` for the React/Vite frontend workspace
 - `diesel-cli` with SQLite support (`cargo install diesel_cli --no-default-features --features sqlite`)
 - SQLite 3 installed on your system
 
@@ -39,12 +39,11 @@ Key settings you may want to override:
 
 | Environment variable | Description | Default |
 | --- | --- | --- |
-| `APP_SECRET` | 64-byte secret used to sign cookies and flash messages | _required_ |
+| `APP_SECRET` | 64-byte secret used to sign cookies | _required_ |
 | `APP_DATABASE_URL` | Path to the SQLite database file | `app.db` |
 | `APP_ADDRESS` | Interface to bind | `127.0.0.1` |
 | `APP_PORT` | HTTP port | `8080` (from `config/local.yaml`) |
 | `APP_DOMAIN` | Cookie domain (without protocol) | _required_ |
-| `APP_TEMPLATES_DIR` | Glob pattern for templates consumed by Tera | `templates/**/*` |
 | `APP_ZMQ_EMAILER_PUB` | ZeroMQ PUB endpoint for outgoing email events | `tcp://127.0.0.1:5557` |
 | `APP_ZMQ_EMAILER_SUB` | ZeroMQ SUB endpoint for inbound email events | `tcp://127.0.0.1:5558` |
 | `APP_ZMQ_REPLIER_PUB` | ZeroMQ PUB endpoint for reply pipeline events | `tcp://127.0.0.1:5559` |
@@ -81,9 +80,22 @@ cargo run
 ```
 
 The server listens on `http://127.0.0.1:8080` by default and serves static
-assets from `./assets` in addition to the Tera-powered HTML pages. Authentication
-and authorization are enforced via the Pushkind auth service and the
-rules defined in [`SPEC.md`](SPEC.md).
+assets from `./assets`, including the Vite-built HTML documents under
+`assets/dist/`. Authentication and authorization are enforced via the Pushkind
+auth service and the rules defined in [`SPEC.md`](SPEC.md).
+
+The repository now also contains a frontend workspace in `frontend/` for the
+React/Vite migration. Useful commands there are:
+
+```bash
+cd frontend
+npm install
+npm run dev
+npm run build
+```
+
+After `npm run build`, the built static assets and HTML documents are emitted to
+`assets/dist/`.
 
 ## Quality Gates
 
@@ -95,6 +107,9 @@ cargo fmt --all -- --check
 cargo clippy --all-features --tests -- -Dwarnings
 cargo test --all-features --verbose
 cargo build --all-features --verbose
+cd frontend && npm run typecheck
+cd frontend && npm run test
+cd frontend && npm run build
 ```
 
 Alternatively, the `make check` target will format the codebase, run clippy, and
