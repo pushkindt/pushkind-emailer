@@ -499,7 +499,7 @@ async function fetchJson(url: string) {
   }
 
   ensureResponseIsNotAuthRedirect(response);
-  return response.json();
+  return readJsonResponse(response, url);
 }
 
 function isJsonResponse(response: Response): boolean {
