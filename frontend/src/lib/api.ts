@@ -498,6 +498,7 @@ async function fetchJson(url: string) {
     throw new Error(`Request failed with status ${response.status}.`);
   }
 
+  ensureResponseIsNotAuthRedirect(response);
   return response.json();
 }
 
@@ -518,7 +519,7 @@ function handleAuthRedirectResponse(response: Response): never {
   throw new Error("Сессия истекла. Выполняется переход на страницу входа.");
 }
 
-function ensureMutationResponseIsNotAuthRedirect(response: Response) {
+function ensureResponseIsNotAuthRedirect(response: Response) {
   if (response.redirected && !isJsonResponse(response)) {
     handleAuthRedirectResponse(response);
   }
@@ -642,7 +643,7 @@ export async function postMultipartForm(
     },
   });
 
-  ensureMutationResponseIsNotAuthRedirect(response);
+  ensureResponseIsNotAuthRedirect(response);
 
   if (response.ok) {
     return await readJsonResponse<ApiMutationSuccess>(response, endpoint);
@@ -665,7 +666,7 @@ export async function postForm(
     },
   });
 
-  ensureMutationResponseIsNotAuthRedirect(response);
+  ensureResponseIsNotAuthRedirect(response);
 
   if (response.ok) {
     return await readJsonResponse<ApiMutationSuccess>(response, endpoint);
@@ -683,7 +684,7 @@ export async function postEmpty(endpoint: string): Promise<ApiMutationSuccess> {
     },
   });
 
-  ensureMutationResponseIsNotAuthRedirect(response);
+  ensureResponseIsNotAuthRedirect(response);
 
   if (response.ok) {
     return await readJsonResponse<ApiMutationSuccess>(response, endpoint);
