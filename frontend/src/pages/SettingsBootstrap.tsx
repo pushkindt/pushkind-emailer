@@ -122,12 +122,14 @@ export function SettingsBootstrap() {
                   type={key.toString().includes("Port") ? "number" : "text"}
                   className="form-control"
                   value={String(value)}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget.value;
+
                     setForm((current) => ({
                       ...current,
-                      [key]: event.currentTarget.value,
-                    }))
-                  }
+                      [key]: nextValue,
+                    }));
+                  }}
                 />
                 {fieldError(
                   key === "smtpServer"
@@ -161,18 +163,57 @@ export function SettingsBootstrap() {
             Шаблон сообщения (доступны переменные{" "}
             {"{name} {message} {unsubscribe_url}"}):
           </h6>
-          <div className="row g-1">
-            <div className="col">
+          <ul className="nav nav-tabs" role="tablist">
+            <li className="nav-item" role="presentation">
+              <button
+                className="nav-link active"
+                id="editor-tab-settings"
+                data-bs-toggle="tab"
+                data-bs-target="#editor-tab-pane-settings"
+                type="button"
+                role="tab"
+                aria-controls="editor-tab-pane-settings"
+                aria-selected="true"
+              >
+                Маркдаун
+              </button>
+            </li>
+            <li className="nav-item" role="presentation">
+              <button
+                className="nav-link"
+                id="preview-tab-settings"
+                data-bs-toggle="tab"
+                data-bs-target="#preview-tab-pane-settings"
+                type="button"
+                role="tab"
+                aria-controls="preview-tab-pane-settings"
+                aria-selected="false"
+              >
+                Превью
+              </button>
+            </li>
+          </ul>
+          <div className="tab-content mb-2">
+            <div
+              className="tab-pane fade show active"
+              id="editor-tab-pane-settings"
+              role="tabpanel"
+              aria-labelledby="editor-tab-settings"
+              tabIndex={0}
+            >
               <textarea
-                className="form-control"
+                className="form-control border-top-0 rounded-top-0"
                 rows={10}
+                id="settings-message-input"
                 value={form.message}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextValue = event.currentTarget.value;
+
                   setForm((current) => ({
                     ...current,
-                    message: event.currentTarget.value,
-                  }))
-                }
+                    message: nextValue,
+                  }));
+                }}
               />
               {fieldError("message") ? (
                 <div className="invalid-feedback d-block">
@@ -181,9 +222,20 @@ export function SettingsBootstrap() {
               ) : null}
             </div>
             <div
-              className="col border rounded"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(form.message) }}
-            />
+              className="tab-pane fade"
+              id="preview-tab-pane-settings"
+              role="tabpanel"
+              aria-labelledby="preview-tab-settings"
+              tabIndex={0}
+            >
+              <div
+                className="border border-top-0 rounded rounded-top-0 p-2 emailer-markdown-preview"
+                id="settings-message-rendered"
+                dangerouslySetInnerHTML={{
+                  __html: renderMarkdown(form.message),
+                }}
+              />
+            </div>
           </div>
           <div className="row mb-2">
             <div className="col">
@@ -192,11 +244,8 @@ export function SettingsBootstrap() {
                 <a href="https://www.markdownguide.org/basic-syntax/">
                   markdown
                 </a>
-                .
+                . Подставляются {"{теги}"} получателей.
               </small>
-            </div>
-            <div className="col">
-              <small className="text-muted">Превью сообщения</small>
             </div>
           </div>
           <div className="row">
