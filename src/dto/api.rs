@@ -2,77 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use pushkind_common::domain::auth::AuthenticatedUser;
 use serde::Serialize;
-
-use crate::forms::FormError;
-
-#[derive(Clone, Copy, Debug, Serialize)]
-pub struct NavigationItemDto {
-    pub name: &'static str,
-    pub url: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CurrentUserDto {
-    pub email: String,
-    pub name: String,
-    pub hub_id: i32,
-    pub roles: Vec<String>,
-}
-
-impl From<&AuthenticatedUser> for CurrentUserDto {
-    fn from(user: &AuthenticatedUser) -> Self {
-        Self {
-            email: user.email.clone(),
-            name: user.name.clone(),
-            hub_id: user.hub_id,
-            roles: user.roles.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct IamDto {
-    pub current_user: CurrentUserDto,
-    pub home_url: String,
-    pub navigation: Vec<NavigationItemDto>,
-    pub local_menu_items: Vec<NavigationItemDto>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ApiFieldErrorDto {
-    pub field: String,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ApiMutationSuccessDto {
-    pub message: String,
-    pub redirect_to: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ApiMutationErrorDto {
-    pub message: String,
-    pub field_errors: Vec<ApiFieldErrorDto>,
-}
-
-impl From<&FormError> for ApiMutationErrorDto {
-    fn from(error: &FormError) -> Self {
-        Self {
-            message: error.to_string(),
-            field_errors: error
-                .field_errors()
-                .into_iter()
-                .map(|field_error| ApiFieldErrorDto {
-                    field: field_error.field.into_owned(),
-                    message: field_error.message.into_owned(),
-                })
-                .collect(),
-        }
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct RecipientOptionDto {
@@ -141,6 +71,7 @@ pub struct EmailCollectionDto {
     pub emails: PaginatedEmailListDto,
     pub custom_fields: Vec<String>,
     pub crm_service_url: String,
+    pub files_service_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -223,6 +154,7 @@ pub struct HubSettingsDto {
     pub imap_server: Option<String>,
     pub imap_port: Option<i32>,
     pub message: Option<String>,
+    pub files_service_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -250,10 +182,4 @@ pub struct HistoryItemDto {
 pub struct EmailHistoryCollectionDto {
     pub items: Vec<HistoryItemDto>,
     pub crm_service_url: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct NoAccessPageDto {
-    pub current_user: CurrentUserDto,
-    pub home_url: String,
 }

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { UserMenuDropdown } from "./UserMenuDropdown";
+import { UserMenuDropdown } from "@pushkind/frontend-shell/UserMenuDropdown";
 
 describe("UserMenuDropdown", () => {
   it("renders local menu items, home link, and logout action", () => {

@@ -1,6 +1,7 @@
 //! Service adaptors serving Emailer API data.
 
 use pushkind_common::domain::auth::AuthenticatedUser;
+use pushkind_common::dto::shell::{CurrentUserDto, IamDto, NavigationItemDto, NoAccessPageDto};
 use pushkind_common::models::config::CommonServerConfig;
 use serde::Deserialize;
 
@@ -10,11 +11,10 @@ use crate::domain::recipient::{Recipient, RecipientWithGroups};
 use crate::dto::api::{
     EmailCollectionDto, EmailHistoryCollectionDto, EmailPreviewDto, EmailPreviewRecipientDto,
     GroupCollectionDto, GroupDetailsDto, GroupListItemDto, GroupModalDto, GroupOptionDto,
-    HistoryItemDto, HubSettingsDto, IamDto, NavigationItemDto, NoAccessPageDto,
-    PaginatedEmailListDto, PaginatedRecipientListDto, RecipientAssignmentOptionDto,
-    RecipientCollectionDto, RecipientDetailsDto, RecipientFieldDto, RecipientListItemDto,
-    RecipientModalDto, RecipientOptionDto, RetryEmailDto, UnsubscribedItemDto,
-    UnsubscribedRecipientCollectionDto,
+    HistoryItemDto, HubSettingsDto, PaginatedEmailListDto, PaginatedRecipientListDto,
+    RecipientAssignmentOptionDto, RecipientCollectionDto, RecipientDetailsDto, RecipientFieldDto,
+    RecipientListItemDto, RecipientModalDto, RecipientOptionDto, RetryEmailDto,
+    UnsubscribedItemDto, UnsubscribedRecipientCollectionDto,
 };
 use crate::dto::main::IndexQueryParams;
 use crate::dto::recipients::RecipientsQueryParams;
@@ -220,12 +220,12 @@ pub fn get_shell_data(
 
     let mut local_menu_items = vec![
         NavigationItemDto {
-            name: "Отписавшиеся",
-            url: "/unsubscribed",
+            name: "Отписавшиеся".to_string(),
+            url: "/unsubscribed".to_string(),
         },
         NavigationItemDto {
-            name: "История",
-            url: "/history",
+            name: "История".to_string(),
+            url: "/history".to_string(),
         },
     ];
 
@@ -233,30 +233,31 @@ pub fn get_shell_data(
         local_menu_items.insert(
             0,
             NavigationItemDto {
-                name: "Настройки",
-                url: "/settings",
+                name: "Настройки".to_string(),
+                url: "/settings".to_string(),
             },
         );
     }
 
     Ok(IamDto {
-        current_user: user.into(),
+        current_user: CurrentUserDto::from(user.clone()),
         home_url: common_config.auth_service_url.clone(),
         navigation: vec![
             NavigationItemDto {
-                name: "Сообщения",
-                url: "/",
+                name: "Сообщения".to_string(),
+                url: "/".to_string(),
             },
             NavigationItemDto {
-                name: "Получатели",
-                url: "/recipients",
+                name: "Получатели".to_string(),
+                url: "/recipients".to_string(),
             },
             NavigationItemDto {
-                name: "Группы",
-                url: "/groups",
+                name: "Группы".to_string(),
+                url: "/groups".to_string(),
             },
         ],
         local_menu_items,
+        hub_name: "Emailer".to_string(),
     })
 }
 
@@ -301,6 +302,7 @@ where
         },
         custom_fields: data.custom_fields,
         crm_service_url: app_config.crm_service_url.clone(),
+        files_service_url: app_config.files_service_url.clone(),
     })
 }
 
@@ -396,7 +398,11 @@ where
 }
 
 /// Returns typed hub settings data.
-pub fn get_hub_settings_data<R>(user: &AuthenticatedUser, repo: &R) -> ServiceResult<HubSettingsDto>
+pub fn get_hub_settings_data<R>(
+    user: &AuthenticatedUser,
+    repo: &R,
+    app_config: &AppConfig,
+) -> ServiceResult<HubSettingsDto>
 where
     R: HubReader + HubWriter,
 {
@@ -415,6 +421,7 @@ where
         imap_server: data.hub.imap_server.as_ref().map(ToString::to_string),
         imap_port: data.hub.imap_port.as_ref().map(|value| value.get() as i32),
         message: data.hub.email_template.as_ref().map(ToString::to_string),
+        files_service_url: app_config.files_service_url.clone(),
     })
 }
 
@@ -474,8 +481,9 @@ pub fn get_no_access_data(
     common_config: &CommonServerConfig,
 ) -> NoAccessPageDto {
     NoAccessPageDto {
-        current_user: user.into(),
+        current_user: CurrentUserDto::from(user.clone()),
         home_url: common_config.auth_service_url.clone(),
+        required_role: Some("emailer".to_string()),
     }
 }
 

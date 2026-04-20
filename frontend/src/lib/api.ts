@@ -1,12 +1,45 @@
+import {
+  browserLocation,
+  ensureResponseIsNotAuthRedirect,
+  fetchHubMenuItems as fetchSharedHubMenuItems,
+  fetchJson as fetchSharedJson,
+  fetchNoAccessData as fetchSharedNoAccessData,
+  fetchShellData as fetchSharedShellData,
+  isJsonResponse,
+  parseMenuItems,
+  readJsonResponse,
+} from "@pushkind/frontend-shell/shellApi";
+
+import {
+  type ApiFieldError,
+  type ApiMutationError,
+  type ApiMutationSuccess,
+  isApiMutationError,
+  postEmpty,
+  postForm,
+  postMultipartForm,
+} from "@pushkind/frontend-shell/mutations";
+
+export {
+  browserLocation,
+  isApiMutationError,
+  postEmpty,
+  postForm,
+  postMultipartForm,
+  type ApiFieldError,
+  type ApiMutationError,
+  type ApiMutationSuccess,
+};
+
 import type {
   EmailPreview,
   GroupOption,
-  GroupModalData,
   GroupListItem,
+  GroupModalData,
   GroupsPageData,
   HistoryPageData,
   IndexPageData,
-  NavigationItem,
+  NoAccessData,
   RecipientAssignmentOption,
   RecipientField,
   RecipientListItem,
@@ -19,21 +52,6 @@ import type {
   UnsubscribedPageData,
   UserMenuItem,
 } from "./models";
-
-export interface ApiFieldError {
-  field: string;
-  message: string;
-}
-
-export interface ApiMutationSuccess {
-  message: string;
-  redirect_to: string | null;
-}
-
-export interface ApiMutationError {
-  message: string;
-  field_errors: ApiFieldError[];
-}
 
 export type FieldErrorMap = Record<string, string[]>;
 
@@ -78,58 +96,6 @@ function readStringArray(record: Record<string, unknown>, key: string) {
   }
 
   return value;
-}
-
-function parseNavigationItems(payload: unknown): NavigationItem[] {
-  if (!Array.isArray(payload)) {
-    throw new Error("Invalid navigation payload.");
-  }
-
-  return payload.map((item) => {
-    if (!isRecord(item)) {
-      throw new Error("Invalid navigation item payload.");
-    }
-
-    return {
-      name: readString(item, "name"),
-      url: readString(item, "url"),
-    };
-  });
-}
-
-function parseShellData(payload: unknown): ShellData {
-  if (!isRecord(payload) || !isRecord(payload.current_user)) {
-    throw new Error("Invalid shell payload.");
-  }
-
-  return {
-    currentUser: {
-      email: readString(payload.current_user, "email"),
-      name: readString(payload.current_user, "name"),
-      hubId: readNumber(payload.current_user, "hub_id"),
-      roles: readStringArray(payload.current_user, "roles"),
-    },
-    homeUrl: readString(payload, "home_url"),
-    navigation: parseNavigationItems(payload.navigation),
-    localMenuItems: parseNavigationItems(payload.local_menu_items),
-  };
-}
-
-function parseMenuItems(payload: unknown): UserMenuItem[] {
-  if (!Array.isArray(payload)) {
-    throw new Error("Invalid auth menu payload.");
-  }
-
-  return payload.map((item) => {
-    if (!isRecord(item)) {
-      throw new Error("Invalid auth menu item payload.");
-    }
-
-    return {
-      name: readString(item, "name"),
-      url: readString(item, "url"),
-    };
-  });
 }
 
 function parseStringMap(value: unknown) {
@@ -344,6 +310,7 @@ function parseIndexPageData(payload: unknown): IndexPageData {
         )
       : [],
     crmServiceUrl: readString(payload, "crm_service_url"),
+    filesServiceUrl: readString(payload, "files_service_url"),
   };
 }
 
@@ -431,6 +398,7 @@ function parseSettingsPageData(payload: unknown): SettingsPageData {
     imapPort:
       payload.imap_port == null ? undefined : readNumber(payload, "imap_port"),
     message: readOptionalString(payload, "message"),
+    filesServiceUrl: readString(payload, "files_service_url"),
   };
 }
 
@@ -482,65 +450,9 @@ function withBaseUrl(baseUrl: string, path: string) {
 }
 
 async function fetchJson(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-    },
-    cache: "no-store",
-    credentials: "include",
+  return fetchSharedJson(url, {
+    unauthorizedMessage: "Недостаточно прав для доступа к Emailer.",
   });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Недостаточно прав для доступа к Emailer.");
-    }
-
-    throw new Error(`Request failed with status ${response.status}.`);
-  }
-
-  ensureResponseIsNotAuthRedirect(response);
-  return readJsonResponse(response, url);
-}
-
-function isJsonResponse(response: Response): boolean {
-  return (
-    response.headers.get("content-type")?.includes("application/json") ?? false
-  );
-}
-
-export const browserLocation = {
-  assign(url: string) {
-    window.location.assign(url);
-  },
-};
-
-function handleAuthRedirectResponse(response: Response): never {
-  browserLocation.assign(response.url);
-  throw new Error("Сессия истекла. Выполняется переход на страницу входа.");
-}
-
-function ensureResponseIsNotAuthRedirect(response: Response) {
-  if (response.redirected && !isJsonResponse(response)) {
-    handleAuthRedirectResponse(response);
-  }
-}
-
-async function readJsonResponse<T>(response: Response, endpoint: string) {
-  if (!isJsonResponse(response)) {
-    throw new Error(
-      `Expected JSON response from ${endpoint} with status ${response.status}.`,
-    );
-  }
-
-  return (await response.json()) as T;
-}
-
-export function isApiMutationError(error: unknown): error is ApiMutationError {
-  return (
-    isRecord(error) &&
-    typeof error.message === "string" &&
-    Array.isArray(error.field_errors)
-  );
 }
 
 export function toFieldErrorMap(error: ApiMutationError): FieldErrorMap {
@@ -562,8 +474,17 @@ export function toFieldErrorMap(error: ApiMutationError): FieldErrorMap {
 }
 
 export async function fetchShellData(): Promise<ShellData> {
-  const payload = await fetchJson("/api/v1/iam");
-  return parseShellData(payload);
+  return fetchSharedShellData<ShellData>(
+    "/api/v1/iam",
+    "Недостаточно прав для доступа к Emailer.",
+  );
+}
+
+export async function fetchNoAccessData(): Promise<NoAccessData> {
+  return fetchSharedNoAccessData<NoAccessData>(
+    "/api/v1/no-access",
+    "Недостаточно прав для доступа к Emailer.",
+  );
 }
 
 export async function fetchIndexPageData(
@@ -624,71 +545,8 @@ export async function fetchHubMenuItems(
   authBaseUrl: string,
   hubId: number,
 ): Promise<UserMenuItem[]> {
-  const payload = await fetchJson(
+  return fetchSharedHubMenuItems<UserMenuItem>(
     withBaseUrl(authBaseUrl, `/api/v1/hubs/${hubId}/menu-items`),
+    "Недостаточно прав для доступа к Emailer.",
   );
-  return parseMenuItems(payload);
-}
-
-export async function postMultipartForm(
-  endpoint: string,
-  body: FormData,
-): Promise<ApiMutationSuccess> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    body,
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  ensureResponseIsNotAuthRedirect(response);
-
-  if (response.ok) {
-    return await readJsonResponse<ApiMutationSuccess>(response, endpoint);
-  }
-
-  throw await readJsonResponse<ApiMutationError>(response, endpoint);
-}
-
-export async function postForm(
-  endpoint: string,
-  body: URLSearchParams,
-): Promise<ApiMutationSuccess> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    body,
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    },
-  });
-
-  ensureResponseIsNotAuthRedirect(response);
-
-  if (response.ok) {
-    return await readJsonResponse<ApiMutationSuccess>(response, endpoint);
-  }
-
-  throw await readJsonResponse<ApiMutationError>(response, endpoint);
-}
-
-export async function postEmpty(endpoint: string): Promise<ApiMutationSuccess> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  ensureResponseIsNotAuthRedirect(response);
-
-  if (response.ok) {
-    return await readJsonResponse<ApiMutationSuccess>(response, endpoint);
-  }
-
-  throw await readJsonResponse<ApiMutationError>(response, endpoint);
 }

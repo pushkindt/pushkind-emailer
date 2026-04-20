@@ -913,15 +913,7 @@ async fn test_emailer_non_admin_settings_access_story() {
         .await
         .expect("Failed to request hub settings API for non-admin user.");
 
-    assert_eq!(hub_settings_response.status(), StatusCode::SEE_OTHER);
-    assert!(
-        hub_settings_response
-            .headers()
-            .get(header::LOCATION)
-            .and_then(|value| value.to_str().ok())
-            .expect("Hub settings redirect should be present.")
-            .starts_with("https://users.pushkind.test/auth/signin?next=")
-    );
+    assert_eq!(hub_settings_response.status(), StatusCode::UNAUTHORIZED);
 
     let save_settings_response = emailer_admin_api_client
         .post(format!("{}/settings/save", app.address()))
@@ -934,15 +926,7 @@ async fn test_emailer_non_admin_settings_access_story() {
         .await
         .expect("Failed to post settings as non-admin user.");
 
-    assert_eq!(save_settings_response.status(), StatusCode::SEE_OTHER);
-    assert!(
-        save_settings_response
-            .headers()
-            .get(header::LOCATION)
-            .and_then(|value| value.to_str().ok())
-            .expect("Settings save redirect should be present.")
-            .starts_with("https://users.pushkind.test/auth/signin?next=")
-    );
+    assert_eq!(save_settings_response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[ignore = "local-only end-to-end test"]
@@ -1025,15 +1009,7 @@ async fn test_emailer_no_role_api_story() {
         .await
         .expect("Failed to request IAM payload without role.");
 
-    assert_eq!(denied_iam_response.status(), StatusCode::SEE_OTHER);
-    assert!(
-        denied_iam_response
-            .headers()
-            .get(header::LOCATION)
-            .and_then(|value| value.to_str().ok())
-            .expect("IAM redirect should be present.")
-            .starts_with("https://users.pushkind.test/auth/signin?next=")
-    );
+    assert_eq!(denied_iam_response.status(), StatusCode::UNAUTHORIZED);
 
     let no_role_no_access_client = common::build_reqwest_client();
     common::login_as(

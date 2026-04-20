@@ -2,12 +2,12 @@
 use actix_files::NamedFile;
 use actix_web::{Either, HttpResponse, Responder, get, post, web};
 use pushkind_common::domain::auth::AuthenticatedUser;
+use pushkind_common::dto::mutation::{ApiMutationErrorDto, ApiMutationSuccessDto};
 use pushkind_common::routes::{check_role, redirect};
 use pushkind_common::services::errors::ServiceError;
 
 use crate::SERVICE_ACCESS_ROLE;
 use crate::SERVICE_ADMIN_ROLE;
-use crate::dto::api::{ApiMutationErrorDto, ApiMutationSuccessDto};
 use crate::dto::settings::ExportedHistory;
 use crate::forms::settings::{SaveHubForm, SaveHubPayload};
 use crate::frontend::open_frontend_html;

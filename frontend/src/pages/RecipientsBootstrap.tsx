@@ -4,12 +4,14 @@ import type { ChangeEvent, FormEvent } from "react";
 import {
   DropdownMultiSelect,
   type DropdownMultiSelectOption,
-} from "../components/DropdownMultiSelect";
+} from "@pushkind/frontend-shell/DropdownMultiSelect";
 import { EmailerShell } from "../components/EmailerShell";
 import { EmailerShellFatalState } from "../components/EmailerShellFatalState";
 import {
+  fetchHubMenuItems,
   fetchRecipientModalData,
   fetchRecipientsPageData,
+  fetchShellData,
   isApiMutationError,
   postEmpty,
   postForm,
@@ -21,8 +23,10 @@ import type {
   RecipientField,
   RecipientModalData,
   RecipientsPageData,
+  ShellData,
+  UserMenuItem,
 } from "../lib/models";
-import { useEmailerShell } from "../lib/useEmailerShell";
+import { useServiceShell } from "@pushkind/frontend-shell/useServiceShell";
 
 type PageState =
   | { status: "loading" }
@@ -53,7 +57,13 @@ function buildSearchUrl(page?: number) {
 }
 
 export function RecipientsBootstrap() {
-  const shellState = useEmailerShell("Не удалось загрузить оболочку Emailer.");
+  const shellState = useServiceShell<ShellData, UserMenuItem>({
+    errorMessage: "Не удалось загрузить оболочку Emailer.",
+    menuLoadWarning:
+      "Failed to load auth navigation menu. Falling back to local Emailer menu only.",
+    fetchShellData,
+    fetchHubMenuItems,
+  });
   const [pageState, setPageState] = useState<PageState>({ status: "loading" });
   const [modalState, setModalState] = useState<RecipientModalState>({
     status: "closed",

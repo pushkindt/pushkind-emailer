@@ -1,25 +1,28 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { marked } from "marked";
+import { MarkdownComposer } from "@pushkind/frontend-shell/markdown";
 import { EmailerShell } from "../components/EmailerShell";
 import { EmailerShellFatalState } from "../components/EmailerShellFatalState";
 import {
+  fetchHubMenuItems,
   fetchSettingsPageData,
+  fetchShellData,
   isApiMutationError,
   postForm,
   toFieldErrorMap,
   type FieldErrorMap,
 } from "../lib/api";
-import type { SettingsPageData } from "../lib/models";
-import { useEmailerShell } from "../lib/useEmailerShell";
-
-function renderMarkdown(markdown: string) {
-  const rendered = marked.parse(markdown, { async: false });
-  return typeof rendered === "string" ? rendered : markdown;
-}
+import type { SettingsPageData, ShellData, UserMenuItem } from "../lib/models";
+import { useServiceShell } from "@pushkind/frontend-shell/useServiceShell";
 
 export function SettingsBootstrap() {
-  const shellState = useEmailerShell("Не удалось загрузить оболочку Emailer.");
+  const shellState = useServiceShell<ShellData, UserMenuItem>({
+    errorMessage: "Не удалось загрузить оболочку Emailer.",
+    menuLoadWarning:
+      "Failed to load auth navigation menu. Falling back to local Emailer menu only.",
+    fetchShellData,
+    fetchHubMenuItems,
+  });
   const [data, setData] = useState<SettingsPageData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -64,6 +67,7 @@ export function SettingsBootstrap() {
   if (shellState.status === "error")
     return <EmailerShellFatalState message={shellState.message} />;
   if (error != null) return <EmailerShellFatalState message={error} />;
+  if (data == null) return null;
 
   const fieldError = (field: string) => fieldErrors[field]?.[0];
 
@@ -163,80 +167,37 @@ export function SettingsBootstrap() {
             Шаблон сообщения (доступны переменные{" "}
             {"{name} {message} {unsubscribe_url}"}):
           </h6>
-          <ul className="nav nav-tabs" role="tablist">
-            <li className="nav-item" role="presentation">
-              <button
-                className="nav-link active"
-                id="editor-tab-settings"
-                data-bs-toggle="tab"
-                data-bs-target="#editor-tab-pane-settings"
-                type="button"
-                role="tab"
-                aria-controls="editor-tab-pane-settings"
-                aria-selected="true"
-              >
-                Маркдаун
-              </button>
-            </li>
-            <li className="nav-item" role="presentation">
-              <button
-                className="nav-link"
-                id="preview-tab-settings"
-                data-bs-toggle="tab"
-                data-bs-target="#preview-tab-pane-settings"
-                type="button"
-                role="tab"
-                aria-controls="preview-tab-pane-settings"
-                aria-selected="false"
-              >
-                Превью
-              </button>
-            </li>
-          </ul>
-          <div className="tab-content mb-2">
-            <div
-              className="tab-pane fade show active"
-              id="editor-tab-pane-settings"
-              role="tabpanel"
-              aria-labelledby="editor-tab-settings"
-              tabIndex={0}
-            >
-              <textarea
-                className="form-control border-top-0 rounded-top-0"
-                rows={10}
-                id="settings-message-input"
-                value={form.message}
-                onChange={(event) => {
-                  const nextValue = event.currentTarget.value;
-
-                  setForm((current) => ({
-                    ...current,
-                    message: nextValue,
-                  }));
-                }}
-              />
-              {fieldError("message") ? (
-                <div className="invalid-feedback d-block">
-                  {fieldError("message")}
-                </div>
-              ) : null}
+          <MarkdownComposer
+            id="settings-message-input"
+            value={form.message}
+            onChange={(nextValue) => {
+              setForm((current) => ({
+                ...current,
+                message: nextValue,
+              }));
+            }}
+            className="mb-2"
+            rows={10}
+            editorLabel="Маркдаун"
+            previewLabel="Превью"
+            fileBrowserLabel="Файлы"
+            previewClassName="emailer-markdown-preview"
+            emptyPreviewLabel="Введите markdown, чтобы увидеть превью."
+            fileBrowser={
+              data.filesServiceUrl
+                ? {
+                    baseUrl: data.filesServiceUrl,
+                    helpText:
+                      "Загрузите или найдите файл, скопируйте ссылку и вставьте её в markdown.",
+                  }
+                : undefined
+            }
+          />
+          {fieldError("message") ? (
+            <div className="invalid-feedback d-block">
+              {fieldError("message")}
             </div>
-            <div
-              className="tab-pane fade"
-              id="preview-tab-pane-settings"
-              role="tabpanel"
-              aria-labelledby="preview-tab-settings"
-              tabIndex={0}
-            >
-              <div
-                className="border border-top-0 rounded rounded-top-0 p-2 emailer-markdown-preview"
-                id="settings-message-rendered"
-                dangerouslySetInnerHTML={{
-                  __html: renderMarkdown(form.message),
-                }}
-              />
-            </div>
-          </div>
+          ) : null}
           <div className="row mb-2">
             <div className="col">
               <small className="text-muted">

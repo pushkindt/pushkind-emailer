@@ -1,26 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { marked } from "marked";
 
 import {
   DropdownMultiSelect,
   type DropdownMultiSelectOption,
-} from "../components/DropdownMultiSelect";
+} from "@pushkind/frontend-shell/DropdownMultiSelect";
+import {
+  MarkdownComposer,
+  renderMarkdownToHtml,
+} from "@pushkind/frontend-shell/markdown";
 import { EmailerShell } from "../components/EmailerShell";
 import { EmailerShellFatalState } from "../components/EmailerShellFatalState";
 import {
+  fetchHubMenuItems,
   fetchIndexPageData,
+  fetchShellData,
   isApiMutationError,
   postEmpty,
   postMultipartForm,
 } from "../lib/api";
-import type { IndexPageData } from "../lib/models";
-import { useEmailerShell } from "../lib/useEmailerShell";
-
-function renderMarkdown(markdown: string) {
-  const rendered = marked.parse(markdown, { async: false });
-  return typeof rendered === "string" ? rendered : markdown;
-}
+import type { IndexPageData, ShellData, UserMenuItem } from "../lib/models";
+import { useServiceShell } from "@pushkind/frontend-shell/useServiceShell";
 
 function splitDateTime(value: string) {
   const [date, time] = value.split(" ");
@@ -95,7 +95,7 @@ function IndexPageContent({
     event.preventDefault();
 
     const body = new FormData();
-    body.set("message", renderMarkdown(message));
+    body.set("message", renderMarkdownToHtml(message));
     body.set("subject", subject);
     body.set("cooldown_days", cooldownDays);
     if (attachment) {
@@ -145,68 +145,29 @@ function IndexPageContent({
               />
             </div>
           </div>
-          <ul className="nav nav-tabs" role="tablist">
-            <li className="nav-item" role="presentation">
-              <button
-                className="nav-link active"
-                id="editor-tab-emailer"
-                data-bs-toggle="tab"
-                data-bs-target="#editor-tab-pane-emailer"
-                type="button"
-                role="tab"
-                aria-controls="editor-tab-pane-emailer"
-                aria-selected="true"
-              >
-                Маркдаун
-              </button>
-            </li>
-            <li className="nav-item" role="presentation">
-              <button
-                className="nav-link"
-                id="preview-tab-emailer"
-                data-bs-toggle="tab"
-                data-bs-target="#preview-tab-pane-emailer"
-                type="button"
-                role="tab"
-                aria-controls="preview-tab-pane-emailer"
-                aria-selected="false"
-              >
-                Превью
-              </button>
-            </li>
-          </ul>
-          <div className="tab-content mb-2">
-            <div
-              className="tab-pane fade show active"
-              id="editor-tab-pane-emailer"
-              role="tabpanel"
-              aria-labelledby="editor-tab-emailer"
-              tabIndex={0}
-            >
-              <textarea
-                className="form-control border-top-0 rounded-top-0"
-                rows={10}
-                id="message-input"
-                required
-                placeholder="Содержание в формате markdown"
-                value={message}
-                onChange={(event) => setMessage(event.currentTarget.value)}
-              />
-            </div>
-            <div
-              className="tab-pane fade"
-              id="preview-tab-pane-emailer"
-              role="tabpanel"
-              aria-labelledby="preview-tab-emailer"
-              tabIndex={0}
-            >
-              <div
-                className="border border-top-0 rounded rounded-top-0 p-2 emailer-markdown-preview"
-                id="message-rendered"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(message) }}
-              />
-            </div>
-          </div>
+          <MarkdownComposer
+            id="message-input"
+            value={message}
+            onChange={setMessage}
+            className="mb-2"
+            rows={10}
+            required
+            placeholder="Содержание в формате markdown"
+            editorLabel="Маркдаун"
+            previewLabel="Превью"
+            fileBrowserLabel="Файлы"
+            previewClassName="emailer-markdown-preview"
+            emptyPreviewLabel="Введите markdown, чтобы увидеть превью."
+            fileBrowser={
+              data.filesServiceUrl
+                ? {
+                    baseUrl: data.filesServiceUrl,
+                    helpText:
+                      "Загрузите или найдите файл, скопируйте ссылку и вставьте её в markdown.",
+                  }
+                : undefined
+            }
+          />
           <div className="row mb-2">
             <div className="col">
               <small className="text-muted">
@@ -441,7 +402,13 @@ function IndexPageContent({
 }
 
 export function IndexBootstrap() {
-  const shellState = useEmailerShell("Не удалось загрузить оболочку Emailer.");
+  const shellState = useServiceShell<ShellData, UserMenuItem>({
+    errorMessage: "Не удалось загрузить оболочку Emailer.",
+    menuLoadWarning:
+      "Failed to load auth navigation menu. Falling back to local Emailer menu only.",
+    fetchShellData,
+    fetchHubMenuItems,
+  });
   const [pageState, setPageState] = useState<
     | { status: "loading" }
     | { status: "ready"; data: IndexPageData }

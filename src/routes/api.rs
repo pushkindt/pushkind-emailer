@@ -130,8 +130,9 @@ pub async fn api_v1_group(
 pub async fn api_v1_hub_settings(
     user: AuthenticatedUser,
     repo: web::Data<DieselRepository>,
+    app_config: web::Data<AppConfig>,
 ) -> impl Responder {
-    match api_service::get_hub_settings_data(&user, repo.get_ref()) {
+    match api_service::get_hub_settings_data(&user, repo.get_ref(), app_config.get_ref()) {
         Ok(response) => HttpResponse::Ok().json(response),
         Err(ServiceError::Unauthorized) => HttpResponse::Unauthorized().finish(),
         Err(err) => {

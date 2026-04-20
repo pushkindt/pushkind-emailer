@@ -14,7 +14,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "marked": "^17.0.5",
+    "@pushkind/frontend-shell": "github:pushkindt/pushkind-common#main",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
