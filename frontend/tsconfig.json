@@ -15,6 +15,9 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "paths": {
+      "@pushkind/frontend-shell/*": ["../../pushkind-common/frontend/src/*"]
+    },
     "types": ["vitest/globals"]
   },
   "include": ["src"]

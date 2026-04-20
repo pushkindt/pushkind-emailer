@@ -1,12 +1,26 @@
 import { useEffect, useState } from "react";
 import { EmailerShell } from "../components/EmailerShell";
 import { EmailerShellFatalState } from "../components/EmailerShellFatalState";
-import { fetchUnsubscribedPageData } from "../lib/api";
-import type { UnsubscribedPageData } from "../lib/models";
-import { useEmailerShell } from "../lib/useEmailerShell";
+import {
+  fetchHubMenuItems,
+  fetchShellData,
+  fetchUnsubscribedPageData,
+} from "../lib/api";
+import type {
+  ShellData,
+  UnsubscribedPageData,
+  UserMenuItem,
+} from "../lib/models";
+import { useServiceShell } from "@pushkind/frontend-shell/useServiceShell";
 
 export function UnsubscribedBootstrap() {
-  const shellState = useEmailerShell("Не удалось загрузить оболочку Emailer.");
+  const shellState = useServiceShell<ShellData, UserMenuItem>({
+    errorMessage: "Не удалось загрузить оболочку Emailer.",
+    menuLoadWarning:
+      "Failed to load auth navigation menu. Falling back to local Emailer menu only.",
+    fetchShellData,
+    fetchHubMenuItems,
+  });
   const [data, setData] = useState<UnsubscribedPageData | null>(null);
   const [error, setError] = useState<string | null>(null);
 

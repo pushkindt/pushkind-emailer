@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
 import { EmailerShell } from "../components/EmailerShell";
 import { EmailerShellFatalState } from "../components/EmailerShellFatalState";
-import { fetchHistoryPageData } from "../lib/api";
-import type { HistoryPageData } from "../lib/models";
-import { useEmailerShell } from "../lib/useEmailerShell";
+import {
+  fetchHistoryPageData,
+  fetchHubMenuItems,
+  fetchShellData,
+} from "../lib/api";
+import type { HistoryPageData, ShellData, UserMenuItem } from "../lib/models";
+import { useServiceShell } from "@pushkind/frontend-shell/useServiceShell";
 
 export function HistoryBootstrap() {
-  const shellState = useEmailerShell("Не удалось загрузить оболочку Emailer.");
+  const shellState = useServiceShell<ShellData, UserMenuItem>({
+    errorMessage: "Не удалось загрузить оболочку Emailer.",
+    menuLoadWarning:
+      "Failed to load auth navigation menu. Falling back to local Emailer menu only.",
+    fetchShellData,
+    fetchHubMenuItems,
+  });
   const [data, setData] = useState<HistoryPageData | null>(null);
   const [error, setError] = useState<string | null>(null);
 

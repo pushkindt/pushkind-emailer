@@ -4,20 +4,27 @@ import type { FormEvent } from "react";
 import {
   DropdownMultiSelect,
   type DropdownMultiSelectOption,
-} from "../components/DropdownMultiSelect";
+} from "@pushkind/frontend-shell/DropdownMultiSelect";
 import { EmailerShell } from "../components/EmailerShell";
 import { EmailerShellFatalState } from "../components/EmailerShellFatalState";
 import {
   fetchGroupModalData,
   fetchGroupsPageData,
+  fetchHubMenuItems,
+  fetchShellData,
   isApiMutationError,
   postEmpty,
   postForm,
   toFieldErrorMap,
   type FieldErrorMap,
 } from "../lib/api";
-import type { GroupModalData, GroupsPageData } from "../lib/models";
-import { useEmailerShell } from "../lib/useEmailerShell";
+import type {
+  GroupModalData,
+  GroupsPageData,
+  ShellData,
+  UserMenuItem,
+} from "../lib/models";
+import { useServiceShell } from "@pushkind/frontend-shell/useServiceShell";
 
 type PageState =
   | { status: "loading" }
@@ -31,7 +38,13 @@ type GroupModalState =
   | { status: "ready"; data: GroupModalData };
 
 export function GroupsBootstrap() {
-  const shellState = useEmailerShell("Не удалось загрузить оболочку Emailer.");
+  const shellState = useServiceShell<ShellData, UserMenuItem>({
+    errorMessage: "Не удалось загрузить оболочку Emailer.",
+    menuLoadWarning:
+      "Failed to load auth navigation menu. Falling back to local Emailer menu only.",
+    fetchShellData,
+    fetchHubMenuItems,
+  });
   const [pageState, setPageState] = useState<PageState>({ status: "loading" });
   const [groupName, setGroupName] = useState("");
   const [filter, setFilter] = useState("");
